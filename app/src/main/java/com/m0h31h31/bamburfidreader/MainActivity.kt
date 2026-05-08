@@ -97,7 +97,7 @@ private const val LOG_TAG = "BambuRfidReader"
 private const val FILAMENT_JSON_NAME = "filaments_color_codes.json"
 private const val FILAMENTS_TYPE_MAPPING_FILE = "filaments_type_mapping.json"
 private const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 22
+private const val FILAMENT_DB_VERSION = 23
 private const val CREALITY_MATERIAL_FILE = "creality_material_list.json"
 private const val CREALITY_MATERIAL_TABLE = "creality_materials"
 private const val FILAMENT_TABLE = "filaments"
@@ -512,6 +512,7 @@ data class ParsedField(
 data class DisplayData(
     val type: String,
     val colorName: String,
+    val colorNameEn: String = "",
     val colorCode: String,
     val colorType: String,
     val colorValues: List<String>,
@@ -548,6 +549,7 @@ data class InventoryItem(
     val materialType: String,
     val materialDetailedType: String = "",
     val colorName: String,
+    val colorNameEn: String = "",
     val colorCode: String,
     val colorType: String,
     val colorValues: List<String>,
@@ -570,6 +572,7 @@ data class ShareTagDbRow(
     val materialType: String?,
     val colorUid: String?,
     val colorName: String?,
+    val colorNameEn: String?,
     val colorType: String?,
     val colorValues: String?,
     val rawData: String?,
@@ -586,6 +589,7 @@ data class ShareTagItem(
     val materialType: String,
     val colorUid: String,
     val colorName: String,
+    val colorNameEn: String = "",
     val colorType: String,
     val colorValues: List<String>,
     val rawBlocks: List<ByteArray?>,
@@ -2125,6 +2129,7 @@ class MainActivity : ComponentActivity() {
                     materialType = preview.displayData.type.ifBlank { null },
                     colorUid = preview.displayData.colorCode.ifBlank { null },
                     colorName = preview.displayData.colorName.ifBlank { null },
+                    colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                     colorType = preview.displayData.colorType.ifBlank { null },
                     colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
                     rawData = normalized,
@@ -2364,6 +2369,7 @@ class MainActivity : ComponentActivity() {
                 materialType = preview.displayData.type.ifBlank { null },
                 colorUid = preview.displayData.colorCode.ifBlank { null },
                 colorName = preview.displayData.colorName.ifBlank { null },
+                colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                 colorType = preview.displayData.colorType.ifBlank { null },
                 colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
                 rawData = normalized, productionDate = productionDate
@@ -3116,6 +3122,7 @@ class MainActivity : ComponentActivity() {
                     materialType = row.materialType.orEmpty(),
                     colorUid = row.colorUid.orEmpty(),
                     colorName = row.colorName.orEmpty(),
+                    colorNameEn = row.colorNameEn.orEmpty(),
                     colorType = row.colorType.orEmpty(),
                     colorValues = colorValuesList,
                     rawBlocks = rawBlocks,
@@ -3171,6 +3178,7 @@ class MainActivity : ComponentActivity() {
                             materialType = preview.displayData.type.ifBlank { null },
                             colorUid = preview.displayData.colorCode.ifBlank { null },
                             colorName = preview.displayData.colorName.ifBlank { null },
+                            colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                             colorType = preview.displayData.colorType.ifBlank { null },
                             colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
                             rawData = normalized
@@ -5420,7 +5428,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
     val invCursor = db.query(
         TRAY_UID_TABLE,
         arrayOf("tray_uid", "material_id", "color_values"),
-        "(color_name IS NULL OR color_name = '') AND material_id IS NOT NULL AND material_id != ''",
+        "material_id IS NOT NULL AND material_id != ''",
         null, null, null, null
     )
     invCursor.use {
@@ -5432,6 +5440,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
             val matched = findFilamentEntryInDb(db, materialId, rawColors) ?: continue
             val values = ContentValues()
             values.put("color_name", matched.resolvedColorName())
+            values.put("color_name_en", matched.colorNameEn)
             values.put("color_code", matched.colorCode)
             values.put("color_type", matched.colorType)
             db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
@@ -5442,7 +5451,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
     val tagCursor = db.query(
         SHARE_TAGS_TABLE,
         arrayOf("file_uid", "color_uid", "color_values"),
-        "(color_name IS NULL OR color_name = '') AND color_uid IS NOT NULL AND color_uid != ''",
+        "color_uid IS NOT NULL AND color_uid != ''",
         null, null, null, null
     )
     tagCursor.use {
@@ -5454,6 +5463,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
             val matched = findFilamentEntryInDb(db, colorUid, rawColors) ?: continue
             val values = ContentValues()
             values.put("color_name", matched.resolvedColorName())
+            values.put("color_name_en", matched.colorNameEn)
             values.put("color_type", matched.colorType)
             db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
             updated++
@@ -5749,6 +5759,7 @@ class FilamentDbHelper(context: Context) :
                 material_type TEXT,
                 material_detailed_type TEXT,
                 color_name TEXT,
+                color_name_en TEXT,
                 color_code TEXT,
                 color_type TEXT,
                 color_values TEXT,
@@ -5780,6 +5791,7 @@ class FilamentDbHelper(context: Context) :
                 material_type TEXT,
                 color_uid TEXT,
                 color_name TEXT,
+                color_name_en TEXT,
                 color_type TEXT,
                 color_values TEXT,
                 raw_data TEXT,
@@ -6017,6 +6029,14 @@ class FilamentDbHelper(context: Context) :
                 db.execSQL("ALTER TABLE $FILAMENT_TABLE ADD COLUMN color_name_en TEXT")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 23) {
+            try {
+                db.execSQL("ALTER TABLE \"$TRAY_UID_TABLE\" ADD COLUMN color_name_en TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN color_name_en TEXT")
+            } catch (_: Exception) {}
+        }
     }
 
     private fun addTrayColumn(db: SQLiteDatabase, column: String, type: String) {
@@ -6036,6 +6056,7 @@ class FilamentDbHelper(context: Context) :
         materialType: String?,
         colorUid: String?,
         colorName: String?,
+        colorNameEn: String? = null,
         colorType: String?,
         colorValues: String?,
         rawData: String? = null,
@@ -6047,6 +6068,7 @@ class FilamentDbHelper(context: Context) :
         if (!materialType.isNullOrBlank()) values.put("material_type", materialType)
         if (!colorUid.isNullOrBlank()) values.put("color_uid", colorUid)
         if (!colorName.isNullOrBlank()) values.put("color_name", colorName)
+        if (!colorNameEn.isNullOrBlank()) values.put("color_name_en", colorNameEn)
         if (!colorType.isNullOrBlank()) values.put("color_type", colorType)
         if (!colorValues.isNullOrBlank()) values.put("color_values", colorValues)
         if (!rawData.isNullOrBlank()) values.put("raw_data", rawData)
@@ -6083,7 +6105,7 @@ class FilamentDbHelper(context: Context) :
         val result = mutableListOf<ShareTagDbRow>()
         val cursor = db.query(
             SHARE_TAGS_TABLE,
-            arrayOf("id", "file_uid", "tray_uid", "material_type", "color_uid", "color_name", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
+            arrayOf("id", "file_uid", "tray_uid", "material_type", "color_uid", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
             null, null, null, null,
             "material_type ASC, color_uid ASC, file_uid ASC"
         )
@@ -6096,12 +6118,13 @@ class FilamentDbHelper(context: Context) :
                     materialType = it.getString(3),
                     colorUid = it.getString(4),
                     colorName = it.getString(5),
-                    colorType = it.getString(6),
-                    colorValues = it.getString(7),
-                    rawData = it.getString(8),
-                    copyCount = it.getInt(9),
-                    verified = it.getInt(10) != 0,
-                    productionDate = it.getString(11)
+                    colorNameEn = it.getString(6),
+                    colorType = it.getString(7),
+                    colorValues = it.getString(8),
+                    rawData = it.getString(9),
+                    copyCount = it.getInt(10),
+                    verified = it.getInt(11) != 0,
+                    productionDate = it.getString(12)
                 ))
             }
         }
@@ -6438,6 +6461,7 @@ class FilamentDbHelper(context: Context) :
         materialType: String? = null,
         detailedMaterialType: String? = null,
         colorName: String? = null,
+        colorNameEn: String? = null,
         colorCode: String? = null,
         colorType: String? = null,
         colorValues: String? = null
@@ -6464,6 +6488,9 @@ class FilamentDbHelper(context: Context) :
         }
         if (colorName != null) {
             values.put("color_name", colorName)
+        }
+        if (colorNameEn != null) {
+            values.put("color_name_en", colorNameEn)
         }
         if (colorCode != null) {
             values.put("color_code", colorCode)
@@ -6537,6 +6564,7 @@ class FilamentDbHelper(context: Context) :
                 material_type,
                 material_detailed_type,
                 color_name,
+                color_name_en,
                 color_code,
                 color_type,
                 color_values,
@@ -6554,7 +6582,7 @@ class FilamentDbHelper(context: Context) :
         cursor.use {
             val results = ArrayList<InventoryItem>()
             while (it.moveToNext()) {
-                val colorValues = it.getString(6).orEmpty()
+                val colorValues = it.getString(7).orEmpty()
                     .split(",")
                     .map { value -> value.trim() }
                     .filter { value -> value.isNotBlank() }
@@ -6564,20 +6592,21 @@ class FilamentDbHelper(context: Context) :
                         materialType = it.getString(1).orEmpty(),
                         materialDetailedType = it.getString(2).orEmpty(),
                         colorName = it.getString(3).orEmpty(),
-                        colorCode = it.getString(4).orEmpty(),
-                        colorType = it.getString(5).orEmpty(),
+                        colorNameEn = it.getString(4).orEmpty(),
+                        colorCode = it.getString(5).orEmpty(),
+                        colorType = it.getString(6).orEmpty(),
                         colorValues = colorValues,
-                        remainingPercent = it.getFloat(7),
-                        remainingGrams = if (!it.isNull(8)) it.getInt(8) else null,
-                        originalMaterial = it.getString(9).orEmpty(),
-                        notes = it.getString(10).orEmpty()
+                        remainingPercent = it.getFloat(8),
+                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
+                        originalMaterial = it.getString(10).orEmpty(),
+                        notes = it.getString(11).orEmpty()
                     )
                 )
             }
             return results
         }
     }
-    
+
     /**
      * 获取filament_inventory库的全部数据，用于数据页面显示
      */
@@ -6588,6 +6617,7 @@ class FilamentDbHelper(context: Context) :
                 material_type,
                 material_detailed_type,
                 color_name,
+                color_name_en,
                 color_code,
                 color_type,
                 color_values,
@@ -6604,7 +6634,7 @@ class FilamentDbHelper(context: Context) :
         cursor.use {
             val results = ArrayList<InventoryItem>()
             while (it.moveToNext()) {
-                val colorValues = it.getString(6).orEmpty()
+                val colorValues = it.getString(7).orEmpty()
                     .split(",")
                     .map { value -> value.trim() }
                     .filter { value -> value.isNotBlank() }
@@ -6614,13 +6644,14 @@ class FilamentDbHelper(context: Context) :
                         materialType = it.getString(1).orEmpty(),
                         materialDetailedType = it.getString(2).orEmpty(),
                         colorName = it.getString(3).orEmpty(),
-                        colorCode = it.getString(4).orEmpty(),
-                        colorType = it.getString(5).orEmpty(),
+                        colorNameEn = it.getString(4).orEmpty(),
+                        colorCode = it.getString(5).orEmpty(),
+                        colorType = it.getString(6).orEmpty(),
                         colorValues = colorValues,
-                        remainingPercent = it.getFloat(7),
-                        remainingGrams = if (!it.isNull(8)) it.getInt(8) else null,
-                        originalMaterial = it.getString(9).orEmpty(),
-                        notes = it.getString(10).orEmpty()
+                        remainingPercent = it.getFloat(8),
+                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
+                        originalMaterial = it.getString(10).orEmpty(),
+                        notes = it.getString(11).orEmpty()
                     )
                 )
             }

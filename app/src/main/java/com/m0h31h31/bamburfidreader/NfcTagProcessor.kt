@@ -146,6 +146,7 @@ object NfcTagProcessor {
                     materialType = parsedBlockData.filamentType,
                     detailedMaterialType = parsedBlockData.detailedFilamentType,
                     colorName = displayData.colorName,
+                    colorNameEn = displayData.colorNameEn.ifBlank { null },
                     colorCode = displayData.colorCode,
                     colorType = displayData.colorType,
                     colorValues = displayData.colorValues.joinToString(separator = ",")
@@ -368,6 +369,7 @@ private fun buildDisplayData(
 ): DisplayData {
     var type = ""
     var colorName = ""
+    var colorNameEn = ""
     var colorCode = ""
     var colorType = ""
     var colorValues = parsedBlockData.colorValues
@@ -385,6 +387,7 @@ private fun buildDisplayData(
         if (entry != null) {
             type = entry.filaType
             colorName = entry.resolvedColorName()
+            colorNameEn = entry.colorNameEn
             colorCode = entry.colorCode
             colorType = entry.colorType
             if (entry.colorValues.isNotEmpty()) colorValues = entry.colorValues
@@ -408,6 +411,7 @@ private fun buildDisplayData(
     return DisplayData(
         type = type,
         colorName = colorName,
+        colorNameEn = colorNameEn,
         colorCode = colorCode,
         colorType = colorType,
         colorValues = colorValues,
