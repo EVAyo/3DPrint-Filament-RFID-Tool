@@ -448,11 +448,11 @@ object LogCollector {
         val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
         val logDir = File(baseDir, LOG_DIR_NAME)
         if (!logDir.exists()) {
-            return "没有日志可打包"
+            return context.getString(R.string.log_none_to_pack)
         }
         val logFiles = logDir.listFiles { file -> file.isFile }?.toList().orEmpty()
         if (logFiles.isEmpty()) {
-            return "没有日志可打包"
+            return context.getString(R.string.log_none_to_pack)
         }
         val archiveName =
             "logs_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.zip"
@@ -467,10 +467,10 @@ object LogCollector {
                     }
                 }
             }
-            "日志已打包到 ${archive.absolutePath}"
+            context.getString(R.string.log_packed_format, archive.absolutePath)
         } catch (e: Exception) {
             logDebug("日志打包失败: ${e.message}")
-            "日志打包失败"
+            context.getString(R.string.log_pack_failed)
         }
     }
 }
@@ -805,7 +805,7 @@ class MainActivity : ComponentActivity() {
     private val exportTagPackageLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument(SHARE_IMPORT_ZIP_MIME)) { uri: Uri? ->
             if (uri == null) {
-                miscStatusMessage = "已取消导出标签包"
+                miscStatusMessage = uiString(R.string.misc_export_tag_canceled)
                 return@registerForActivityResult
             }
             lifecycleScope.launch(Dispatchers.IO) {
@@ -816,7 +816,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    private fun resetDebugInfoDialog(title: String = "调试信息") {
+    private fun resetDebugInfoDialog(title: String = getString(R.string.debug_info_title)) {
         synchronized(debugInfoLock) {
             debugInfoBuffer.clear()
         }
@@ -906,7 +906,7 @@ class MainActivity : ComponentActivity() {
                     runOnUiThread { writeStatusMessage = uiString(R.string.copy_write_done_verifying) }
                     val verifyResult = if (targetItem != null) {
                         verifyTagAgainstDump(tag, targetItem)
-                    } else "校验失败：任务为空"
+                    } else uiString(R.string.copy_verify_task_empty)
                     runOnUiThread {
                         if (verifyResult.contains("成功") || verifyResult.contains("success", ignoreCase = true)) {
                             playFeedbackTone(FeedbackTone.SUCCESS)
@@ -942,7 +942,7 @@ class MainActivity : ComponentActivity() {
                             }
                             pendingWriteItem = null
                             pendingVerifyItem = targetItem
-                            writeStatusMessage = "写入成功，自动校验失败：$verifyResult，请再次贴卡校验"
+                            writeStatusMessage = uiString(R.string.write_success_verify_failed_format, verifyResult)
                             // 写入成功（即使校验失败）也上报复制事件
                             if (targetItem != null) {
                                 val copiedUid = targetItem.sourceUid
@@ -991,7 +991,7 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread { writeStatusMessage = status }
                     }
                 } else {
-                    "C卡修改任务为空"
+                    uiString(R.string.cmodify_task_empty)
                 }
                 runOnUiThread {
                     writeStatusMessage = result
@@ -1073,7 +1073,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         pendingSnapmakerWriteItem = null
-                        snapmakerWriteStatusMessage = "写入成功"
+                        snapmakerWriteStatusMessage = uiString(R.string.snapmaker_write_success)
                     } else {
                         playFeedbackTone(FeedbackTone.FAILURE)
                         snapmakerWriteStatusMessage = writeResult
@@ -1146,10 +1146,10 @@ class MainActivity : ComponentActivity() {
                             if (result != null) {
                                 readerCrealityTagData = result
                                 readerCrealityMaterial = material
-                                readerBrandStatus = "读取成功"
+                                readerBrandStatus = uiString(R.string.status_read_success)
                                 playFeedbackTone(FeedbackTone.SUCCESS)
                             } else {
-                                readerBrandStatus = "读取失败"
+                                readerBrandStatus = uiString(R.string.status_read_failed)
                                 playFeedbackTone(FeedbackTone.FAILURE)
                             }
                         }
@@ -1159,10 +1159,10 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread {
                             if (result != null) {
                                 readerSnapmakerTagData = result
-                                readerBrandStatus = "读取成功"
+                                readerBrandStatus = uiString(R.string.status_read_success)
                                 playFeedbackTone(FeedbackTone.SUCCESS)
                             } else {
-                                readerBrandStatus = "读取失败"
+                                readerBrandStatus = uiString(R.string.status_read_failed)
                                 playFeedbackTone(FeedbackTone.FAILURE)
                             }
                         }
@@ -1466,7 +1466,7 @@ class MainActivity : ComponentActivity() {
                     onEnqueueCuidTest = { enqueueCuidTestTask() },
                     onCancelCuidTest = {
                         pendingCuidTest = false
-                        val msg = "已取消CUID检测"
+                        val msg = uiString(R.string.misc_cuid_cancel)
                         miscStatusMessage = msg
                         msg
                     },
@@ -1880,11 +1880,11 @@ class MainActivity : ComponentActivity() {
     private fun backupDatabase(): String {
         val dbFile = getDatabasePath(FILAMENT_DB_NAME)
         if (!dbFile.exists()) {
-            return "数据库文件不存在"
+            return uiString(R.string.db_file_not_found)
         }
         val externalDir = getExternalFilesDir(null)
         if (externalDir == null) {
-            return "无法访问存储目录"
+            return uiString(R.string.db_storage_unavailable)
         }
         val backupFile = File(externalDir, "filaments_backup.db")
         return try {
@@ -1898,31 +1898,31 @@ class MainActivity : ComponentActivity() {
                 db.delete(SHARE_TAGS_TABLE, null, null)
                 db.delete(SNAPMAKER_SHARE_TAGS_TABLE, null, null)
             }
-            "数据库备份成功"
+            uiString(R.string.db_backup_success)
         } catch (e: Exception) {
             logDebug("数据库备份失败: ${e.message}")
-            "数据库备份失败"
+            uiString(R.string.db_backup_failed)
         }
     }
 
     private fun importDatabase(): String {
         val externalDir = getExternalFilesDir(null)
         if (externalDir == null) {
-            return "无法访问存储目录"
+            return uiString(R.string.db_storage_unavailable)
         }
         val backupFile = File(externalDir, "filaments_backup.db")
         if (!backupFile.exists()) {
-            return "未找到备份文件"
+            return uiString(R.string.db_import_file_not_found)
         }
         val dbFile = getDatabasePath(FILAMENT_DB_NAME)
         return try {
             filamentDbHelper?.close()
             backupFile.copyTo(dbFile, overwrite = true)
             filamentDbHelper?.writableDatabase
-            "数据库导入成功"
+            uiString(R.string.db_import_success)
         } catch (e: Exception) {
             logDebug("数据库导入失败: ${e.message}")
-            "数据库导入失败"
+            uiString(R.string.db_import_failed)
         }
     }
 
@@ -1935,10 +1935,10 @@ class MainActivity : ComponentActivity() {
             }
             filamentDbHelper = FilamentDbHelper(this)
             filamentDbHelper?.let { syncFilamentDatabase(this, it) }
-            "数据库重置成功"
+            uiString(R.string.db_reset_success)
         } catch (e: Exception) {
             logDebug("数据库重置失败: ${e.message}")
-            "数据库重置失败"
+            uiString(R.string.db_reset_failed)
         }
     }
 
@@ -1955,7 +1955,7 @@ class MainActivity : ComponentActivity() {
 
     private fun exportSelfTagPackageToDownloads(): String {
         val (export, errorMessage) = prepareSelfTagPackageExport()
-        if (export == null) return errorMessage ?: "无法准备标签包导出"
+        if (export == null) return errorMessage ?: uiString(R.string.tag_export_prepare_failed)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
@@ -1969,41 +1969,41 @@ class MainActivity : ComponentActivity() {
                 val resolver = contentResolver
                 val uri =
                     resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                        ?: return "创建下载文件失败"
-                writeSelfTagPackageToUri(uri, export) ?: return "打开下载文件失败"
+                        ?: return uiString(R.string.tag_export_create_file_failed)
+                writeSelfTagPackageToUri(uri, export) ?: return uiString(R.string.tag_export_open_file_failed)
             } else {
                 exportTagPackageLauncher.launch(export.zipName)
-                return "请选择保存位置"
+                return uiString(R.string.tag_export_select_location)
             }
-            "标签数据打包成功: Download/${export.zipName}"
+            uiString(R.string.tag_export_success_download_format, export.zipName)
         } catch (e: Exception) {
             logDebug("标签数据打包失败: ${e.message}")
-            "标签数据打包失败: ${e.message.orEmpty()}"
+            uiString(R.string.tag_export_failed_format, e.message.orEmpty())
         }
     }
 
     private fun exportSelfTagPackageToUri(uri: Uri): String {
         val (export, errorMessage) = prepareSelfTagPackageExport()
-        if (export == null) return errorMessage ?: "无法准备标签包导出"
+        if (export == null) return errorMessage ?: uiString(R.string.tag_export_prepare_failed)
         return try {
-            writeSelfTagPackageToUri(uri, export) ?: return "打开导出文件失败"
-            "标签数据打包成功: ${export.zipName}"
+            writeSelfTagPackageToUri(uri, export) ?: return uiString(R.string.tag_export_open_uri_failed)
+            uiString(R.string.tag_export_success_format, export.zipName)
         } catch (e: Exception) {
             logDebug("标签数据打包失败: ${e.message}")
-            "标签数据打包失败: ${e.message.orEmpty()}"
+            uiString(R.string.tag_export_failed_format, e.message.orEmpty())
         }
     }
 
     private fun prepareSelfTagPackageExport(): Pair<SelfTagPackageExport?, String?> {
         val externalDir = getExternalFilesDir(null)
-            ?: return null to "无法访问应用存储目录"
+            ?: return null to uiString(R.string.tag_export_app_dir_unavailable)
         val sourceDir = File(externalDir, "rfid_files/self_${getDeviceIdSuffix()}")
         if (!sourceDir.exists() || !sourceDir.isDirectory) {
-            return null to "未找到标签数据目录: ${sourceDir.name}"
+            return null to uiString(R.string.tag_export_no_dir_format, sourceDir.name)
         }
         val files = sourceDir.walkTopDown().filter { it.isFile }.toList()
         if (files.isEmpty()) {
-            return null to "标签数据目录为空，无法打包"
+            return null to uiString(R.string.tag_export_dir_empty)
         }
         val zipName =
             "tag_package_${sourceDir.name}_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.zip"
@@ -2068,7 +2068,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun importTagPackageFromZipUri(uri: Uri): String {
-        val dbHelper = filamentDbHelper ?: return "数据库不可用"
+        val dbHelper = filamentDbHelper ?: return uiString(R.string.db_unavailable)
         val db = dbHelper.writableDatabase
         return try {
             var extractedCount = 0
@@ -2085,7 +2085,7 @@ class MainActivity : ComponentActivity() {
 
             val zipEntries = extractZipEntries(uri)
             if (zipEntries.isEmpty() && !(cacheDir.listFiles()?.any { it.name.startsWith("import_") } ?: false)) {
-                return "读取标签包失败（文件损坏或密码错误）"
+                return uiString(R.string.tag_import_invalid_zip)
             }
             for ((entryName, bytes) in zipEntries) {
                 if (!entryName.lowercase(Locale.US).endsWith(".txt")) continue
@@ -2132,17 +2132,17 @@ class MainActivity : ComponentActivity() {
 
             when {
                 extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
-                    "导入完成，但压缩包内未发现 txt 标签数据"
+                    uiString(R.string.tag_import_no_txt_data)
                 extractedCount == 0 ->
-                    "导入完成：格式无效 $invalidCount 个，重复跳过 $skippedCount 个"
+                    uiString(R.string.tag_import_zero_format, invalidCount, skippedCount)
                 forceOverwriteImport ->
-                    "标签包导入完成: 导入 $extractedCount 个（覆盖 $overwrittenCount 个），格式无效 $invalidCount 个，跳过重复 $skippedCount 个"
+                    uiString(R.string.tag_import_success_overwrite_format, extractedCount, overwrittenCount, invalidCount, skippedCount)
                 else ->
-                    "标签包导入完成: 导入 $extractedCount 个，格式无效 $invalidCount 个，跳过重复 $skippedCount 个"
+                    uiString(R.string.tag_import_success_format, extractedCount, invalidCount, skippedCount)
             }
         } catch (e: Exception) {
             logDebug("导入标签包失败: ${e.message}")
-            "导入标签包失败: ${e.message.orEmpty()}"
+            uiString(R.string.tag_import_failed_format, e.message.orEmpty())
         }
     }
     
@@ -2207,7 +2207,7 @@ class MainActivity : ComponentActivity() {
                        else getString(R.string.download_tag_package_failed)
             }
             importTagPackageFromZipFile(tmp, snapmaker = brand == "snapmaker") { cur, total ->
-                mainHandler.post { onImportStatus("正在导入 ($cur/$total)…") }
+                mainHandler.post { onImportStatus(uiString(R.string.tag_import_progress_format, cur, total)) }
             }
         } finally {
             tmp.delete()
@@ -2223,7 +2223,7 @@ class MainActivity : ComponentActivity() {
         snapmaker: Boolean,
         onProgress: ((cur: Int, total: Int) -> Unit)? = null
     ): String {
-        val dbHelper = filamentDbHelper ?: return "数据库不可用"
+        val dbHelper = filamentDbHelper ?: return uiString(R.string.db_unavailable)
         val db = dbHelper.writableDatabase
         return try {
             // 用 zip4j 直接打开文件（与 extractZipEntries 相同逻辑，跳过 URI 拷贝）
@@ -2242,7 +2242,7 @@ class MainActivity : ComponentActivity() {
             else processBambuZipEntries(entries, db, dbHelper, onProgress)
         } catch (e: Exception) {
             logDebug("importTagPackageFromZipFile error: ${e.message}")
-            "导入失败: ${e.message.orEmpty()}"
+            uiString(R.string.tag_import_failed_general_format, e.message.orEmpty())
         }
     }
 
@@ -2260,7 +2260,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun importSnapmakerTagPackageFromZipUri(uri: Uri): String {
-        val dbHelper = filamentDbHelper ?: return "数据库不可用"
+        val dbHelper = filamentDbHelper ?: return uiString(R.string.db_unavailable)
         val db = dbHelper.writableDatabase
         return try {
             var extractedCount = 0
@@ -2304,15 +2304,15 @@ class MainActivity : ComponentActivity() {
 
             when {
                 extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
-                    "导入完成，但压缩包内未发现 txt 标签数据"
+                    uiString(R.string.tag_import_no_txt_data)
                 extractedCount == 0 ->
-                    "导入完成：格式无效 $invalidCount 个，重复跳过 $skippedCount 个"
+                    uiString(R.string.tag_import_zero_format, invalidCount, skippedCount)
                 else ->
-                    "快造标签包导入完成: 导入 $extractedCount 个，格式无效 $invalidCount 个，跳过重复 $skippedCount 个"
+                    uiString(R.string.snapmaker_import_success_format, extractedCount, invalidCount, skippedCount)
             }
         } catch (e: Exception) {
             logDebug("导入快造标签包失败: ${e.message}")
-            "导入快造标签包失败: ${e.message.orEmpty()}"
+            uiString(R.string.snapmaker_import_failed_format, e.message.orEmpty())
         }
     }
 
@@ -2371,13 +2371,13 @@ class MainActivity : ComponentActivity() {
         }
         return when {
             extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
-                "导入完成，但压缩包内未发现标签数据"
+                uiString(R.string.tag_import_no_data)
             extractedCount == 0 ->
-                "导入完成：格式无效 $invalidCount 个，重复跳过 $skippedCount 个"
+                uiString(R.string.tag_import_zero_format, invalidCount, skippedCount)
             forceOverwriteImport ->
-                "Bambu 标签包导入完成：新增 $extractedCount 个（覆盖 $overwrittenCount 个），无效 $invalidCount 个，跳过 $skippedCount 个"
+                uiString(R.string.bambu_import_success_overwrite_format, extractedCount, overwrittenCount, invalidCount, skippedCount)
             else ->
-                "Bambu 标签包导入完成：新增 $extractedCount 个，无效 $invalidCount 个，跳过 $skippedCount 个"
+                uiString(R.string.bambu_import_success_format, extractedCount, invalidCount, skippedCount)
         }
     }
 
@@ -2419,11 +2419,11 @@ class MainActivity : ComponentActivity() {
         }
         return when {
             extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
-                "导入完成，但压缩包内未发现标签数据"
+                uiString(R.string.tag_import_no_data)
             extractedCount == 0 ->
-                "导入完成：格式无效 $invalidCount 个，重复跳过 $skippedCount 个"
+                uiString(R.string.tag_import_zero_format, invalidCount, skippedCount)
             else ->
-                "Snapmaker 标签包导入完成：新增 $extractedCount 个，无效 $invalidCount 个，跳过 $skippedCount 个"
+                uiString(R.string.snapmaker_import_dl_success_format, extractedCount, invalidCount, skippedCount)
         }
     }
 
@@ -2535,15 +2535,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deleteSnapmakerShareTagItem(item: SnapmakerShareTagItem): String {
-        val dbHelper = filamentDbHelper ?: return "数据库不可用"
+        val dbHelper = filamentDbHelper ?: return uiString(R.string.db_unavailable)
         dbHelper.deleteSnapmakerShareTagByUid(dbHelper.writableDatabase, item.uid)
         snapmakerShareTagItems = snapmakerShareTagItems.filter { it.uid != item.uid }
-        return "已删除"
+        return uiString(R.string.snapmaker_item_deleted)
     }
 
     private fun enqueueSnapmakerWriteTask(item: SnapmakerShareTagItem) {
         pendingSnapmakerWriteItem = item
-        snapmakerWriteStatusMessage = "请将空白卡贴近手机..."
+        snapmakerWriteStatusMessage = uiString(R.string.snapmaker_write_place_blank_card)
     }
 
     private fun writeSnapmakerTagFromDump(
@@ -2551,11 +2551,11 @@ class MainActivity : ComponentActivity() {
         item: SnapmakerShareTagItem,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
-        val mifare = MifareClassic.get(tag) ?: return "写入失败：标签不支持 MIFARE Classic"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.snapmaker_write_failed_no_mifare)
         val sourceBlocks = item.rawBlocks
-        if (sourceBlocks.isEmpty()) return "写入失败：源数据为空"
+        if (sourceBlocks.isEmpty()) return uiString(R.string.snapmaker_write_failed_empty)
 
-        val uid = tag.id ?: return "写入失败：无法读取卡 UID"
+        val uid = tag.id ?: return uiString(R.string.snapmaker_write_failed_no_uid)
         val ffKey = ByteArray(6) { 0xFF.toByte() }
         val targetSectorCount = minOf(16, mifare.sectorCount)
         val fullFfTrailer = ByteArray(16).apply {
@@ -2580,13 +2580,13 @@ class MainActivity : ComponentActivity() {
                     mifare, 0, listOf(snapKeysA[0]), listOf(snapKeysB[0])
                 )
                 if (!sector0DerivedAuth) {
-                    return "写入失败：标签认证失败（非空白卡且无法通过快造派生秘钥认证）"
+                    return uiString(R.string.snapmaker_write_failed_auth)
                 }
 
                 // Phase 1: 将所有扇区从派生秘钥重置为全 FF
-                onStatusUpdate?.invoke("检测到已写入的快造标签，正在重置...")
+                onStatusUpdate?.invoke(uiString(R.string.snapmaker_write_detected_resetting))
                 for (sector in 0 until targetSectorCount) {
-                    onStatusUpdate?.invoke("正在重置扇区 ${sector + 1}/$targetSectorCount...")
+                    onStatusUpdate?.invoke(uiString(R.string.snapmaker_write_resetting_format, sector + 1, targetSectorCount))
                     val trailerBlock = mifare.sectorToBlock(sector) + 3
                     val curKeyA = snapKeysA[sector]
                     val curKeyB = snapKeysB[sector]
@@ -2594,7 +2594,7 @@ class MainActivity : ComponentActivity() {
                     // 步骤1：仅用派生 KeyB 认证，将权限位改为 FF078069（保留派生秘钥）
                     reconnectMifareClassic(mifare)
                     if (!authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(curKeyB))) {
-                        return "写入失败：重置扇区 $sector 派生 KeyB 认证失败"
+                        return uiString(R.string.snapmaker_write_reset_failed_auth_format, sector)
                     }
                     val step1Trailer = ByteArray(16).apply {
                         System.arraycopy(curKeyA, 0, this, 0, 6)
@@ -2603,25 +2603,25 @@ class MainActivity : ComponentActivity() {
                         System.arraycopy(curKeyB, 0, this, 10, 6)
                     }
                     if (!writeBlockWithRetry(mifare, trailerBlock, step1Trailer)) {
-                        return "写入失败：重置扇区 $sector 修改权限位失败"
+                        return uiString(R.string.snapmaker_write_reset_failed_perms_format, sector)
                     }
                     Thread.sleep(15)
 
                     // 步骤2：权限位已是 FF078069，将 KeyA/B 改为 FF
                     if (!authenticateSectorWithRetry(mifare, sector, listOf(curKeyA, ffKey), listOf(curKeyB, ffKey))) {
-                        return "写入失败：重置扇区 $sector 步骤2认证失败"
+                        return uiString(R.string.snapmaker_write_reset_failed_step2_format, sector)
                     }
                     if (!writeBlockWithRetry(mifare, trailerBlock, fullFfTrailer)) {
-                        return "写入失败：重置扇区 $sector 重置秘钥为 FF 失败"
+                        return uiString(R.string.snapmaker_write_reset_failed_ff_format, sector)
                     }
                     Thread.sleep(15)
 
                     // 验证 FF 秘钥可用
                     if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
-                        return "写入失败：重置扇区 $sector FF 秘钥验证失败"
+                        return uiString(R.string.snapmaker_write_reset_verify_failed_format, sector)
                     }
                 }
-                onStatusUpdate?.invoke("重置完成，正在写入数据...")
+                onStatusUpdate?.invoke(uiString(R.string.snapmaker_write_reset_done))
                 Thread.sleep(100)
             }
 
@@ -2637,24 +2637,24 @@ class MainActivity : ComponentActivity() {
                     keysA = listOf(ffKey, sourceKeyA),
                     keysB = listOf(ffKey, sourceKeyB)
                 )
-                if (!authenticated) return "写入失败：扇区 $sector 认证失败"
+                if (!authenticated) return uiString(R.string.snapmaker_write_failed_sector_auth_format, sector)
 
-                onStatusUpdate?.invoke("正在写入扇区 ${sector + 1}/$targetSectorCount...")
+                onStatusUpdate?.invoke(uiString(R.string.snapmaker_write_sector_format, sector + 1, targetSectorCount))
                 val startBlock = mifare.sectorToBlock(sector)
                 for (offset in 0 until 4) {
                     val blockIndex = startBlock + offset
                     val targetData = sourceBlocks.getOrNull(blockIndex)
-                        ?: return "写入失败：区块 $blockIndex 源数据缺失"
-                    if (targetData.size != 16) return "写入失败：区块 $blockIndex 数据长度异常"
+                        ?: return uiString(R.string.snapmaker_write_failed_block_missing_format, blockIndex)
+                    if (targetData.size != 16) return uiString(R.string.snapmaker_write_failed_block_size_format, blockIndex)
                     if (!writeBlockWithRetry(mifare, blockIndex, targetData)) {
-                        return "写入失败：区块 $blockIndex 写入异常"
+                        return uiString(R.string.snapmaker_write_failed_block_error_format, blockIndex)
                     }
                     Thread.sleep(20)
                 }
             }
-            "写入成功"
+            uiString(R.string.snapmaker_write_success)
         } catch (e: Exception) {
-            "写入失败：${e.message.orEmpty()}"
+            uiString(R.string.snapmaker_write_failed_format, e.message.orEmpty())
         } finally {
             try { mifare.close() } catch (_: Exception) {}
         }
@@ -2729,18 +2729,18 @@ class MainActivity : ComponentActivity() {
     private fun validateNdefWriteRequest(request: NdefWriteRequest): String? {
         return when (request.type) {
             NdefWriteType.TEXT -> {
-                if (request.textContent.isBlank()) "请输入要写入的文本内容" else null
+                if (request.textContent.isBlank()) getString(R.string.ndef_validate_text_empty) else null
             }
             NdefWriteType.URL -> {
-                if (request.url.isBlank()) "请输入网页地址" else null
+                if (request.url.isBlank()) getString(R.string.ndef_validate_url_empty) else null
             }
             NdefWriteType.PHONE -> {
-                if (request.phone.isBlank()) "请输入电话号码" else null
+                if (request.phone.isBlank()) getString(R.string.ndef_validate_phone_empty) else null
             }
             NdefWriteType.WIFI -> {
                 when {
-                    request.wifiSsid.isBlank() -> "请输入WiFi名称(SSID)"
-                    request.wifiSecurity.isBlank() -> "请输入WiFi加密类型（WPA/WEP/NONE）"
+                    request.wifiSsid.isBlank() -> getString(R.string.ndef_validate_wifi_ssid_empty)
+                    request.wifiSecurity.isBlank() -> getString(R.string.ndef_validate_wifi_security_empty)
                     else -> null
                 }
             }
@@ -2751,8 +2751,8 @@ class MainActivity : ComponentActivity() {
         if (pendingWriteItem != null || pendingVerifyItem != null || pendingCuidTest || pendingNdefWriteRequest != null) {
             return uiString(R.string.misc_finish_current_write_verify)
         }
-        resetDebugInfoDialog("格式化标签调试")
-        appendDebugInfoDialog("已进入等待贴卡状态")
+        resetDebugInfoDialog(getString(R.string.format_tag_debug_title))
+        appendDebugInfoDialog(getString(R.string.format_tag_wait_state))
         pendingClearFuid = true
         miscStatusMessage = uiString(R.string.misc_format_ready)
         return miscStatusMessage
@@ -2772,11 +2772,11 @@ class MainActivity : ComponentActivity() {
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
         val mifare = MifareClassic.get(tag)
-            ?: return uiString(R.string.misc_cuid_test_failed, "标签不支持 MIFARE Classic")
+            ?: return uiString(R.string.misc_cuid_test_failed, getString(R.string.cuid_detail_no_mifare))
         val ffKey = ByteArray(6) { 0xFF.toByte() }
         return try {
             mifare.connect()
-            onStatusUpdate?.invoke("正在检测...")
+            onStatusUpdate?.invoke(uiString(R.string.misc_cuid_detecting))
 
             // Step 1: Authenticate sector 0 with FF key
             val authOk = authenticateSectorWithRetry(
@@ -2791,12 +2791,12 @@ class MainActivity : ComponentActivity() {
 
             // Step 2: Read block 0 (save original)
             val originalBlock0 = readBlockWithRetry(mifare, 0)
-                ?: return uiString(R.string.misc_cuid_test_failed, "读取块0失败")
+                ?: return uiString(R.string.misc_cuid_test_failed, getString(R.string.cuid_detail_read_block0_failed))
 
             // Step 3: Read sector 0 trailer (block 3, save original)
             val trailerBlock = mifare.sectorToBlock(0) + 3
             val originalTrailer = readBlockWithRetry(mifare, trailerBlock)
-                ?: return uiString(R.string.misc_cuid_test_failed, "读取权限位失败")
+                ?: return uiString(R.string.misc_cuid_test_failed, getString(R.string.cuid_detail_read_perms_failed))
 
             // Step 4: Modify sector 0 access bits to 878787 — must use Key B to write trailer
             val newTrailer = ByteArray(16).apply {
@@ -2814,7 +2814,7 @@ class MainActivity : ComponentActivity() {
                 keysB = listOf(ffKey)
             )
             if (!authKeyBStep4 || !writeBlockWithRetry(mifare, trailerBlock, newTrailer)) {
-                return uiString(R.string.misc_cuid_test_failed, "无法修改权限位")
+                return uiString(R.string.misc_cuid_test_failed, getString(R.string.cuid_detail_modify_perms_failed))
             }
 
             // Step 5: Re-authenticate after trailer change
@@ -2825,7 +2825,7 @@ class MainActivity : ComponentActivity() {
                 keysB = listOf(ffKey)
             )
             if (!reAuthOk) {
-                return uiString(R.string.misc_cuid_test_failed, "修改权限后认证失败，请手动重置卡片")
+                return uiString(R.string.misc_cuid_test_failed, getString(R.string.cuid_detail_auth_after_modify_failed))
             }
 
             // Step 6: Try to write block 0 with test data using KeyA FF
@@ -2897,7 +2897,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clearSelfTagFiles(): String {
-        val dir = resolveSelfRfidDirectory() ?: return "未找到自有标签目录"
+        val dir = resolveSelfRfidDirectory() ?: return uiString(R.string.self_tags_not_found)
         return try {
             var deleted = 0
             dir.walkTopDown()
@@ -2908,10 +2908,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             refreshSelfTagCount()
-            "已清空自有标签，共删除 $deleted 个文件"
+            uiString(R.string.self_tags_cleared_format, deleted)
         } catch (e: Exception) {
             logDebug("清空自有标签失败: ${e.message}")
-            "清空自有标签失败: ${e.message.orEmpty()}"
+            uiString(R.string.self_tags_clear_failed_format, e.message.orEmpty())
         }
     }
 
@@ -2927,15 +2927,15 @@ class MainActivity : ComponentActivity() {
         snapmakerShareTagItems = emptyList()
         val externalDir = getExternalFilesDir(null) ?: filesDir
         val shareDir = File(externalDir, "rfid_files/share")
-        if (!shareDir.exists()) return "已清空标签数据库，共删除 ${dbDeleted + snapmakerDbDeleted} 条数据"
+        if (!shareDir.exists()) return uiString(R.string.share_db_cleared_format, dbDeleted + snapmakerDbDeleted)
         return try {
             shareDir.walkTopDown()
                 .filter { it.isFile }
                 .forEach { file -> file.delete() }
-            "已清空标签数据库，共删除 ${dbDeleted + snapmakerDbDeleted} 条数据"
+            uiString(R.string.share_db_cleared_format, dbDeleted + snapmakerDbDeleted)
         } catch (e: Exception) {
             logDebug("清空标签数据库失败: ${e.message}")
-            "清空标签数据库失败: ${e.message.orEmpty()}"
+            uiString(R.string.share_db_clear_failed_format, e.message.orEmpty())
         }
     }
 
@@ -3193,10 +3193,10 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (_: Exception) { }
             shareTagItems = shareTagItems.filterNot { it.relativePath == item.relativePath }
-            "删除成功：${item.sourceUid}"
+            uiString(R.string.share_tag_delete_success_format, item.sourceUid)
         } catch (e: Exception) {
             logDebug("删除共享标签失败: ${e.message}")
-            "删除失败: ${e.message.orEmpty()}"
+            uiString(R.string.share_tag_delete_failed_format, e.message.orEmpty())
         }
     }
 
@@ -3206,7 +3206,7 @@ class MainActivity : ComponentActivity() {
         }
         shareLoading = true
         shareRefreshStatusClearJob?.cancel()
-        shareRefreshStatusMessage = "正在后台刷新共享数据..."
+        shareRefreshStatusMessage = uiString(R.string.share_refreshing)
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 ensureBundledShareDataExtracted()
@@ -3215,12 +3215,12 @@ class MainActivity : ComponentActivity() {
                 withContext(Dispatchers.Main) {
                     shareTagItems = loadedItems
                     shareLoading = false
-                    shareRefreshStatusMessage = "已刷新共享数据，共 ${loadedItems.size} 条"
+                    shareRefreshStatusMessage = uiString(R.string.share_refreshed_format, loadedItems.size)
                     scheduleClearShareRefreshStatusMessage()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    shareRefreshStatusMessage = "刷新失败: ${e.message.orEmpty()}"
+                    shareRefreshStatusMessage = uiString(R.string.share_refresh_failed_format, e.message.orEmpty())
                     scheduleClearShareRefreshStatusMessage()
                 }
             } finally {
@@ -3441,10 +3441,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun writeTagFromDump(tag: Tag, item: ShareTagItem, onStatusUpdate: ((String) -> Unit)? = null): String {
-        val mifare = MifareClassic.get(tag) ?: return "写入失败：标签不支持 MIFARE Classic"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.write_failed_no_mifare)
         val sourceBlocks = item.rawBlocks
         if (sourceBlocks.isEmpty()) {
-            return "写入失败：源文件数据为空"
+            return uiString(R.string.write_failed_empty_data)
         }
 
         val ffKey = ByteArray(6) { 0xFF.toByte() }
@@ -3467,11 +3467,11 @@ class MainActivity : ComponentActivity() {
                         val precheck = precheckBeforeWrite(mifare, sourceBlocks)
                         when (precheck.action) {
                             WritePrecheckAction.ALREADY_MATCHED -> {
-                                return "写入前检查：目标卡已是目标数据，无需重复写入"
+                                return uiString(R.string.write_precheck_already_matched)
                             }
                             WritePrecheckAction.BLOCKED_CONFLICT,
                             WritePrecheckAction.BLOCKED_UNREADABLE -> {
-                                return "写入前检查失败：${precheck.message}"
+                                return uiString(R.string.write_precheck_blocked_format, precheck.message.orEmpty())
                             }
                             WritePrecheckAction.RESUME_FROM_POINT -> {
                                 resumePoint = precheck.resumePoint
@@ -3499,10 +3499,10 @@ class MainActivity : ComponentActivity() {
                             keysB = listOf(ffKey, sourceKeyB)
                         )
                         if (!authenticated) {
-                            return "写入失败：扇区 $sector 认证失败"
+                            return uiString(R.string.write_failed_sector_auth_format, sector)
                         }
 
-                        onStatusUpdate?.invoke("正在写入扇区 ${sector + 1}/$targetSectorCount...")
+                        onStatusUpdate?.invoke(uiString(R.string.write_sector_format, sector + 1, targetSectorCount))
 
                         val startBlock = mifare.sectorToBlock(sector)
                         val startOffset = if (sector == resumePoint.sector) {
@@ -3515,14 +3515,14 @@ class MainActivity : ComponentActivity() {
                             val blockIndex = startBlock + offset
                             // 严格 1:1 按文件写入（包括 trailer 密钥与权限位）。
                             val targetData = sourceBlocks.getOrNull(blockIndex)
-                                ?: return "写入失败：区块 $blockIndex 源数据缺失"
+                                ?: return uiString(R.string.write_failed_block_missing_format, blockIndex)
                             if (targetData.size != 16) {
-                                return "写入失败：区块 $blockIndex 数据长度异常"
+                                return uiString(R.string.write_failed_block_size_format, blockIndex)
                             }
 
                             val writeOk = writeBlockWithRetry(mifare, blockIndex, targetData)
                             if (!writeOk) {
-                                throw IOException("区块 $blockIndex 写入异常")
+                                throw IOException(uiString(R.string.write_block_error_format, blockIndex))
                             }
                             // 每块间隔一点点，降低连续写导致的链路抖动。
                             Thread.sleep(20)
@@ -3538,23 +3538,23 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {
                     }
                     if (recoverAttempts > WRITE_RESUME_MAX_ATTEMPTS) {
-                        return "写入失败：${e.message.orEmpty()}（已超过续写重试次数）"
+                        return uiString(R.string.write_failed_retry_format, e.message.orEmpty())
                     }
                     val detected = detectWriteResumePoint(tag, sourceBlocks)
                     if (detected == null) {
-                        return "写入失败：中断后无法定位断点"
+                        return uiString(R.string.write_failed_resume_lost)
                     }
                     if (detected.sector >= targetSectorCount) {
                         // 探测到全卡已是目标内容，视为成功。
-                        return "写入成功：断线后校验断点显示已完成全部写入"
+                        return uiString(R.string.write_success_resume)
                     }
                     resumePoint = detected
                 }
             }
 
-            "写入成功：已完成全部区块写入"
+            uiString(R.string.write_success_done)
         } catch (e: Exception) {
-            "写入失败：${e.message.orEmpty()}"
+            uiString(R.string.write_failed_format, e.message.orEmpty())
         } finally {
             try {
                 mifare.close()
@@ -3575,11 +3575,11 @@ class MainActivity : ComponentActivity() {
         item: ShareTagItem,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
-        val mifare = MifareClassic.get(tag) ?: return "改写失败：标签不支持 MIFARE Classic"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.cmodify_failed_no_mifare)
         val sourceBlocks = item.rawBlocks
-        if (sourceBlocks.isEmpty()) return "改写失败：源数据为空"
+        if (sourceBlocks.isEmpty()) return uiString(R.string.cmodify_failed_empty_data)
 
-        val uid = tag.id ?: return "改写失败：无法读取卡 UID"
+        val uid = tag.id ?: return uiString(R.string.cmodify_failed_no_uid)
         val currentKeysA = deriveWriteKeys(uid, WRITE_INFO_A)
         val currentKeysB = deriveWriteKeys(uid, WRITE_INFO_B)
 
@@ -3648,16 +3648,16 @@ class MainActivity : ComponentActivity() {
             return true // 读取失败但 FF 认证已通过，视为成功
         }
 
-        val retryHint = "请移开标签重新贴上重试，确保标签处于手机 NFC 区域"
+        val retryHint = uiString(R.string.cmodify_retry_hint)
 
         return try {
             mifare.connect()
             Thread.sleep(300)
 
             // ===== Phase 1: 将所有扇区 Trailer 重置为全FF =====
-            onStatusUpdate?.invoke("正在还原 Trailer，请等待...")
+            onStatusUpdate?.invoke(uiString(R.string.cmodify_restoring_trailer))
             for (sector in 0 until targetSectorCount) {
-                onStatusUpdate?.invoke("正在还原 Trailer ${sector + 1}/$targetSectorCount...")
+                onStatusUpdate?.invoke(uiString(R.string.cmodify_restoring_trailer_format, sector + 1, targetSectorCount))
                 val trailerBlock = mifare.sectorToBlock(sector) + 3
                 var done = false
                 for (attempt in 1..maxRetry) {
@@ -3676,14 +3676,14 @@ class MainActivity : ComponentActivity() {
                     }
                     Thread.sleep(60L * attempt)
                 }
-                if (!done) return "扇区 $sector Trailer 还原失败，$retryHint"
+                if (!done) return uiString(R.string.cmodify_sector_trailer_failed_format, sector, retryHint)
             }
-            onStatusUpdate?.invoke("Trailer 还原完成，正在写入目标数据...")
+            onStatusUpdate?.invoke(uiString(R.string.cmodify_trailer_done_writing))
             Thread.sleep(100)
 
             // ===== Phase 2: 使用FF密钥逐扇区写入源数据 =====
             for (sector in 0 until targetSectorCount) {
-                onStatusUpdate?.invoke("正在写入数据 ${sector + 1}/$targetSectorCount...")
+                onStatusUpdate?.invoke(uiString(R.string.cmodify_writing_format, sector + 1, targetSectorCount))
                 var done = false
                 for (attempt in 1..maxRetry) {
                     reconnectMifareClassic(mifare)
@@ -3696,19 +3696,19 @@ class MainActivity : ComponentActivity() {
                         val blockIndex = startBlock + offset
                         val srcIdx = sector * 4 + offset
                         val blockData = sourceBlocks.getOrNull(srcIdx)
-                            ?: return "改写失败：区块 $srcIdx 源数据缺失"
-                        if (blockData.size != 16) return "改写失败：区块 $srcIdx 数据长度异常"
+                            ?: return uiString(R.string.cmodify_failed_block_missing_format, srcIdx)
+                        if (blockData.size != 16) return uiString(R.string.cmodify_failed_block_size_format, srcIdx)
                         if (!writeBlockWithRetry(mifare, blockIndex, blockData)) { blockFailed = true; break }
                         Thread.sleep(15)
                     }
                     if (!blockFailed) { done = true; break }
                     Thread.sleep(60L * attempt)
                 }
-                if (!done) return "扇区 $sector 数据写入失败，$retryHint"
+                if (!done) return uiString(R.string.cmodify_sector_write_failed_format, sector, retryHint)
             }
 
             // ===== Phase 3: 重连，使用源数据密钥全量校验 =====
-            onStatusUpdate?.invoke("写入完成，正在校验数据...")
+            onStatusUpdate?.invoke(uiString(R.string.cmodify_verifying))
             try { mifare.close() } catch (_: Exception) {}
             Thread.sleep(150)
             mifare.connect()
@@ -3716,12 +3716,12 @@ class MainActivity : ComponentActivity() {
 
             for (sector in 0 until targetSectorCount) {
                 val trailerData = sourceBlocks.getOrNull(sector * 4 + 3)
-                    ?: return "校验失败：扇区 $sector 源 Trailer 缺失"
-                if (trailerData.size != 16) return "校验失败：扇区 $sector Trailer 长度异常"
+                    ?: return uiString(R.string.cmodify_verify_trailer_missing_format, sector)
+                if (trailerData.size != 16) return uiString(R.string.cmodify_verify_trailer_size_format, sector)
                 val srcKeyA = trailerData.copyOfRange(0, 6)
                 val srcKeyB = trailerData.copyOfRange(10, 16)
                 if (!authenticateSectorWithRetry(mifare, sector, listOf(srcKeyA), listOf(srcKeyB))) {
-                    return "改写成功但校验认证失败：扇区 $sector，$retryHint"
+                    return uiString(R.string.cmodify_success_auth_failed_format, sector, retryHint)
                 }
                 val startBlock = mifare.sectorToBlock(sector)
                 for (offset in 0 until 4) {
@@ -3729,7 +3729,7 @@ class MainActivity : ComponentActivity() {
                     val srcIdx = sector * 4 + offset
                     val expected = sourceBlocks.getOrNull(srcIdx) ?: continue
                     val actual = readBlockWithRetry(mifare, blockIndex)
-                        ?: return "改写成功但校验读取失败：区块 $blockIndex，$retryHint"
+                        ?: return uiString(R.string.cmodify_success_read_failed_format, blockIndex, retryHint)
                     val cmpExpected = if (blockIndex % 4 == 3) expected.copyOf().also {
                         for (i in 0..5) it[i] = 0; for (i in 10..15) it[i] = 0
                     } else expected
@@ -3737,14 +3737,14 @@ class MainActivity : ComponentActivity() {
                         for (i in 0..5) it[i] = 0; for (i in 10..15) it[i] = 0
                     } else actual
                     if (!cmpActual.contentEquals(cmpExpected)) {
-                        return "改写成功但数据不一致：区块 $blockIndex，$retryHint"
+                        return uiString(R.string.cmodify_success_mismatch_format, blockIndex, retryHint)
                     }
                 }
             }
-            onStatusUpdate?.invoke("改写并校验完成！")
-            "改写成功：已完成全部区块写入并校验"
+            onStatusUpdate?.invoke(uiString(R.string.cmodify_done))
+            uiString(R.string.cmodify_success)
         } catch (e: Exception) {
-            "改写失败：${e.message.orEmpty()}，$retryHint"
+            uiString(R.string.cmodify_failed_format, e.message.orEmpty(), retryHint)
         } finally {
             try { mifare.close() } catch (_: Exception) {}
         }
@@ -3754,22 +3754,22 @@ class MainActivity : ComponentActivity() {
         tag: Tag,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
-        val mifare = MifareClassic.get(tag) ?: return "格式化失败：标签不支持 MIFARE Classic"
-        val uid = tag.id ?: return "格式化失败：无法读取UID"
-        if (uid.isEmpty()) return "格式化失败：UID为空"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.format_failed_no_mifare)
+        val uid = tag.id ?: return uiString(R.string.format_failed_no_uid)
+        if (uid.isEmpty()) return uiString(R.string.format_failed_uid_empty)
 
         val derivedKeysA = try {
             deriveWriteKeys(uid, WRITE_INFO_A)
         } catch (e: Exception) {
-            return "格式化失败：派生KeyA失败 ${e.message.orEmpty()}"
+            return uiString(R.string.format_failed_key_a_format, e.message.orEmpty())
         }
         val derivedKeysB = try {
             deriveWriteKeys(uid, WRITE_INFO_B)
         } catch (e: Exception) {
-            return "格式化失败：派生KeyB失败 ${e.message.orEmpty()}"
+            return uiString(R.string.format_failed_key_b_format, e.message.orEmpty())
         }
         if (derivedKeysA.size < WRITE_SECTOR_COUNT || derivedKeysB.size < WRITE_SECTOR_COUNT) {
-            return "格式化失败：派生秘钥数量不足"
+            return uiString(R.string.format_failed_key_count)
         }
 
         val (snapKeysA, snapKeysB) = deriveSnapmakerKeys(uid)
@@ -3904,11 +3904,11 @@ class MainActivity : ComponentActivity() {
 
         return try {
             mifare.connect()
-            onStatusUpdate?.invoke("正在格式化")
+            onStatusUpdate?.invoke(uiString(R.string.format_starting))
             logStep("开始处理 UID=${uid.toHex().uppercase(Locale.US)}")
 
             if (mifare.sectorCount < WRITE_SECTOR_COUNT) {
-                return fail("格式化失败：标签扇区数量不足 ${mifare.sectorCount}")
+                return fail(uiString(R.string.format_failed_sector_count_format, mifare.sectorCount))
             }
 
             // 记录第0扇区成功的品牌，后续扇区优先使用
@@ -3935,9 +3935,9 @@ class MainActivity : ComponentActivity() {
                         keysA = listOf(snapKeysA[0]),
                         keysB = listOf(snapKeysB[0])
                     ) -> { logStep("扇区0: 快造派生秘钥认证成功"); detectedBrand = "snapmaker" }
-                    else -> return fail("格式化失败：扇区0 拓竹/FF/创想/快造秘钥认证均失败，无法读取块0")
+                    else -> return fail(uiString(R.string.format_failed_sector0_all_failed))
                 }
-                readBlockWithRetry(mifare, 0) ?: return fail("格式化失败：读取块0失败")
+                readBlockWithRetry(mifare, 0) ?: return fail(uiString(R.string.format_failed_read_block0))
             }
             logStep("检测到卡片品牌：$detectedBrand，后续扇区优先使用此品牌秘钥")
             logStep("块0读取成功（用于最终校验）")
@@ -3952,22 +3952,22 @@ class MainActivity : ComponentActivity() {
                         keysB = listOf(ffKey)
                     )
                     if (!authOk) {
-                        return "校验失败：扇区 $sector 使用FF秘钥认证失败"
+                        return uiString(R.string.format_verify_failed_ff_auth_format, sector)
                     }
                     val startBlock = mifare.sectorToBlock(sector)
                     for (offset in 0 until 4) {
                         val blockIndex = startBlock + offset
                         val actual = readBlockWithRetry(mifare, blockIndex)
-                            ?: return "校验失败：区块 $blockIndex 读取失败"
+                            ?: return uiString(R.string.format_verify_failed_read_format, blockIndex)
                         if (blockIndex == 0) {
                             if (!actual.contentEquals(originalBlock0)) {
-                                return "校验失败：区块0被修改"
+                                return uiString(R.string.format_verify_failed_block0)
                             }
                         } else if (blockIndex % 4 == 3) {
-                            // trailer 不参与“清零校验”，本步骤只要求 FF 可认证即可。
+                            // trailer 不参与”清零校验”，本步骤只要求 FF 可认证即可。
                             continue
                         } else if (!actual.all { it == 0.toByte() }) {
-                            return "校验失败：区块 $blockIndex 不是全00"
+                            return uiString(R.string.format_verify_failed_not_zero_format, blockIndex)
                         }
                     }
                     logStep("扇区$sector: 校验通过")
@@ -4001,7 +4001,7 @@ class MainActivity : ComponentActivity() {
                                 if (auth) {
                                     logStep("扇区$sector: 拓竹派生秘钥认证成功，重置 trailer")
                                     if (!resetTrailerByDerivedKeyBStages(sector))
-                                        return fail("格式化失败：扇区 $sector 拓竹 trailer 重置失败")
+                                        return fail(uiString(R.string.format_failed_bambu_trailer_reset_format, sector))
                                     logStep("扇区$sector: 拓竹 trailer 重置成功")
                                     sectorDone = true
                                 }
@@ -4046,7 +4046,7 @@ class MainActivity : ComponentActivity() {
                                 if (auth) {
                                     logStep("扇区$sector: 创想派生秘钥认证成功，重置 trailer")
                                     if (!resetTrailerByCrealityDerivedKey(sector))
-                                        return fail("格式化失败：扇区 $sector 创想 trailer 重置失败")
+                                        return fail(uiString(R.string.format_failed_creality_trailer_reset_format, sector))
                                     logStep("扇区$sector: 创想 trailer 重置成功")
                                     sectorDone = true
                                 }
@@ -4060,14 +4060,14 @@ class MainActivity : ComponentActivity() {
                                 if (auth) {
                                     logStep("扇区$sector: 快造派生秘钥认证成功，重置 trailer")
                                     if (!resetTrailerBySnapmakerDerivedKeys(sector))
-                                        return fail("格式化失败：扇区 $sector 快造 trailer 重置失败")
+                                        return fail(uiString(R.string.format_failed_snapmaker_trailer_reset_format, sector))
                                     logStep("扇区$sector: 快造 trailer 重置成功")
                                     sectorDone = true
                                 }
                             }
                         }
                     }
-                    if (!sectorDone) return fail("格式化失败：扇区 $sector 拓竹/FF/创想/快造 秘钥认证均失败")
+                    if (!sectorDone) return fail(uiString(R.string.format_failed_all_keys_failed_format, sector))
                 }
                 logStep("已重置全部 trailer")
 
@@ -4081,7 +4081,7 @@ class MainActivity : ComponentActivity() {
                         keysB = listOf(ffKey, derivedKeysB[sector], snapKeysB[sector])
                     )
                     if (!authOk) {
-                        return fail("格式化失败：扇区 $sector 使用FF/派生秘钥认证失败")
+                        return fail(uiString(R.string.format_failed_ff_auth_format, sector))
                     }
                     val startBlock = mifare.sectorToBlock(sector)
                     for (offset in 0 until 4) {
@@ -4090,18 +4090,18 @@ class MainActivity : ComponentActivity() {
                             continue
                         }
                         if (!writeBlockWithRetry(mifare, blockIndex, zeroBlock)) {
-                            return fail("格式化失败：区块 $blockIndex 写零失败")
+                            return fail(uiString(R.string.format_failed_block_write_format, blockIndex))
                         }
                     }
                     logStep("扇区$sector: 区块清零完成")
                 }
                 logStep("已完成数据区块清零（跳过 block0 和 trailer）")
-                onStatusUpdate?.invoke("格式化完成，正在校检")
+                onStatusUpdate?.invoke(uiString(R.string.format_checking))
 
                 val verifyError = runStep3VerifyByFf()
                 if (verifyError == null) {
                     logStep("校验通过")
-                    return "格式化标签成功：已重置并校验通过"
+                    return uiString(R.string.format_success)
                 }
 
                 if (attempt < maxStep3RetryCount) {
@@ -4111,12 +4111,12 @@ class MainActivity : ComponentActivity() {
                 return fail(verifyError)
             }
 
-            fail("格式化失败：步骤3重试结束仍未通过")
+            fail(uiString(R.string.format_failed_max_retry))
         } catch (e: Exception) {
             logDebug("格式化标签失败: ${e.message}\n${Log.getStackTraceString(e)}")
             LogCollector.append(this, "E", "格式化标签失败: ${e.message}")
             appendDebugInfoDialog("异常: ${e.message.orEmpty()}")
-            "格式化失败：${e.message.orEmpty()}"
+            uiString(R.string.format_failed_format, e.message.orEmpty())
         } finally {
             try {
                 mifare.close()
@@ -4129,7 +4129,7 @@ class MainActivity : ComponentActivity() {
         val message = try {
             buildNdefMessage(request)
         } catch (e: Exception) {
-            return "NDEF写入失败：生成消息异常 ${e.message.orEmpty()}"
+            return uiString(R.string.ndef_write_failed_generate_format, e.message.orEmpty())
         }
         val expectedBytes = message.toByteArray()
         val mifareClassic = MifareClassic.get(tag)
@@ -4138,10 +4138,10 @@ class MainActivity : ComponentActivity() {
             if (mifareClassic != null) {
                 writeNdefByMifareClassicMappingAndVerify(mifareClassic, expectedBytes)
             } else {
-                "NDEF写入失败：标签不支持 MIFARE Classic 直写映射"
+                uiString(R.string.ndef_write_failed_no_mapping)
             }
         } catch (e: Exception) {
-            "NDEF写入失败：${e.message.orEmpty()}"
+            uiString(R.string.ndef_write_failed_format, e.message.orEmpty())
         } finally {
             try {
                 mifareClassic?.close()
@@ -4162,7 +4162,7 @@ class MainActivity : ComponentActivity() {
                 mifare.connect()
             }
             if (mifare.sectorCount <= 1) {
-                return "NDEF写入失败：M1卡扇区数量不足"
+                return uiString(R.string.ndef_write_m1_failed_sectors)
             }
 
             val dataBlocks = ArrayList<Int>()
@@ -4174,7 +4174,7 @@ class MainActivity : ComponentActivity() {
                     keysB = listOf(ffKey)
                 )
                 if (!authOk) {
-                    return "NDEF写入失败：M1映射认证失败（扇区 $sector，需FF秘钥）"
+                    return uiString(R.string.ndef_write_m1_failed_auth_format, sector)
                 }
                 val startBlock = mifare.sectorToBlock(sector)
                 val blockCount = mifare.getBlockCountInSector(sector)
@@ -4188,7 +4188,7 @@ class MainActivity : ComponentActivity() {
 
             val capacity = dataBlocks.size * 16
             if (tlv.size > capacity) {
-                return "NDEF写入失败：M1映射容量不足（需要${tlv.size}字节，最大${capacity}字节）"
+                return uiString(R.string.ndef_write_m1_failed_capacity_format, tlv.size, capacity)
             }
 
             val usedBlocks = ArrayList<Int>()
@@ -4208,7 +4208,7 @@ class MainActivity : ComponentActivity() {
             }
             if (writeOffset < tlv.size) {
                 val remain = tlv.size - writeOffset
-                return "NDEF写入失败：M1映射可写区块不足，剩余 $remain 字节未写入"
+                return uiString(R.string.ndef_write_m1_failed_blocks_format, remain)
             }
 
             val readBack = ByteArray(tlv.size)
@@ -4216,21 +4216,21 @@ class MainActivity : ComponentActivity() {
             for (blockIndex in usedBlocks) {
                 if (readOffset >= tlv.size) break
                 val block = readBlockWithRetry(mifare, blockIndex)
-                    ?: return "NDEF写入失败：M1映射校检读取区块 $blockIndex 失败"
+                    ?: return uiString(R.string.ndef_write_m1_failed_verify_read_format, blockIndex)
                 val copyLen = minOf(16, tlv.size - readOffset)
                 System.arraycopy(block, 0, readBack, readOffset, copyLen)
                 readOffset += copyLen
             }
             if (!readBack.contentEquals(tlv)) {
-                return "NDEF写入失败：M1映射写入后校检不一致"
+                return uiString(R.string.ndef_write_m1_failed_verify_mismatch)
             }
             if (skippedBlocks.isEmpty()) {
-                "NDEF写入成功：已通过 MIFARE Classic 映射写入并校检（FF秘钥）"
+                uiString(R.string.ndef_write_m1_success)
             } else {
-                "NDEF写入成功：已通过 MIFARE Classic 映射写入并校检（FF秘钥，跳过不可写区块 ${skippedBlocks.joinToString(",")}）"
+                uiString(R.string.ndef_write_m1_success_skipped_format, skippedBlocks.joinToString(","))
             }
         } catch (e: Exception) {
-            "NDEF写入失败：M1映射异常 ${e.message.orEmpty()}"
+            uiString(R.string.ndef_write_m1_failed_exception_format, e.message.orEmpty())
         }
     }
 
@@ -4300,10 +4300,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun verifyTagAgainstDump(tag: Tag, item: ShareTagItem): String {
-        val mifare = MifareClassic.get(tag) ?: return "校验失败：标签不支持 MIFARE Classic"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.verify_failed_no_mifare)
         val sourceBlocks = item.rawBlocks
         if (sourceBlocks.size < 64) {
-            return "校验失败：源数据不足 64 区块"
+            return uiString(R.string.verify_failed_insufficient_blocks)
         }
 
         return try {
@@ -4313,9 +4313,9 @@ class MainActivity : ComponentActivity() {
             for (sector in 0 until targetSectorCount) {
                 val trailerIndex = sector * 4 + 3
                 val trailerData = sourceBlocks.getOrNull(trailerIndex)
-                    ?: return "校验失败：扇区 $sector trailer 缺失"
+                    ?: return uiString(R.string.verify_sector_trailer_missing_format, sector)
                 if (trailerData.size != 16) {
-                    return "校验失败：扇区 $sector trailer 长度异常"
+                    return uiString(R.string.verify_sector_trailer_size_format, sector)
                 }
                 val sourceKeyA = trailerData.copyOfRange(0, 6)
                 val sourceKeyB = trailerData.copyOfRange(10, 16)
@@ -4326,14 +4326,14 @@ class MainActivity : ComponentActivity() {
                     keysB = listOf(sourceKeyB)
                 )
                 if (!authenticated) {
-                    return "校验失败：扇区 $sector 使用文件秘钥认证失败"
+                    return uiString(R.string.verify_sector_auth_failed_format, sector)
                 }
 
                 val startBlock = mifare.sectorToBlock(sector)
                 for (offset in 0 until 4) {
                     val blockIndex = startBlock + offset
                     val actual = readBlockWithRetry(mifare, blockIndex)
-                        ?: return "校验失败：区块 $blockIndex 读取异常"
+                        ?: return uiString(R.string.verify_block_read_failed_format, blockIndex)
                     readBackBlocks[blockIndex] = actual
                 }
             }
@@ -4359,13 +4359,13 @@ class MainActivity : ComponentActivity() {
                 val expected = expectedLines.getOrNull(index).orEmpty()
                 val actual = actualLines.getOrNull(index).orEmpty()
                 if (expected != actual) {
-                    return "校验失败：第 ${index + 1} 行不一致，期望=$expected，实际=$actual"
+                    return uiString(R.string.verify_line_mismatch_format, index + 1, expected, actual)
                 }
             }
 
-            "校验成功"
+            uiString(R.string.verify_success)
         } catch (e: Exception) {
-            "校验失败：${e.message.orEmpty()}"
+            uiString(R.string.verify_failed_format, e.message.orEmpty())
         } finally {
             try {
                 mifare.close()
@@ -4623,7 +4623,7 @@ class MainActivity : ComponentActivity() {
         return CrealityTagData(
             materialId = raw.substring(12, 17).trim(),
             colorHex = raw.substring(18, 24).trim(),
-            weight = CREALITY_LENGTH_TO_WEIGHT[raw.substring(24, 28)] ?: "未知",
+            weight = CREALITY_LENGTH_TO_WEIGHT[raw.substring(24, 28)] ?: getString(R.string.label_unknown),
             serial = serial,
             vendorId = vendorId,
             batch = "",
@@ -4663,11 +4663,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun writeCrealityTag(tag: Tag, pending: CrealityWritePending): String {
-        val mifare = MifareClassic.get(tag) ?: return "写入失败：不支持 MIFARE Classic"
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.creality_write_failed_no_mifare)
         return try {
             if (!mifare.isConnected) mifare.connect()
             Thread.sleep(300)
-            val uid = tag.id ?: return "写入失败：无法读取 UID"
+            val uid = tag.id ?: return uiString(R.string.creality_write_failed_no_uid)
             val derivedKey = deriveCrealityKeyA(uid)
             val ffKey = ByteArray(6) { 0xFF.toByte() }
             val authenticated = authenticateSectorWithRetry(
@@ -4675,21 +4675,21 @@ class MainActivity : ComponentActivity() {
                 keysA = listOf(derivedKey, ffKey),
                 keysB = listOf(derivedKey, ffKey)
             )
-            if (!authenticated) return "写入失败：扇区1 认证失败"
+            if (!authenticated) return uiString(R.string.creality_write_failed_auth)
             val plaintext = buildCrealityTagBytes(pending.materialId, pending.colorHex, pending.weight)
             val encrypted = encryptCrealityData48(plaintext)
             val b4ok = writeBlockWithRetry(mifare, 4, encrypted.copyOfRange(0, 16))
             val b5ok = writeBlockWithRetry(mifare, 5, encrypted.copyOfRange(16, 32))
             val b6ok = writeBlockWithRetry(mifare, 6, encrypted.copyOfRange(32, 48))
-            if (!b4ok || !b5ok || !b6ok) return "写入失败：数据块写入异常"
+            if (!b4ok || !b5ok || !b6ok) return uiString(R.string.creality_write_failed_blocks)
             // Update trailer: KeyA=derived, access bits=FF078069, KeyB=FF×6
             val trailer = derivedKey +
                 byteArrayOf(0xFF.toByte(), 0x07.toByte(), 0x80.toByte(), 0x69.toByte()) +
                 ffKey
             writeBlockWithRetry(mifare, 7, trailer)
-            "写入成功"
+            uiString(R.string.creality_write_success)
         } catch (e: Exception) {
-            "写入失败：${e.message.orEmpty()}"
+            uiString(R.string.creality_write_failed_format, e.message.orEmpty())
         } finally {
             try { mifare.close() } catch (_: Exception) {}
         }
@@ -5144,12 +5144,12 @@ class MainActivity : ComponentActivity() {
         val parts = ArrayList<String>()
         if (type.isNotBlank()) {
             val speechType = buildSpeechMaterialName(type)
-            parts.add("耗材类型 $speechType")
+            parts.add(getString(R.string.tts_material_type_format, speechType))
         }
         if (colorName.isNotBlank()) {
-            parts.add("颜色 $colorName")
+            parts.add(getString(R.string.tts_color_format, colorName))
         }
-        val message = parts.joinToString(separator = "，")
+        val message = parts.joinToString(separator = getString(R.string.tts_separator))
         if (message.isNotBlank()) {
             logDebug("语音播报内容: $message")
             tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "scan_result")

@@ -339,7 +339,7 @@ fun ColorPickerDialog(
                         keyboardType = KeyboardType.Ascii
                     ),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    prefix = { Text("#", fontFamily = FontFamily.Monospace) }
+                    prefix = { Text(stringResource(R.string.creality_hex_prefix), fontFamily = FontFamily.Monospace) }
                 )
             }
         },

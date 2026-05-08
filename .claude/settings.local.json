@@ -12,7 +12,10 @@
       "Bash(grep -v \"//.*onCreate\\\\|//.*onUpgrade\")",
       "Bash(xargs wc:*)",
       "Bash(xargs grep:*)",
-      "Bash(ls C:/Users/jack8/StudioProjects/BambuRfidReader/*.md)"
+      "Bash(ls C:/Users/jack8/StudioProjects/BambuRfidReader/*.md)",
+      "Bash(grep *)",
+      "PowerShell(.\\\\gradlew assembleDebug 2>&1 | Select-Object -Last 25)",
+      "Bash(python3 *)"
     ]
   }
 }

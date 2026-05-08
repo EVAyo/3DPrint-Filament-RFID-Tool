@@ -157,9 +157,9 @@ private data class ColorGroup(
 
 private data class CategoryGroup(val materialType: String, val colorGroups: List<ColorGroup>)
 
-private fun buildCategoryGroups(items: List<ShareTagItem>): List<CategoryGroup> {
+private fun buildCategoryGroups(items: List<ShareTagItem>, unknownLabel: String): List<CategoryGroup> {
     return items
-        .groupBy { it.materialType.ifBlank { "未知" } }
+        .groupBy { it.materialType.ifBlank { unknownLabel } }
         .entries
         .sortedBy { it.key }
         .map { (material, matItems) ->
@@ -636,23 +636,29 @@ private fun CModifyRecoveryDialog(
     val context = LocalContext.current
     val ffKey = "FFFFFFFFFFFF"
 
+    val strOriginalUidHeader = stringResource(R.string.tag_cuid_keys_original_uid_header, info.originalUid)
+    val strTargetUidHeader = stringResource(R.string.tag_cuid_keys_target_uid_header, info.targetUid)
+    val strFfFixedHeader = stringResource(R.string.tag_cuid_keys_ff_fixed_header)
+    val strKeyEntryAFormat = stringResource(R.string.tag_cuid_key_entry_a)
+    val strKeyEntryBFormat = stringResource(R.string.tag_cuid_key_entry_b)
+
     // 构建可滚动密钥区文字
     val keysText = buildString {
-        appendLine("=== 原UID(${info.originalUid})派生密钥 ===")
+        appendLine(strOriginalUidHeader)
         for (i in info.originalKeysA.indices) {
-            appendLine("S${i} A: ${info.originalKeysA.getOrElse(i) { "" }}")
-            appendLine("S${i} B: ${info.originalKeysB.getOrElse(i) { "" }}")
+            appendLine(String.format(strKeyEntryAFormat, i, info.originalKeysA.getOrElse(i) { "" }))
+            appendLine(String.format(strKeyEntryBFormat, i, info.originalKeysB.getOrElse(i) { "" }))
         }
         if (info.targetKeysA.isNotEmpty() && info.targetUid != info.originalUid) {
             appendLine()
-            appendLine("=== 目标UID(${info.targetUid})派生密钥 ===")
+            appendLine(strTargetUidHeader)
             for (i in info.targetKeysA.indices) {
-                appendLine("S${i} A: ${info.targetKeysA.getOrElse(i) { "" }}")
-                appendLine("S${i} B: ${info.targetKeysB.getOrElse(i) { "" }}")
+                appendLine(String.format(strKeyEntryAFormat, i, info.targetKeysA.getOrElse(i) { "" }))
+                appendLine(String.format(strKeyEntryBFormat, i, info.targetKeysB.getOrElse(i) { "" }))
             }
         }
         appendLine()
-        appendLine("=== FF固定秘钥 ===")
+        appendLine(strFfFixedHeader)
         appendLine(ffKey)
     }.trimEnd()
 
@@ -882,7 +888,8 @@ fun TagScreen(
         filtered
     }
 
-    val categories = remember(filteredItems) { buildCategoryGroups(filteredItems) }
+    val unknownLabel = stringResource(R.string.label_unknown)
+    val categories = remember(filteredItems) { buildCategoryGroups(filteredItems, unknownLabel) }
 
     val selectedItem = items.firstOrNull { it.relativePath == selectedFileName }
 

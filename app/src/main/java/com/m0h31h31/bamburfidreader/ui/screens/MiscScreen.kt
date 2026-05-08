@@ -904,7 +904,7 @@ fun MiscScreen(
                                 title = {
                                     Text(stringResource(
                                         R.string.downloading_tag_package_brand,
-                                        if (dlBrand == "bambu") "Bambu" else "Snapmaker"
+                                        if (dlBrand == "bambu") stringResource(R.string.brand_bambu) else stringResource(R.string.brand_snapmaker)
                                     ))
                                 },
                                 text = {
@@ -915,7 +915,7 @@ fun MiscScreen(
                                                 modifier = Modifier.fillMaxWidth()
                                             )
                                             Text(
-                                                "$dlProgress%",
+                                                stringResource(R.string.format_percent, dlProgress),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )

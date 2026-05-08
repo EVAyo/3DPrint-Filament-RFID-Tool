@@ -682,9 +682,9 @@ fun ReaderScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         val brands = listOf(
-                            ReaderBrand.BAMBU    to "拓竹",
-                            ReaderBrand.CREALITY to "创想",
-                            ReaderBrand.SNAPMAKER to "快造"
+                            ReaderBrand.BAMBU    to stringResource(R.string.tab_tag),
+                            ReaderBrand.CREALITY to stringResource(R.string.tab_creality),
+                            ReaderBrand.SNAPMAKER to stringResource(R.string.tab_snapmaker)
                         )
                         brands.forEach { (brand, label) ->
                             val selected = readerBrand == brand
@@ -921,7 +921,7 @@ fun ReaderScreen(
                                         )
                                         androidx.compose.foundation.Image(
                                             painter = painterResource(id = R.drawable.creality_logo_mask),
-                                            contentDescription = "Creality",
+                                            contentDescription = stringResource(R.string.content_logo_creality),
                                             colorFilter = ColorFilter.tint(animatedCrealityTint),
                                             modifier = Modifier.size(80.dp, 250.dp)
                                         )
@@ -938,7 +938,7 @@ fun ReaderScreen(
                                         )
                                         androidx.compose.foundation.Image(
                                             painter = painterResource(id = R.drawable.snapmaker_logo_mask),
-                                            contentDescription = "Snapmaker",
+                                            contentDescription = stringResource(R.string.content_logo_snapmaker),
                                             colorFilter = ColorFilter.tint(animatedSnapTint),
                                             modifier = Modifier.size(80.dp, 250.dp)
                                         )

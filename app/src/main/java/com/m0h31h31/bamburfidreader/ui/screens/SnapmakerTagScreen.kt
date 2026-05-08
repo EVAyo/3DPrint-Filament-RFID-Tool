@@ -105,9 +105,9 @@ private data class SnapTypeCategory(
     val colorGroups: List<SnapColorGroup>
 )
 
-private fun buildSnapTypeCategoryGroups(items: List<SnapmakerShareTagItem>): List<SnapTypeCategory> =
+private fun buildSnapTypeCategoryGroups(items: List<SnapmakerShareTagItem>, unknownLabel: String): List<SnapTypeCategory> =
     items
-        .groupBy { snapFullTypeName(it.mainType, it.subType).ifBlank { "未知" } }
+        .groupBy { snapFullTypeName(it.mainType, it.subType).ifBlank { unknownLabel } }
         .entries
         .sortedBy { it.key }
         .map { (typeKey, typeItems) ->
@@ -176,7 +176,8 @@ fun SnapmakerTagScreen(
         )
     }
 
-    val categories = remember(filteredItems) { buildSnapTypeCategoryGroups(filteredItems) }
+    val unknownLabel = stringResource(R.string.label_unknown)
+    val categories = remember(filteredItems) { buildSnapTypeCategoryGroups(filteredItems, unknownLabel) }
     val selectedItem = items.firstOrNull { it.uid == selectedUid }
 
     Surface(modifier = modifier.fillMaxSize().neuBackground(), color = MaterialTheme.colorScheme.background) {

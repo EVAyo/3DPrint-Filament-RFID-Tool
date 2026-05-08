@@ -233,6 +233,12 @@
     <string name="misc_cuid_format_first">请先格式化卡</string>
     <string name="misc_cuid_test_failed">检测失败：%1$s</string>
     <string name="misc_cuid_test_disclaimer">此功能不是 100% 准确，请以 AMS 实际响应为准。</string>
+    <string name="misc_cuid_detecting">正在检测...</string>
+    <string name="cuid_detail_no_mifare">标签不支持 MIFARE Classic</string>
+    <string name="cuid_detail_read_block0_failed">读取块0失败</string>
+    <string name="cuid_detail_read_perms_failed">读取权限位失败</string>
+    <string name="cuid_detail_modify_perms_failed">无法修改权限位</string>
+    <string name="cuid_detail_auth_after_modify_failed">修改权限后认证失败，请手动重置卡片</string>
 
     <string name="copy_write_in_progress">正在写入，请保持标签稳定贴合，切勿移动...</string>
     <string name="copy_verify_in_progress">正在校验，请保持标签稳定贴合，切勿移动...</string>
@@ -357,6 +363,24 @@
     <string name="dl_state_importing">正在导入标签…</string>
     <string name="dl_state_checking">检查权限中…</string>
 
+    <!-- Brand names -->
+    <string name="brand_bambu">Bambu</string>
+    <string name="brand_snapmaker">Snapmaker</string>
+
+    <!-- Logo content descriptions -->
+    <string name="content_logo_creality">Creality</string>
+    <string name="content_logo_snapmaker">Snapmaker</string>
+
+    <!-- CUID recovery key display -->
+    <string name="tag_cuid_keys_original_uid_header">=== 原UID(%1$s)派生密钥 ===</string>
+    <string name="tag_cuid_keys_target_uid_header">=== 目标UID(%1$s)派生密钥 ===</string>
+    <string name="tag_cuid_keys_ff_fixed_header">=== FF固定秘钥 ===</string>
+    <string name="tag_cuid_key_entry_a">S%1$d A: %2$s</string>
+    <string name="tag_cuid_key_entry_b">S%1$d B: %2$s</string>
+
+    <!-- Hex color input prefix -->
+    <string name="creality_hex_prefix">#</string>
+
     <!-- Boost reminder dialog -->
     <string name="boost_reminder_title">⏰ 别让助力券过期！</string>
     <string name="boost_reminder_message">如果你有多余的助力券，不妨把它用在有意义的地方——\n\n给作者的 MakerWorld 主页 @m0h31h31 助力！主页上的其他模型同样欢迎助力 🎉\n\n📌 每年可助力 5 个模型，每个模型最多助力 2 次。\n\n你的每一次助力，都是对作者坚持创作最真诚的支持 ❤️</string>
@@ -439,4 +463,205 @@
     <string name="write_precheck_invalid_block">源数据区块 %1$d 长度异常</string>
     <string name="write_precheck_read_failed">读取区块 %1$d 失败</string>
     <string name="write_precheck_conflict">区块 %1$d 存在非目标数据，已阻止写入</string>
+
+    <!-- Log packing -->
+    <string name="log_none_to_pack">没有日志可打包</string>
+    <string name="log_packed_format">日志已打包到 %1$s</string>
+    <string name="log_pack_failed">日志打包失败</string>
+
+    <!-- Misc status -->
+    <string name="misc_export_tag_canceled">已取消导出标签包</string>
+    <string name="misc_cuid_cancel">已取消CUID检测</string>
+    <string name="format_tag_debug_title">格式化标签调试</string>
+    <string name="format_tag_wait_state">已进入等待贴卡状态</string>
+
+    <!-- Write flow -->
+    <string name="write_success_verify_failed_format">写入成功，自动校验失败：%1$s，请再次贴卡校验</string>
+    <string name="cmodify_task_empty">C卡修改任务为空</string>
+    <string name="write_failed_no_mifare">写入失败：标签不支持 MIFARE Classic</string>
+    <string name="write_failed_empty_data">写入失败：源文件数据为空</string>
+    <string name="write_precheck_already_matched">写入前检查：目标卡已是目标数据，无需重复写入</string>
+    <string name="write_precheck_blocked_format">写入前检查失败：%1$s</string>
+    <string name="write_failed_sector_auth_format">写入失败：扇区 %1$d 认证失败</string>
+    <string name="write_sector_format">正在写入扇区 %1$d/%2$d...</string>
+    <string name="write_failed_block_missing_format">写入失败：区块 %1$d 源数据缺失</string>
+    <string name="write_failed_block_size_format">写入失败：区块 %1$d 数据长度异常</string>
+    <string name="write_block_error_format">区块 %1$d 写入异常</string>
+    <string name="write_failed_retry_format">写入失败：%1$s（已超过续写重试次数）</string>
+    <string name="write_failed_resume_lost">写入失败：中断后无法定位断点</string>
+    <string name="write_success_resume">写入成功：断线后校验断点显示已完成全部写入</string>
+    <string name="write_success_done">写入成功：已完成全部区块写入</string>
+    <string name="write_failed_format">写入失败：%1$s</string>
+
+    <!-- CUID modify -->
+    <string name="cmodify_failed_no_mifare">改写失败：标签不支持 MIFARE Classic</string>
+    <string name="cmodify_failed_empty_data">改写失败：源数据为空</string>
+    <string name="cmodify_failed_no_uid">改写失败：无法读取卡 UID</string>
+    <string name="cmodify_retry_hint">请移开标签重新贴上重试，确保标签处于手机 NFC 区域</string>
+    <string name="cmodify_restoring_trailer">正在还原 Trailer，请等待...</string>
+    <string name="cmodify_restoring_trailer_format">正在还原 Trailer %1$d/%2$d...</string>
+    <string name="cmodify_sector_trailer_failed_format">扇区 %1$d Trailer 还原失败，%2$s</string>
+    <string name="cmodify_trailer_done_writing">Trailer 还原完成，正在写入目标数据...</string>
+    <string name="cmodify_writing_format">正在写入数据 %1$d/%2$d...</string>
+    <string name="cmodify_failed_block_missing_format">改写失败：区块 %1$d 源数据缺失</string>
+    <string name="cmodify_failed_block_size_format">改写失败：区块 %1$d 数据长度异常</string>
+    <string name="cmodify_sector_write_failed_format">扇区 %1$d 数据写入失败，%2$s</string>
+    <string name="cmodify_verifying">写入完成，正在校验数据...</string>
+    <string name="cmodify_verify_trailer_missing_format">校验失败：扇区 %1$d 源 Trailer 缺失</string>
+    <string name="cmodify_verify_trailer_size_format">校验失败：扇区 %1$d Trailer 长度异常</string>
+    <string name="cmodify_success_auth_failed_format">改写成功但校验认证失败：扇区 %1$d，%2$s</string>
+    <string name="cmodify_success_read_failed_format">改写成功但校验读取失败：区块 %1$d，%2$s</string>
+    <string name="cmodify_success_mismatch_format">改写成功但数据不一致：区块 %1$d，%2$s</string>
+    <string name="cmodify_done">改写并校验完成！</string>
+    <string name="cmodify_success">改写成功：已完成全部区块写入并校验</string>
+    <string name="cmodify_failed_format">改写失败：%1$s，%2$s</string>
+
+    <!-- Format tag -->
+    <string name="format_failed_no_mifare">格式化失败：标签不支持 MIFARE Classic</string>
+    <string name="format_failed_no_uid">格式化失败：无法读取UID</string>
+    <string name="format_failed_uid_empty">格式化失败：UID为空</string>
+    <string name="format_failed_key_a_format">格式化失败：派生KeyA失败 %1$s</string>
+    <string name="format_failed_key_b_format">格式化失败：派生KeyB失败 %1$s</string>
+    <string name="format_failed_key_count">格式化失败：派生秘钥数量不足</string>
+    <string name="format_starting">正在格式化</string>
+    <string name="format_failed_sector_count_format">格式化失败：标签扇区数量不足 %1$d</string>
+    <string name="format_failed_sector0_all_failed">格式化失败：扇区0 拓竹/FF/创想/快造秘钥认证均失败，无法读取块0</string>
+    <string name="format_failed_read_block0">格式化失败：读取块0失败</string>
+    <string name="format_failed_bambu_trailer_reset_format">格式化失败：扇区 %1$d 拓竹 trailer 重置失败</string>
+    <string name="format_failed_creality_trailer_reset_format">格式化失败：扇区 %1$d 创想 trailer 重置失败</string>
+    <string name="format_failed_snapmaker_trailer_reset_format">格式化失败：扇区 %1$d 快造 trailer 重置失败</string>
+    <string name="format_failed_max_retry">格式化失败：步骤3重试结束仍未通过</string>
+    <string name="format_verify_failed_ff_auth_format">校验失败：扇区 %1$d 使用FF秘钥认证失败</string>
+    <string name="format_verify_failed_read_format">校验失败：区块 %1$d 读取失败</string>
+    <string name="format_verify_failed_block0">校验失败：区块0被修改</string>
+    <string name="format_verify_failed_not_zero_format">校验失败：区块 %1$d 不是全00</string>
+    <string name="format_failed_all_keys_failed_format">格式化失败：扇区 %1$d 拓竹/FF/创想/快造 秘钥认证均失败</string>
+    <string name="format_failed_ff_auth_format">格式化失败：扇区 %1$d 使用FF/派生秘钥认证失败</string>
+    <string name="format_failed_block_write_format">格式化失败：区块 %1$d 写零失败</string>
+    <string name="format_checking">格式化完成，正在校检</string>
+    <string name="format_success">格式化标签成功：已重置并校验通过</string>
+    <string name="format_failed_format">格式化失败：%1$s</string>
+
+    <!-- Verify -->
+    <string name="verify_failed_no_mifare">校验失败：标签不支持 MIFARE Classic</string>
+    <string name="verify_failed_insufficient_blocks">校验失败：源数据不足 64 区块</string>
+    <string name="verify_sector_trailer_missing_format">校验失败：扇区 %1$d trailer 缺失</string>
+    <string name="verify_sector_trailer_size_format">校验失败：扇区 %1$d trailer 长度异常</string>
+    <string name="verify_sector_auth_failed_format">校验失败：扇区 %1$d 使用文件秘钥认证失败</string>
+    <string name="verify_block_read_failed_format">校验失败：区块 %1$d 读取异常</string>
+    <string name="verify_line_mismatch_format">校验失败：第 %1$d 行不一致，期望=%2$s，实际=%3$s</string>
+    <string name="verify_success">校验成功</string>
+    <string name="verify_failed_format">校验失败：%1$s</string>
+
+    <!-- NDEF write -->
+    <string name="ndef_write_failed_generate_format">NDEF写入失败：生成消息异常 %1$s</string>
+    <string name="ndef_write_failed_no_mapping">NDEF写入失败：标签不支持 MIFARE Classic 直写映射</string>
+    <string name="ndef_write_failed_format">NDEF写入失败：%1$s</string>
+    <string name="ndef_write_m1_failed_sectors">NDEF写入失败：M1卡扇区数量不足</string>
+    <string name="ndef_write_m1_failed_auth_format">NDEF写入失败：M1映射认证失败（扇区 %1$d，需FF秘钥）</string>
+    <string name="ndef_write_m1_failed_capacity_format">NDEF写入失败：M1映射容量不足（需要%1$d字节，最大%2$d字节）</string>
+    <string name="ndef_write_m1_failed_blocks_format">NDEF写入失败：M1映射可写区块不足，剩余 %1$d 字节未写入</string>
+    <string name="ndef_write_m1_failed_verify_read_format">NDEF写入失败：M1映射校检读取区块 %1$d 失败</string>
+    <string name="ndef_write_m1_failed_verify_mismatch">NDEF写入失败：M1映射写入后校检不一致</string>
+    <string name="ndef_write_m1_success">NDEF写入成功：已通过 MIFARE Classic 映射写入并校检（FF秘钥）</string>
+    <string name="ndef_write_m1_success_skipped_format">NDEF写入成功：已通过 MIFARE Classic 映射写入并校检（FF秘钥，跳过不可写区块 %1$s）</string>
+    <string name="ndef_write_m1_failed_exception_format">NDEF写入失败：M1映射异常 %1$s</string>
+
+    <!-- NDEF input validation -->
+    <string name="ndef_validate_text_empty">请输入要写入的文本内容</string>
+    <string name="ndef_validate_url_empty">请输入网页地址</string>
+    <string name="ndef_validate_phone_empty">请输入电话号码</string>
+    <string name="ndef_validate_wifi_ssid_empty">请输入WiFi名称(SSID)</string>
+    <string name="ndef_validate_wifi_security_empty">请输入WiFi加密类型（WPA/WEP/NONE）</string>
+
+    <!-- Creality write -->
+    <string name="creality_write_failed_no_mifare">写入失败：不支持 MIFARE Classic</string>
+    <string name="creality_write_failed_no_uid">写入失败：无法读取 UID</string>
+    <string name="creality_write_failed_auth">写入失败：扇区1 认证失败</string>
+    <string name="creality_write_failed_blocks">写入失败：数据块写入异常</string>
+    <string name="creality_write_success">写入成功</string>
+    <string name="creality_write_failed_format">写入失败：%1$s</string>
+
+    <!-- Snapmaker write -->
+    <string name="snapmaker_write_place_blank_card">请将空白卡贴近手机...</string>
+    <string name="snapmaker_item_deleted">已删除</string>
+    <string name="snapmaker_write_success">写入成功</string>
+    <string name="snapmaker_write_failed_no_mifare">写入失败：标签不支持 MIFARE Classic</string>
+    <string name="snapmaker_write_failed_empty">写入失败：源数据为空</string>
+    <string name="snapmaker_write_failed_no_uid">写入失败：无法读取卡 UID</string>
+    <string name="snapmaker_write_failed_auth">写入失败：标签认证失败（非空白卡且无法通过快造派生秘钥认证）</string>
+    <string name="snapmaker_write_detected_resetting">检测到已写入的快造标签，正在重置...</string>
+    <string name="snapmaker_write_resetting_format">正在重置扇区 %1$d/%2$d...</string>
+    <string name="snapmaker_write_reset_failed_auth_format">写入失败：重置扇区 %1$d 派生 KeyB 认证失败</string>
+    <string name="snapmaker_write_reset_failed_perms_format">写入失败：重置扇区 %1$d 修改权限位失败</string>
+    <string name="snapmaker_write_reset_failed_step2_format">写入失败：重置扇区 %1$d 步骤2认证失败</string>
+    <string name="snapmaker_write_reset_failed_ff_format">写入失败：重置扇区 %1$d 重置秘钥为 FF 失败</string>
+    <string name="snapmaker_write_reset_verify_failed_format">写入失败：重置扇区 %1$d FF 秘钥验证失败</string>
+    <string name="snapmaker_write_reset_done">重置完成，正在写入数据...</string>
+    <string name="snapmaker_write_failed_sector_auth_format">写入失败：扇区 %1$d 认证失败</string>
+    <string name="snapmaker_write_sector_format">正在写入扇区 %1$d/%2$d...</string>
+    <string name="snapmaker_write_failed_block_missing_format">写入失败：区块 %1$d 源数据缺失</string>
+    <string name="snapmaker_write_failed_block_size_format">写入失败：区块 %1$d 数据长度异常</string>
+    <string name="snapmaker_write_failed_block_error_format">写入失败：区块 %1$d 写入异常</string>
+    <string name="snapmaker_write_failed_format">写入失败：%1$s</string>
+
+    <!-- Database operations -->
+    <string name="db_file_not_found">数据库文件不存在</string>
+    <string name="db_storage_unavailable">无法访问存储目录</string>
+    <string name="db_backup_success">数据库备份成功</string>
+    <string name="db_backup_failed">数据库备份失败</string>
+    <string name="db_import_file_not_found">未找到备份文件</string>
+    <string name="db_import_success">数据库导入成功</string>
+    <string name="db_import_failed">数据库导入失败</string>
+    <string name="db_reset_success">数据库重置成功</string>
+    <string name="db_reset_failed">数据库重置失败</string>
+    <string name="db_unavailable">数据库不可用</string>
+
+    <!-- Tag export -->
+    <string name="tag_export_prepare_failed">无法准备标签包导出</string>
+    <string name="tag_export_create_file_failed">创建下载文件失败</string>
+    <string name="tag_export_open_file_failed">打开下载文件失败</string>
+    <string name="tag_export_select_location">请选择保存位置</string>
+    <string name="tag_export_success_download_format">标签数据打包成功: Download/%1$s</string>
+    <string name="tag_export_success_format">标签数据打包成功: %1$s</string>
+    <string name="tag_export_failed_format">标签数据打包失败: %1$s</string>
+    <string name="tag_export_open_uri_failed">打开导出文件失败</string>
+    <string name="tag_export_no_dir_format">未找到标签数据目录: %1$s</string>
+    <string name="tag_export_dir_empty">标签数据目录为空，无法打包</string>
+    <string name="tag_export_app_dir_unavailable">无法访问应用存储目录</string>
+
+    <!-- Tag import -->
+    <string name="tag_import_invalid_zip">读取标签包失败（文件损坏或密码错误）</string>
+    <string name="tag_import_no_txt_data">导入完成，但压缩包内未发现 txt 标签数据</string>
+    <string name="tag_import_no_data">导入完成，但压缩包内未发现标签数据</string>
+    <string name="tag_import_zero_format">导入完成：格式无效 %1$d 个，重复跳过 %2$d 个</string>
+    <string name="tag_import_success_overwrite_format">标签包导入完成: 导入 %1$d 个（覆盖 %2$d 个），格式无效 %3$d 个，跳过重复 %4$d 个</string>
+    <string name="tag_import_success_format">标签包导入完成: 导入 %1$d 个，格式无效 %2$d 个，跳过重复 %3$d 个</string>
+    <string name="tag_import_failed_format">导入标签包失败: %1$s</string>
+    <string name="tag_import_progress_format">正在导入 (%1$d/%2$d)…</string>
+    <string name="tag_import_failed_general_format">导入失败: %1$s</string>
+    <string name="bambu_import_success_overwrite_format">Bambu 标签包导入完成：新增 %1$d 个（覆盖 %2$d 个），无效 %3$d 个，跳过 %4$d 个</string>
+    <string name="bambu_import_success_format">Bambu 标签包导入完成：新增 %1$d 个，无效 %2$d 个，跳过 %3$d 个</string>
+    <string name="snapmaker_import_success_format">快造标签包导入完成: 导入 %1$d 个，格式无效 %2$d 个，跳过重复 %3$d 个</string>
+    <string name="snapmaker_import_failed_format">导入快造标签包失败: %1$s</string>
+    <string name="snapmaker_import_dl_success_format">Snapmaker 标签包导入完成：新增 %1$d 个，无效 %2$d 个，跳过 %3$d 个</string>
+
+    <!-- Share tag operations -->
+    <string name="share_refreshing">正在后台刷新共享数据...</string>
+    <string name="share_refreshed_format">已刷新共享数据，共 %1$d 条</string>
+    <string name="share_refresh_failed_format">刷新失败: %1$s</string>
+    <string name="share_tag_delete_success_format">删除成功：%1$s</string>
+    <string name="share_tag_delete_failed_format">删除失败: %1$s</string>
+
+    <!-- Self/share tag clear -->
+    <string name="self_tags_not_found">未找到自有标签目录</string>
+    <string name="self_tags_cleared_format">已清空自有标签，共删除 %1$d 个文件</string>
+    <string name="self_tags_clear_failed_format">清空自有标签失败: %1$s</string>
+    <string name="share_db_cleared_format">已清空标签数据库，共删除 %1$d 条数据</string>
+    <string name="share_db_clear_failed_format">清空标签数据库失败: %1$s</string>
+
+    <!-- TTS speech assembly -->
+    <string name="tts_material_type_format">耗材类型 %1$s</string>
+    <string name="tts_color_format">颜色 %1$s</string>
+    <string name="tts_separator">，</string>
 </resources>

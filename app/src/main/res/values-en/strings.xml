@@ -19,7 +19,7 @@
     <string name="tab_inventory">Inventory</string>
     <string name="tab_data">Data</string>
     <string name="tab_write">Write</string>
-    <string name="tab_tag">Copy</string>
+    <string name="tab_tag">Bambu</string>
     <string name="tab_misc">Settings</string>
 
     <string name="voice_status_prefix">Voice %1$s</string>
@@ -302,6 +302,12 @@
     <string name="creality_btn_clear">Clear</string>
     <string name="creality_min_max_temp">%1$d–%2$d °C</string>
     <string name="misc_cuid_test_disclaimer">This feature is not 100% accurate. Please rely on the actual AMS response as the definitive result.</string>
+    <string name="misc_cuid_detecting">Detecting...</string>
+    <string name="cuid_detail_no_mifare">Tag does not support MIFARE Classic</string>
+    <string name="cuid_detail_read_block0_failed">Failed to read block 0</string>
+    <string name="cuid_detail_read_perms_failed">Failed to read access bits</string>
+    <string name="cuid_detail_modify_perms_failed">Unable to modify access bits</string>
+    <string name="cuid_detail_auth_after_modify_failed">Auth failed after access bits change, please reset card manually</string>
     <string name="creality_page_title">Creality 3D Dedicated Read/Write</string>
     <string name="creality_page_subtitle">This page is designed exclusively for Creality 3D filament tags. Only tag reading and writing are supported — fully independent from inventory, data, and other features.</string>
     <string name="creality_read_success">Read successful</string>
@@ -358,6 +364,7 @@
     <string name="dl_state_checking">Checking permission…</string>
 
     <!-- Boost reminder dialog -->
+    <string name="creality_hex_prefix">#</string>
     <string name="boost_reminder_title">⏰ Don\'t let your boosts expire!</string>
     <string name="boost_reminder_message">If you have spare boosts, use them where it matters —\n\nBoost the author\'s MakerWorld page @m0h31h31! Other models on the page are also welcome 🎉\n\n📌 Up to 5 models can be boosted per year, each up to 2 times.\n\nEvery boost is a genuine show of support for the author ❤️</string>
     <string name="boost_action_go">Go Boost 🚀</string>
@@ -439,4 +446,214 @@
     <string name="write_precheck_invalid_block">Source data block %1$d length invalid</string>
     <string name="write_precheck_read_failed">Failed to read block %1$d</string>
     <string name="write_precheck_conflict">Block %1$d has non-target data, write blocked</string>
+
+    <!-- Log packing -->
+    <string name="log_none_to_pack">No logs to pack</string>
+    <string name="log_packed_format">Logs packed to %1$s</string>
+    <string name="log_pack_failed">Log packing failed</string>
+
+    <!-- Misc status -->
+    <string name="misc_export_tag_canceled">Tag package export canceled</string>
+    <string name="misc_cuid_cancel">CUID test canceled</string>
+    <string name="format_tag_debug_title">Format Tag Debug</string>
+    <string name="format_tag_wait_state">Entered waiting-for-tag state</string>
+
+    <!-- Write flow -->
+    <string name="write_success_verify_failed_format">Write succeeded, auto-verify failed: %1$s — tap card again to verify</string>
+    <string name="cmodify_task_empty">C card modify task is empty</string>
+    <string name="write_failed_no_mifare">Write failed: tag does not support MIFARE Classic</string>
+    <string name="write_failed_empty_data">Write failed: source file data is empty</string>
+    <string name="write_precheck_already_matched">Pre-write check: target card already matches — no need to write again</string>
+    <string name="write_precheck_blocked_format">Pre-write check failed: %1$s</string>
+    <string name="write_failed_sector_auth_format">Write failed: sector %1$d auth failed</string>
+    <string name="write_sector_format">Writing sector %1$d/%2$d...</string>
+    <string name="write_failed_block_missing_format">Write failed: block %1$d source data missing</string>
+    <string name="write_failed_block_size_format">Write failed: block %1$d data length invalid</string>
+    <string name="write_block_error_format">Block %1$d write error</string>
+    <string name="write_failed_retry_format">Write failed: %1$s (max resume retries exceeded)</string>
+    <string name="write_failed_resume_lost">Write failed: cannot locate resume point after disconnect</string>
+    <string name="write_success_resume">Write succeeded: post-disconnect check shows all blocks written</string>
+    <string name="write_success_done">Write succeeded: all blocks written</string>
+    <string name="write_failed_format">Write failed: %1$s</string>
+
+    <!-- CUID modify -->
+    <string name="cmodify_failed_no_mifare">Rewrite failed: tag does not support MIFARE Classic</string>
+    <string name="cmodify_failed_empty_data">Rewrite failed: source data is empty</string>
+    <string name="cmodify_failed_no_uid">Rewrite failed: unable to read card UID</string>
+    <string name="cmodify_retry_hint">Remove the tag and tap again — keep the tag in the phone NFC area</string>
+    <string name="cmodify_restoring_trailer">Restoring trailers, please wait...</string>
+    <string name="cmodify_restoring_trailer_format">Restoring trailer %1$d/%2$d...</string>
+    <string name="cmodify_sector_trailer_failed_format">Sector %1$d trailer restore failed, %2$s</string>
+    <string name="cmodify_trailer_done_writing">Trailers restored, writing target data...</string>
+    <string name="cmodify_writing_format">Writing data %1$d/%2$d...</string>
+    <string name="cmodify_failed_block_missing_format">Rewrite failed: block %1$d source data missing</string>
+    <string name="cmodify_failed_block_size_format">Rewrite failed: block %1$d data length invalid</string>
+    <string name="cmodify_sector_write_failed_format">Sector %1$d write failed, %2$s</string>
+    <string name="cmodify_verifying">Write complete, verifying data...</string>
+    <string name="cmodify_verify_trailer_missing_format">Verify failed: sector %1$d source trailer missing</string>
+    <string name="cmodify_verify_trailer_size_format">Verify failed: sector %1$d trailer length invalid</string>
+    <string name="cmodify_success_auth_failed_format">Rewrite succeeded but verify auth failed: sector %1$d, %2$s</string>
+    <string name="cmodify_success_read_failed_format">Rewrite succeeded but verify read failed: block %1$d, %2$s</string>
+    <string name="cmodify_success_mismatch_format">Rewrite succeeded but data mismatch: block %1$d, %2$s</string>
+    <string name="cmodify_done">Rewrite and verify complete!</string>
+    <string name="cmodify_success">Rewrite succeeded: all blocks written and verified</string>
+    <string name="cmodify_failed_format">Rewrite failed: %1$s, %2$s</string>
+
+    <!-- Format tag -->
+    <string name="format_starting">Formatting</string>
+    <string name="format_failed_no_mifare">Format failed: tag does not support MIFARE Classic</string>
+    <string name="format_failed_no_uid">Format failed: unable to read UID</string>
+    <string name="format_failed_uid_empty">Format failed: UID is empty</string>
+    <string name="format_failed_key_a_format">Format failed: KeyA derivation failed %1$s</string>
+    <string name="format_failed_key_b_format">Format failed: KeyB derivation failed %1$s</string>
+    <string name="format_failed_key_count">Format failed: insufficient derived keys</string>
+    <string name="format_failed_sector_count_format">Format failed: tag has insufficient sectors %1$d</string>
+    <string name="format_failed_sector0_all_failed">Format failed: sector 0 Bambu/FF/Creality/Snapmaker key auth all failed, cannot read block 0</string>
+    <string name="format_failed_read_block0">Format failed: cannot read block 0</string>
+    <string name="format_failed_bambu_trailer_reset_format">Format failed: sector %1$d Bambu trailer reset failed</string>
+    <string name="format_failed_creality_trailer_reset_format">Format failed: sector %1$d Creality trailer reset failed</string>
+    <string name="format_failed_snapmaker_trailer_reset_format">Format failed: sector %1$d Snapmaker trailer reset failed</string>
+    <string name="format_failed_max_retry">Format failed: step 3 retries exhausted</string>
+    <string name="format_verify_failed_ff_auth_format">Verify failed: sector %1$d FF key auth failed</string>
+    <string name="format_verify_failed_read_format">Verify failed: block %1$d read failed</string>
+    <string name="format_verify_failed_block0">Verify failed: block 0 was modified</string>
+    <string name="format_verify_failed_not_zero_format">Verify failed: block %1$d is not all zeros</string>
+    <string name="format_failed_all_keys_failed_format">Format failed: sector %1$d Bambu/FF/Creality/Snapmaker key auth all failed</string>
+    <string name="format_failed_ff_auth_format">Format failed: sector %1$d FF/derived key auth failed</string>
+    <string name="format_failed_block_write_format">Format failed: block %1$d zero-write failed</string>
+    <string name="format_checking">Format complete, verifying</string>
+    <string name="format_success">Tag formatted successfully: reset and verified</string>
+    <string name="format_failed_format">Format failed: %1$s</string>
+
+    <!-- Verify -->
+    <string name="verify_failed_no_mifare">Verify failed: tag does not support MIFARE Classic</string>
+    <string name="verify_failed_insufficient_blocks">Verify failed: source data has fewer than 64 blocks</string>
+    <string name="verify_sector_trailer_missing_format">Verify failed: sector %1$d trailer missing</string>
+    <string name="verify_sector_trailer_size_format">Verify failed: sector %1$d trailer length invalid</string>
+    <string name="verify_sector_auth_failed_format">Verify failed: sector %1$d auth failed using file keys</string>
+    <string name="verify_block_read_failed_format">Verify failed: block %1$d read error</string>
+    <string name="verify_line_mismatch_format">Verify failed: line %1$d mismatch, expected=%2$s, actual=%3$s</string>
+    <string name="verify_success">Verify succeeded</string>
+    <string name="verify_failed_format">Verify failed: %1$s</string>
+
+    <!-- NDEF write -->
+    <string name="ndef_write_failed_generate_format">NDEF write failed: message generation error %1$s</string>
+    <string name="ndef_write_failed_no_mapping">NDEF write failed: tag does not support MIFARE Classic direct mapping</string>
+    <string name="ndef_write_failed_format">NDEF write failed: %1$s</string>
+    <string name="ndef_write_m1_failed_sectors">NDEF write failed: M1 card has insufficient sectors</string>
+    <string name="ndef_write_m1_failed_auth_format">NDEF write failed: M1 mapping auth failed (sector %1$d, FF key required)</string>
+    <string name="ndef_write_m1_failed_capacity_format">NDEF write failed: M1 mapping capacity insufficient (need %1$d bytes, max %2$d bytes)</string>
+    <string name="ndef_write_m1_failed_blocks_format">NDEF write failed: not enough M1 mapping blocks, %1$d bytes unwritten</string>
+    <string name="ndef_write_m1_failed_verify_read_format">NDEF write failed: M1 mapping verify read block %1$d failed</string>
+    <string name="ndef_write_m1_failed_verify_mismatch">NDEF write failed: M1 mapping post-write verify mismatch</string>
+    <string name="ndef_write_m1_success">NDEF write succeeded: written and verified via MIFARE Classic mapping (FF key)</string>
+    <string name="ndef_write_m1_success_skipped_format">NDEF write succeeded: written and verified via MIFARE Classic mapping (FF key, skipped unwritable blocks %1$s)</string>
+    <string name="ndef_write_m1_failed_exception_format">NDEF write failed: M1 mapping exception %1$s</string>
+
+    <!-- NDEF input validation -->
+    <string name="ndef_validate_text_empty">Enter text content to write</string>
+    <string name="ndef_validate_url_empty">Enter a website URL</string>
+    <string name="ndef_validate_phone_empty">Enter a phone number</string>
+    <string name="ndef_validate_wifi_ssid_empty">Enter the WiFi name (SSID)</string>
+    <string name="ndef_validate_wifi_security_empty">Enter the WiFi security type (WPA/WEP/NONE)</string>
+
+    <!-- Creality write -->
+    <string name="creality_write_failed_no_mifare">Write failed: MIFARE Classic not supported</string>
+    <string name="creality_write_failed_no_uid">Write failed: unable to read UID</string>
+    <string name="creality_write_failed_auth">Write failed: sector 1 auth failed</string>
+    <string name="creality_write_failed_blocks">Write failed: data block write error</string>
+    <string name="creality_write_success">Write succeeded</string>
+    <string name="creality_write_failed_format">Write failed: %1$s</string>
+
+    <!-- Snapmaker write -->
+    <string name="snapmaker_write_place_blank_card">Place a blank card near the phone...</string>
+    <string name="snapmaker_item_deleted">Deleted</string>
+    <string name="snapmaker_write_success">Write succeeded</string>
+    <string name="snapmaker_write_failed_no_mifare">Write failed: tag does not support MIFARE Classic</string>
+    <string name="snapmaker_write_failed_empty">Write failed: source data is empty</string>
+    <string name="snapmaker_write_failed_no_uid">Write failed: unable to read card UID</string>
+    <string name="snapmaker_write_failed_auth">Write failed: tag auth failed (not blank and derived key failed)</string>
+    <string name="snapmaker_write_detected_resetting">Detected existing Snapmaker tag, resetting...</string>
+    <string name="snapmaker_write_resetting_format">Resetting sector %1$d/%2$d...</string>
+    <string name="snapmaker_write_reset_failed_auth_format">Write failed: sector %1$d derived KeyB auth failed during reset</string>
+    <string name="snapmaker_write_reset_failed_perms_format">Write failed: sector %1$d access bit change failed during reset</string>
+    <string name="snapmaker_write_reset_failed_step2_format">Write failed: sector %1$d step 2 auth failed during reset</string>
+    <string name="snapmaker_write_reset_failed_ff_format">Write failed: sector %1$d FF key reset failed during reset</string>
+    <string name="snapmaker_write_reset_verify_failed_format">Write failed: sector %1$d FF key verify failed during reset</string>
+    <string name="snapmaker_write_reset_done">Reset complete, writing data...</string>
+    <string name="snapmaker_write_failed_sector_auth_format">Write failed: sector %1$d auth failed</string>
+    <string name="snapmaker_write_sector_format">Writing sector %1$d/%2$d...</string>
+    <string name="snapmaker_write_failed_block_missing_format">Write failed: block %1$d source data missing</string>
+    <string name="snapmaker_write_failed_block_size_format">Write failed: block %1$d data length invalid</string>
+    <string name="snapmaker_write_failed_block_error_format">Write failed: block %1$d write error</string>
+    <string name="snapmaker_write_failed_format">Write failed: %1$s</string>
+
+    <!-- Database operations -->
+    <string name="db_file_not_found">Database file not found</string>
+    <string name="db_storage_unavailable">Storage directory unavailable</string>
+    <string name="db_backup_success">Database backup successful</string>
+    <string name="db_backup_failed">Database backup failed</string>
+    <string name="db_import_file_not_found">Backup file not found</string>
+    <string name="db_import_success">Database import successful</string>
+    <string name="db_import_failed">Database import failed</string>
+    <string name="db_reset_success">Database reset successful</string>
+    <string name="db_reset_failed">Database reset failed</string>
+    <string name="db_unavailable">Database unavailable</string>
+
+    <!-- Tag export -->
+    <string name="tag_export_prepare_failed">Unable to prepare tag package export</string>
+    <string name="tag_export_create_file_failed">Failed to create download file</string>
+    <string name="tag_export_open_file_failed">Failed to open download file</string>
+    <string name="tag_export_select_location">Choose save location</string>
+    <string name="tag_export_success_download_format">Tag package created: Download/%1$s</string>
+    <string name="tag_export_success_format">Tag package created: %1$s</string>
+    <string name="tag_export_failed_format">Tag package export failed: %1$s</string>
+    <string name="tag_export_open_uri_failed">Failed to open export file</string>
+    <string name="tag_export_no_dir_format">Tag data directory not found: %1$s</string>
+    <string name="tag_export_dir_empty">Tag data directory is empty, nothing to pack</string>
+    <string name="tag_export_app_dir_unavailable">App storage directory unavailable</string>
+
+    <!-- Tag import -->
+    <string name="tag_import_invalid_zip">Failed to read tag package (corrupted or wrong password)</string>
+    <string name="tag_import_no_txt_data">Import complete, but no .txt tag data found in archive</string>
+    <string name="tag_import_no_data">Import complete, but no tag data found in archive</string>
+    <string name="tag_import_zero_format">Import complete: %1$d invalid, %2$d skipped (duplicate)</string>
+    <string name="tag_import_success_overwrite_format">Import complete: %1$d imported (%2$d overwritten), %3$d invalid, %4$d skipped</string>
+    <string name="tag_import_success_format">Import complete: %1$d imported, %2$d invalid, %3$d skipped</string>
+    <string name="tag_import_failed_format">Tag package import failed: %1$s</string>
+    <string name="tag_import_progress_format">Importing (%1$d/%2$d)…</string>
+    <string name="tag_import_failed_general_format">Import failed: %1$s</string>
+    <string name="bambu_import_success_overwrite_format">Bambu package imported: %1$d new (%2$d overwritten), %3$d invalid, %4$d skipped</string>
+    <string name="bambu_import_success_format">Bambu package imported: %1$d new, %2$d invalid, %3$d skipped</string>
+    <string name="snapmaker_import_success_format">Snapmaker package imported: %1$d, %2$d invalid, %3$d skipped</string>
+    <string name="snapmaker_import_failed_format">Snapmaker package import failed: %1$s</string>
+    <string name="snapmaker_import_dl_success_format">Snapmaker package imported: %1$d new, %2$d invalid, %3$d skipped</string>
+
+    <!-- Share tag operations -->
+    <string name="share_refreshing">Refreshing shared data in background...</string>
+    <string name="share_refreshed_format">Shared data refreshed, %1$d records</string>
+    <string name="share_refresh_failed_format">Refresh failed: %1$s</string>
+    <string name="share_tag_delete_success_format">Deleted: %1$s</string>
+    <string name="share_tag_delete_failed_format">Delete failed: %1$s</string>
+
+    <!-- Self/share tag clear -->
+    <string name="self_tags_not_found">Self tag directory not found</string>
+    <string name="self_tags_cleared_format">Self tags cleared, %1$d file(s) deleted</string>
+    <string name="self_tags_clear_failed_format">Failed to clear self tags: %1$s</string>
+    <string name="share_db_cleared_format">Tag database cleared, %1$d record(s) deleted</string>
+    <string name="share_db_clear_failed_format">Failed to clear tag database: %1$s</string>
+
+    <!-- TTS speech assembly -->
+    <string name="tts_material_type_format">Material type %1$s</string>
+    <string name="tts_color_format">Color %1$s</string>
+    <string name="tts_separator">, </string>
+    <string name="brand_bambu">Bambu</string>
+    <string name="brand_snapmaker">Snapmaker</string>
+    <string name="content_logo_creality">Creality</string>
+    <string name="content_logo_snapmaker">Snapmaker</string>
+    <string name="tag_cuid_keys_original_uid_header">=== 原UID(%1$s)派生密钥 ===</string>
+    <string name="tag_cuid_keys_target_uid_header">=== 目标UID(%1$s)派生密钥 ===</string>
+    <string name="tag_cuid_keys_ff_fixed_header">=== FF固定秘钥 ===</string>
+    <string name="tag_cuid_key_entry_a">S%1$d A: %2$s</string>
+    <string name="tag_cuid_key_entry_b">S%1$d B: %2$s</string>
 </resources>
