@@ -6046,6 +6046,11 @@ class FilamentDbHelper(context: Context) :
             try {
                 db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN color_name_en TEXT")
             } catch (_: Exception) {}
+            // Force full re-sync on next launch to populate color_name_en in filaments
+            // and backfill inventory/share_tags via rematchUnnamedInventoryColors().
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+            } catch (_: Exception) {}
         }
     }
 
