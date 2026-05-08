@@ -557,7 +557,12 @@ data class InventoryItem(
     val remainingGrams: Int? = null,
     val originalMaterial: String = "",
     val notes: String = ""
-)
+) {
+    fun resolvedColorName(): String {
+        val lang = Locale.getDefault().language.lowercase(Locale.US)
+        return if (lang == "zh") colorName else colorNameEn.ifBlank { colorName }
+    }
+}
 
 data class ShareTagDbMeta(
     val id: Long = -1L,
@@ -597,7 +602,12 @@ data class ShareTagItem(
     val copyCount: Int = 0,
     val verified: Boolean = false,
     val productionDate: String = ""
-)
+) {
+    fun resolvedColorName(): String {
+        val lang = Locale.getDefault().language.lowercase(Locale.US)
+        return if (lang == "zh") colorName else colorNameEn.ifBlank { colorName }
+    }
+}
 
 data class CModifyRecoveryInfo(
     val originalUid: String,

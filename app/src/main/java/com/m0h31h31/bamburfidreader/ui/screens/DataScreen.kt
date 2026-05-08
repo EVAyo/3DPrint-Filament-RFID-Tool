@@ -39,6 +39,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -302,7 +303,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                                 colorValues = item.colorValues,
                                                 colorCode = item.colorCode,
                                                 colorType = item.colorType,
-                                                title = item.colorName.take(4),
+                                                title = item.resolvedColorName(),
                                                 subtitle = String.format("%.1f%%", item.remainingPercent)
                                             )
                                         }
@@ -318,7 +319,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                                 colorValues = stack.displayItem.colorValues,
                                                 colorCode = stack.displayItem.colorCode,
                                                 colorType = stack.displayItem.colorType,
-                                                title = stack.displayItem.colorName.take(4),
+                                                title = stack.displayItem.resolvedColorName(),
                                                 subtitle = if (stack.count > 1) null else String.format("%.1f%%", stack.displayItem.remainingPercent),
                                                 badgeText = if (stack.count > 1) "${stack.count}" else null,
                                                 modifier = Modifier.clickable {
@@ -346,7 +347,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                 Text(
                     text = stringResource(
                         R.string.data_stack_title_format,
-                        dialogStack.displayItem.colorName.ifBlank {
+                        dialogStack.displayItem.resolvedColorName().ifBlank {
                             context.getString(R.string.data_unknown_color)
                         },
                         dialogStack.count
@@ -378,7 +379,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = item.colorName.ifBlank {
+                                        text = item.resolvedColorName().ifBlank {
                                             unknownColorText
                                         },
                                         fontSize = 12.sp,
@@ -474,14 +475,18 @@ private fun SwatchCell(
             Text(
                 text = title,
                 fontSize = 10.sp,
+                lineHeight = 11.sp,
                 color = textColor,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = if (subtitle != null) 2.dp else 0.dp)
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = if (subtitle != null) 1.dp else 0.dp)
             )
             if (subtitle != null) {
                 Text(
                     text = subtitle,
                     fontSize = 10.sp,
+                    lineHeight = 11.sp,
                     color = textColor,
                     textAlign = TextAlign.Center
                 )

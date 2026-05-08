@@ -171,7 +171,7 @@ private fun buildCategoryGroups(items: List<ShareTagItem>, unknownLabel: String)
                     val first = groupItems.first()
                     ColorGroup(
                         colorUid = first.colorUid,
-                        colorName = first.colorName,
+                        colorName = first.resolvedColorName(),
                         colorType = first.colorType,
                         colorValues = first.colorValues,
                         items = groupItems
@@ -256,7 +256,7 @@ private fun TagListItem(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.colorName.ifBlank { unknownColorText }, fontSize = 12.sp, color = titleColor)
+                    Text(item.resolvedColorName().ifBlank { unknownColorText }, fontSize = 12.sp, color = titleColor)
                     ColorSwatch(colorValues = item.colorValues, colorType = item.colorType, modifier = Modifier.width(42.dp).height(28.dp))
                 }
             }
@@ -317,15 +317,17 @@ private fun ColorSwatchTile(
             Text(
                 text = group.colorName,
                 fontSize = 9.sp,
+                lineHeight = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = group.colorUid,
                 fontSize = 8.sp,
+                lineHeight = 9.sp,
                 color = textColor.copy(alpha = 0.85f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

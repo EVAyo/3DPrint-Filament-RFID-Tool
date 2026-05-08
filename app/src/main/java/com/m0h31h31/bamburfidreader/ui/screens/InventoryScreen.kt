@@ -526,7 +526,7 @@ fun InventoryScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     Text(
-                                                        text = item.colorName.ifBlank {
+                                                        text = item.resolvedColorName().ifBlank {
                                                             stringResource(
                                                                 R.string.inventory_unknown_color
                                                             )
