@@ -97,7 +97,7 @@ private const val LOG_TAG = "BambuRfidReader"
 private const val FILAMENT_JSON_NAME = "filaments_color_codes.json"
 private const val FILAMENTS_TYPE_MAPPING_FILE = "filaments_type_mapping.json"
 private const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 21
+private const val FILAMENT_DB_VERSION = 22
 private const val CREALITY_MATERIAL_FILE = "creality_material_list.json"
 private const val CREALITY_MATERIAL_TABLE = "creality_materials"
 private const val FILAMENT_TABLE = "filaments"
@@ -525,9 +525,15 @@ data class FilamentColorEntry(
     val filaType: String,
     val filaDetailedType: String = "",
     val colorNameZh: String,
+    val colorNameEn: String = "",
     val colorValues: List<String>,
     val colorCount: Int
-)
+) {
+    fun resolvedColorName(): String {
+        val lang = Locale.getDefault().language.lowercase(Locale.US)
+        return if (lang == "zh") colorNameZh else colorNameEn.ifBlank { colorNameZh }
+    }
+}
 
 data class ParsedBlockData(
     val fields: List<ParsedField>,
@@ -5372,6 +5378,7 @@ internal fun syncFilamentDatabase(context: Context, dbHelper: FilamentDbHelper) 
                     values.put("fila_detailed_type", detailedType)
                 }
                 values.put("color_name_zh", entry.colorNameZh)
+                values.put("color_name_en", entry.colorNameEn)
                 values.put("color_values", entry.colorValues.joinToString(separator = ","))
                 values.put("color_count", entry.colorCount)
                 db.insertWithOnConflict(
@@ -5424,7 +5431,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
                 .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
             val matched = findFilamentEntryInDb(db, materialId, rawColors) ?: continue
             val values = ContentValues()
-            values.put("color_name", matched.colorNameZh)
+            values.put("color_name", matched.resolvedColorName())
             values.put("color_code", matched.colorCode)
             values.put("color_type", matched.colorType)
             db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
@@ -5446,7 +5453,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
                 .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
             val matched = findFilamentEntryInDb(db, colorUid, rawColors) ?: continue
             val values = ContentValues()
-            values.put("color_name", matched.colorNameZh)
+            values.put("color_name", matched.resolvedColorName())
             values.put("color_type", matched.colorType)
             db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
             updated++
@@ -5461,11 +5468,11 @@ private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, colorValue
         val list = mutableListOf<FilamentColorEntry>()
         db.query(
             FILAMENT_TABLE,
-            arrayOf("fila_color_code", "fila_id", "fila_color_type", "fila_type", "fila_detailed_type", "color_name_zh", "color_values", "color_count"),
+            arrayOf("fila_color_code", "fila_id", "fila_color_type", "fila_type", "fila_detailed_type", "color_name_zh", "color_name_en", "color_values", "color_count"),
             selection, args, null, null, "fila_color_code ASC"
         ).use { c ->
             while (c.moveToNext()) {
-                val cv = c.getString(6)?.split(',')
+                val cv = c.getString(7)?.split(',')
                     ?.map { normalizeColorValue(it.trim()) }?.filter { it.isNotEmpty() }
                     ?: emptyList()
                 list.add(FilamentColorEntry(
@@ -5475,8 +5482,9 @@ private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, colorValue
                     filaType = c.getString(3).orEmpty(),
                     filaDetailedType = c.getString(4).orEmpty(),
                     colorNameZh = c.getString(5).orEmpty(),
+                    colorNameEn = c.getString(6).orEmpty(),
                     colorValues = cv,
-                    colorCount = c.getInt(7)
+                    colorCount = c.getInt(8)
                 ))
             }
         }
@@ -5490,10 +5498,10 @@ private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, colorValue
         query("fila_id = ?", arrayOf(filaId))
     }
 
-    if (colorValues.isEmpty()) return candidates.firstOrNull { it.colorNameZh.isNotBlank() }
+    if (colorValues.isEmpty()) return candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
     val normalized = colorValues.sorted()
-    return candidates.firstOrNull { it.colorValues.sorted() == normalized && it.colorNameZh.isNotBlank() }
-        ?: candidates.firstOrNull { it.colorNameZh.isNotBlank() }
+    return candidates.firstOrNull { it.colorValues.sorted() == normalized && it.resolvedColorName().isNotBlank() }
+        ?: candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
 }
 
 internal fun syncCrealityMaterialDatabase(context: Context, dbHelper: FilamentDbHelper) {
@@ -5597,14 +5605,15 @@ private fun parseFilamentEntries(jsonText: String): List<FilamentColorEntry> {
     }
     val data = root.optJSONArray("data") ?: JSONArray()
     val entries = ArrayList<FilamentColorEntry>(data.length())
-    val language = Locale.getDefault().language.lowercase(Locale.US)
     for (i in 0 until data.length()) {
         val item = data.optJSONObject(i) ?: continue
         val filaId = item.optString("fila_id")
         if (filaId.isBlank()) {
             continue
         }
-        val colorNameZh = resolveColorName(item.optJSONObject("fila_color_name"), language)
+        val colorNames = item.optJSONObject("fila_color_name")
+        val colorNameZh = resolveColorName(colorNames, "zh")
+        val colorNameEn = resolveColorName(colorNames, "en")
         val colorsArray = item.optJSONArray("fila_color")
         val colorValues = ArrayList<String>()
         if (colorsArray != null) {
@@ -5622,6 +5631,7 @@ private fun parseFilamentEntries(jsonText: String): List<FilamentColorEntry> {
                 colorType = item.optString("fila_color_type"),
                 filaType = item.optString("fila_type"),
                 colorNameZh = colorNameZh,
+                colorNameEn = colorNameEn,
                 colorValues = colorValues.toList(),
                 colorCount = colorValues.size
             )
@@ -5708,6 +5718,7 @@ class FilamentDbHelper(context: Context) :
                 fila_type TEXT,
                 fila_detailed_type TEXT,
                 color_name_zh TEXT,
+                color_name_en TEXT,
                 color_values TEXT,
                 color_count INTEGER,
                 UNIQUE (fila_id, fila_color_code)
@@ -5999,6 +6010,11 @@ class FilamentDbHelper(context: Context) :
         if (oldVersion < 21) {
             try {
                 db.execSQL("ALTER TABLE $ANOMALY_UIDS_TABLE ADD COLUMN report_count INTEGER NOT NULL DEFAULT 1")
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 22) {
+            try {
+                db.execSQL("ALTER TABLE $FILAMENT_TABLE ADD COLUMN color_name_en TEXT")
             } catch (_: Exception) {}
         }
     }

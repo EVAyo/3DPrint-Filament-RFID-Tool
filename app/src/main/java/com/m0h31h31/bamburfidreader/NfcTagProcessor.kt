@@ -384,7 +384,7 @@ private fun buildDisplayData(
             matched ?: if (parsedBlockData.colorValues.isEmpty()) entries.firstOrNull() else null
         if (entry != null) {
             type = entry.filaType
-            colorName = entry.colorNameZh
+            colorName = entry.resolvedColorName()
             colorCode = entry.colorCode
             colorType = entry.colorType
             if (entry.colorValues.isNotEmpty()) colorValues = entry.colorValues
@@ -458,6 +458,7 @@ private fun queryFilamentEntries(
                 "fila_type",
                 "fila_detailed_type",
                 "color_name_zh",
+                "color_name_en",
                 "color_values",
                 "color_count"
             ),
@@ -469,7 +470,7 @@ private fun queryFilamentEntries(
         )
         cursor.use {
             while (it.moveToNext()) {
-                val colorValues = it.getString(6)
+                val colorValues = it.getString(7)
                     ?.split(',')
                     ?.map { value -> normalizeColorValue(value.trim()) }
                     ?.filter { value -> value.isNotEmpty() }
@@ -482,8 +483,9 @@ private fun queryFilamentEntries(
                         filaType = it.getString(3).orEmpty(),
                         filaDetailedType = it.getString(4).orEmpty(),
                         colorNameZh = it.getString(5).orEmpty(),
+                        colorNameEn = it.getString(6).orEmpty(),
                         colorValues = colorValues,
-                        colorCount = it.getInt(7)
+                        colorCount = it.getInt(8)
                     )
                 )
             }
