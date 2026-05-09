@@ -11,7 +11,7 @@
     <string name="action_hide">隐藏</string>
     <string name="action_backup_db">备份数据库</string>
     <string name="action_import_db">导入数据库</string>
-    <string name="action_boost_open_bambu">助力：打开 Bambu APP</string>
+    <string name="action_boost_open_bambu">助力：打开 Bambu Handy</string>
     <string name="tab_reader">识别</string>
     <string name="tab_inventory">库存</string>
     <string name="tab_data">数据</string>

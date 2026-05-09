@@ -14,7 +14,7 @@
     <string name="action_hide">Hide</string>
     <string name="action_backup_db">Backup Database</string>
     <string name="action_import_db">Import Database</string>
-    <string name="action_boost_open_bambu">Boost: Open Bambu App</string>
+    <string name="action_boost_open_bambu">Boost: Open Bambu Handy</string>
     <string name="tab_reader">Scan</string>
     <string name="tab_inventory">Inventory</string>
     <string name="tab_data">Data</string>
