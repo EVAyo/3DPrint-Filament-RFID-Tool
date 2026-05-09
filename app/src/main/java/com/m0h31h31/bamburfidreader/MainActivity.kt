@@ -1441,9 +1441,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onDownloadTagPackage = { brand, onProgress, onImportStatus ->
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                             downloadAndImportTagPackage(brand, onProgress, onImportStatus)
                         }
+                        refreshShareTagItemsAsync()
+                        result
                     },
                     hideCopiedTags = hideCopiedTags,
                     onHideCopiedTagsChange = { enabled ->
@@ -2096,12 +2098,9 @@ class MainActivity : ComponentActivity() {
             var invalidCount = 0
             var overwrittenCount = 0
 
-            // 从 DB 加载已有的 file_uid 和 tray_uid，用于去重（纯 DB 操作）
+            // 从 DB 加载已有的 file_uid，用于去重（纯 DB 操作）
             val existingRows = dbHelper.getAllShareTagRows(db)
             val existingFileUidSet = existingRows.map { it.fileUid.uppercase(Locale.US) }.toMutableSet()
-            val existingTrayUidSet = existingRows
-                .mapNotNull { it.trayUid?.uppercase(Locale.US)?.ifBlank { null } }
-                .toMutableSet()
 
             val zipEntries = extractZipEntries(uri)
             if (zipEntries.isEmpty() && !(cacheDir.listFiles()?.any { it.name.startsWith("import_") } ?: false)) {
@@ -2117,13 +2116,10 @@ class MainActivity : ComponentActivity() {
                 val content = String(bytes, Charsets.UTF_8)
                 val rawBlocks = parseHexTagFileStrict(content)
                 if (rawBlocks == null) { invalidCount++; continue }
-                if (!isValidBambuTag(rawBlocks)) { invalidCount++; continue }
+                if (!isImportableBambuTag(rawBlocks)) { invalidCount++; continue }
 
                 val preview = NfcTagProcessor.parseForPreview(rawBlocks, filamentDbHelper) { }
                 val trayUid = preview.trayUidHex.trim()
-                if (trayUid.isNotBlank() && existingTrayUidSet.contains(trayUid.uppercase())) {
-                    skippedCount++; continue
-                }
 
                 if (alreadyExists && forceOverwriteImport && incomingUid.isNotBlank()) {
                     dbHelper.deleteShareTagByFileUid(db, incomingUid)
@@ -2132,7 +2128,7 @@ class MainActivity : ComponentActivity() {
                 val normalized = content.trim().lines()
                     .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
                 val productionDate = extractProductionDate(rawBlocks)
-                dbHelper.insertShareTag(
+                val rowId = dbHelper.insertShareTag(
                     db,
                     fileUid = incomingUid,
                     trayUid = trayUid.ifBlank { null },
@@ -2145,10 +2141,14 @@ class MainActivity : ComponentActivity() {
                     rawData = normalized,
                     productionDate = productionDate
                 )
-                extractedCount++
-                if (alreadyExists && forceOverwriteImport) overwrittenCount++
-                if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
-                if (trayUid.isNotBlank()) existingTrayUidSet.add(trayUid.uppercase())
+                if (rowId >= 0) {
+                    extractedCount++
+                    if (alreadyExists && forceOverwriteImport) overwrittenCount++
+                    if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
+                } else {
+                    logDebug("insertShareTag conflict for fileUid=$incomingUid")
+                    skippedCount++
+                }
             }
 
             when {
@@ -2353,8 +2353,6 @@ class MainActivity : ComponentActivity() {
         var processed = 0
         val existingRows = helper.getAllShareTagRows(db)
         val existingFileUidSet = existingRows.map { it.fileUid.uppercase(Locale.US) }.toMutableSet()
-        val existingTrayUidSet = existingRows
-            .mapNotNull { it.trayUid?.uppercase(Locale.US)?.ifBlank { null } }.toMutableSet()
         for ((entryName, bytes) in txtEntries) {
             val incomingUid = File(entryName).nameWithoutExtension.uppercase(Locale.US)
             val alreadyExists = incomingUid.isNotBlank() && existingFileUidSet.contains(incomingUid)
@@ -2362,19 +2360,16 @@ class MainActivity : ComponentActivity() {
             val content = String(bytes, Charsets.UTF_8)
             val rawBlocks = parseHexTagFileStrict(content)
             if (rawBlocks == null) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
-            if (!isValidBambuTag(rawBlocks)) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
+            if (!isImportableBambuTag(rawBlocks)) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
             val preview = NfcTagProcessor.parseForPreview(rawBlocks, filamentDbHelper) { }
             val trayUid = preview.trayUidHex.trim()
-            if (trayUid.isNotBlank() && existingTrayUidSet.contains(trayUid.uppercase())) {
-                skippedCount++; processed++; onProgress?.invoke(processed, total); continue
-            }
             if (alreadyExists && forceOverwriteImport && incomingUid.isNotBlank()) {
                 helper.deleteShareTagByFileUid(db, incomingUid)
             }
             val normalized = content.trim().lines()
                 .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
             val productionDate = extractProductionDate(rawBlocks)
-            helper.insertShareTag(
+            val rowId = helper.insertShareTag(
                 db, fileUid = incomingUid, trayUid = trayUid.ifBlank { null },
                 materialType = preview.displayData.type.ifBlank { null },
                 colorUid = preview.displayData.colorCode.ifBlank { null },
@@ -2384,10 +2379,14 @@ class MainActivity : ComponentActivity() {
                 colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
                 rawData = normalized, productionDate = productionDate
             )
-            extractedCount++
-            if (alreadyExists && forceOverwriteImport) overwrittenCount++
-            if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
-            if (trayUid.isNotBlank()) existingTrayUidSet.add(trayUid.uppercase())
+            if (rowId >= 0) {
+                extractedCount++
+                if (alreadyExists && forceOverwriteImport) overwrittenCount++
+                if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
+            } else {
+                logDebug("insertShareTag conflict for fileUid=$incomingUid")
+                skippedCount++
+            }
             processed++
             onProgress?.invoke(processed, total)
         }
@@ -2944,6 +2943,8 @@ class MainActivity : ComponentActivity() {
         filamentDbHelper?.writableDatabase?.let { db ->
             dbDeleted = filamentDbHelper!!.clearShareTagsTable(db)
             snapmakerDbDeleted = filamentDbHelper!!.clearSnapmakerShareTagsTable(db)
+            // Reset migration flag so bundled tags are re-seeded on next refresh
+            filamentDbHelper!!.deleteMetaValue(db, "share_disk_migration_v1")
         }
         shareTagItems = emptyList()
         snapmakerShareTagItems = emptyList()
@@ -3433,6 +3434,23 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    /**
+     * 导入用宽松校验：只校验权限位 87878769，不校验密钥（因为第三方工具读取的真实标签
+     * 会因 Mifare Classic 硬件屏蔽导致 KeyA 全零，无法通过密钥派生校验）。
+     */
+    private fun isImportableBambuTag(rawBlocks: List<ByteArray?>): Boolean {
+        for (sector in 0 until 16) {
+            val trailer = rawBlocks.getOrNull(sector * 4 + 3) ?: return false
+            if (trailer.size < 16) return false
+            if (trailer[6] != 0x87.toByte() ||
+                trailer[7] != 0x87.toByte() ||
+                trailer[8] != 0x87.toByte() ||
+                trailer[9] != 0x69.toByte()
+            ) return false
+        }
+        return true
+    }
+
     private fun parseHexTagFileStrict(content: String): List<ByteArray?>? {
         val lines = content.trim().lines()
             .map { it.trim() }
@@ -3805,8 +3823,8 @@ class MainActivity : ComponentActivity() {
         val targetSectorCount = minOf(WRITE_SECTOR_COUNT, mifare.sectorCount)
 
         fun logStep(message: String) {
-            logDebug("格式化标签: $message")
-            LogCollector.append(this, "I", "格式化标签: $message")
+            logDebug("Format tag: $message")
+            LogCollector.append(this, "I", "Format tag: $message")
             appendDebugInfoDialog(message)
         }
 
@@ -3827,7 +3845,7 @@ class MainActivity : ComponentActivity() {
             val trailerBlock = mifare.sectorToBlock(sector) + 3
             val derivedA = derivedKeysA[sector]
             val derivedB = derivedKeysB[sector]
-            logStep("扇区$sector.trailer: 使用派生KeyB认证")
+            logStep("Sector $sector trailer: auth with derived KeyB")
             val authByDerivedB = authenticateSectorWithRetry(
                 mifare = mifare,
                 sectorIndex = sector,
@@ -3835,26 +3853,24 @@ class MainActivity : ComponentActivity() {
                 keysB = listOf(derivedB)
             )
             if (!authByDerivedB) {
-                logStep("扇区$sector.trailer: 派生KeyB认证失败")
+                logStep("Sector $sector trailer: derived KeyB auth failed")
                 return false
             }
-            logStep("扇区$sector.trailer: 派生KeyB认证成功")
+            logStep("Sector $sector trailer: derived KeyB auth OK")
 
-            // 按用户要求：直接使用派生 KeyB 授权，一次性写入完整默认 trailer
             if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("扇区$sector.trailer: 写入完整默认trailer失败")
+                logStep("Sector $sector trailer: write default trailer failed")
                 return false
             }
-            logStep("扇区$sector.trailer: 写入完整默认trailer成功")
+            logStep("Sector $sector trailer: write default trailer OK")
 
-            // 优先以 FF 认证作为成功判据；若失败，则允许派生秘钥继续认证（兼容“只改了权限位”的卡）
             val ffAuthOk = authenticateSectorWithRetry(
                 mifare = mifare,
                 sectorIndex = sector,
                 keysA = listOf(ffKey),
                 keysB = listOf(ffKey)
             )
-            logStep("扇区$sector.trailer: FF认证${if (ffAuthOk) "成功" else "失败"}")
+            logStep("Sector $sector trailer: FF auth ${if (ffAuthOk) "OK" else "failed"}")
             if (ffAuthOk) return true
 
             val derivedAuthStillOk = authenticateSectorWithRetry(
@@ -3864,7 +3880,7 @@ class MainActivity : ComponentActivity() {
                 keysB = listOf(derivedB)
             )
             logStep(
-                "扇区$sector.trailer: FF失败后派生秘钥复验${if (derivedAuthStillOk) "成功（继续后续清零）" else "失败"}"
+                "Sector $sector trailer: derived key re-verify after FF fail — ${if (derivedAuthStillOk) "OK (continue zero)" else "failed"}"
             )
             return derivedAuthStillOk
         }
@@ -3874,16 +3890,16 @@ class MainActivity : ComponentActivity() {
             // 创想：KeyA=派生，KeyB=FF，访问位=FF078069，可直接用 KeyA 写 Trailer
             reconnectMifareClassic(mifare)
             if (!authenticateSectorWithRetry(mifare, sector, listOf(crealityKeyA), listOf(ffKey))) {
-                logStep("扇区$sector: 创想派生 KeyA 认证失败")
+                logStep("Sector $sector: Creality derived KeyA auth failed")
                 return false
             }
             if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("扇区$sector: 创想重置秘钥为 FF 失败")
+                logStep("Sector $sector: Creality reset key to FF failed")
                 return false
             }
             Thread.sleep(15)
             val ffAuthOk = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
-            logStep("扇区$sector: 创想重置后 FF 验证${if (ffAuthOk) "成功" else "失败"}")
+            logStep("Sector $sector: Creality post-reset FF verify ${if (ffAuthOk) "OK" else "failed"}")
             return ffAuthOk
         }
 
@@ -3895,7 +3911,7 @@ class MainActivity : ComponentActivity() {
             // 步骤1：仅用派生 KeyB 认证，将权限位改为 FF078069（保留派生秘钥）
             reconnectMifareClassic(mifare)
             if (!authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(curKeyB))) {
-                logStep("扇区$sector: 快造派生 KeyB 认证失败")
+                logStep("Sector $sector: Snapmaker derived KeyB auth failed")
                 return false
             }
             val step1Trailer = ByteArray(16).apply {
@@ -3905,31 +3921,31 @@ class MainActivity : ComponentActivity() {
                 System.arraycopy(curKeyB, 0, this, 10, 6)
             }
             if (!writeBlockWithRetry(mifare, trailerBlock, step1Trailer)) {
-                logStep("扇区$sector: 快造修改权限位失败")
+                logStep("Sector $sector: Snapmaker access bit update failed")
                 return false
             }
             Thread.sleep(15)
 
-            // 步骤2：权限位已是 FF078069，将 KeyA/B 改为 FF
+            // Step 2: access bits are now FF078069, change KeyA/B to FF
             if (!authenticateSectorWithRetry(mifare, sector, listOf(curKeyA, ffKey), listOf(curKeyB, ffKey))) {
-                logStep("扇区$sector: 快造步骤2认证失败")
+                logStep("Sector $sector: Snapmaker step-2 auth failed")
                 return false
             }
             if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("扇区$sector: 快造重置秘钥为 FF 失败")
+                logStep("Sector $sector: Snapmaker reset key to FF failed")
                 return false
             }
             Thread.sleep(15)
 
             val ffAuthOk = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
-            logStep("扇区$sector: 快造重置后 FF 验证${if (ffAuthOk) "成功" else "失败"}")
+            logStep("Sector $sector: Snapmaker post-reset FF verify ${if (ffAuthOk) "OK" else "failed"}")
             return ffAuthOk
         }
 
         return try {
             mifare.connect()
             onStatusUpdate?.invoke(uiString(R.string.format_starting))
-            logStep("开始处理 UID=${uid.toHex().uppercase(Locale.US)}")
+            logStep("Start UID=${uid.toHex().uppercase(Locale.US)}")
 
             if (mifare.sectorCount < WRITE_SECTOR_COUNT) {
                 return fail(uiString(R.string.format_failed_sector_count_format, mifare.sectorCount))
@@ -3943,32 +3959,32 @@ class MainActivity : ComponentActivity() {
                         mifare, 0,
                         keysA = listOf(derivedKeysA[0]),
                         keysB = listOf(derivedKeysB[0])
-                    ) -> { logStep("扇区0: 拓竹派生秘钥认证成功"); detectedBrand = "bambu" }
+                    ) -> { logStep("Sector 0: Bambu derived key auth OK"); detectedBrand = "bambu" }
                     authenticateSectorWithRetry(
                         mifare, 0,
                         keysA = listOf(ffKey),
                         keysB = listOf(ffKey)
-                    ) -> { logStep("扇区0: FF秘钥认证成功"); detectedBrand = "ff" }
+                    ) -> { logStep("Sector 0: FF key auth OK"); detectedBrand = "ff" }
                     authenticateSectorWithRetry(
                         mifare, 0,
                         keysA = listOf(crealityKeyA),
                         keysB = listOf(ffKey)
-                    ) -> { logStep("扇区0: 创想派生秘钥认证成功"); detectedBrand = "creality" }
+                    ) -> { logStep("Sector 0: Creality derived key auth OK"); detectedBrand = "creality" }
                     authenticateSectorWithRetry(
                         mifare, 0,
                         keysA = listOf(snapKeysA[0]),
                         keysB = listOf(snapKeysB[0])
-                    ) -> { logStep("扇区0: 快造派生秘钥认证成功"); detectedBrand = "snapmaker" }
+                    ) -> { logStep("Sector 0: Snapmaker derived key auth OK"); detectedBrand = "snapmaker" }
                     else -> return fail(uiString(R.string.format_failed_sector0_all_failed))
                 }
                 readBlockWithRetry(mifare, 0) ?: return fail(uiString(R.string.format_failed_read_block0))
             }
-            logStep("检测到卡片品牌：$detectedBrand，后续扇区优先使用此品牌秘钥")
-            logStep("块0读取成功（用于最终校验）")
+            logStep("Detected brand: $detectedBrand — subsequent sectors prefer this key")
+            logStep("Block 0 read OK (used for final verify)")
 
             fun runStep3VerifyByFf(): String? {
                 for (sector in 0 until targetSectorCount) {
-                    logStep("步骤3/3 扇区$sector: 使用FF秘钥校验")
+                    logStep("Step 3/3 sector $sector: verify with FF key")
                     val authOk = authenticateSectorWithRetry(
                         mifare = mifare,
                         sectorIndex = sector,
@@ -3988,13 +4004,13 @@ class MainActivity : ComponentActivity() {
                                 return uiString(R.string.format_verify_failed_block0)
                             }
                         } else if (blockIndex % 4 == 3) {
-                            // trailer 不参与”清零校验”，本步骤只要求 FF 可认证即可。
+                            // trailer 不参与"清零校验"，本步骤只要求 FF 可认证即可。
                             continue
                         } else if (!actual.all { it == 0.toByte() }) {
                             return uiString(R.string.format_verify_failed_not_zero_format, blockIndex)
                         }
                     }
-                    logStep("扇区$sector: 校验通过")
+                    logStep("Sector $sector: verify passed")
                 }
                 return null
             }
@@ -4002,7 +4018,7 @@ class MainActivity : ComponentActivity() {
             val maxStep3RetryCount = 2
             for (attempt in 0..maxStep3RetryCount) {
                 if (attempt > 0) {
-                    logStep("步骤3FF校验失败后重试：第${attempt}次重试（最多${maxStep3RetryCount}次）")
+                    logStep("Step-3 FF verify failed — retry $attempt/$maxStep3RetryCount")
                 }
 
                 // 第一步：重置所有扇区 trailer 为 FF，优先使用第0扇区检测到的品牌秘钥
@@ -4011,7 +4027,7 @@ class MainActivity : ComponentActivity() {
                 val brandOrder = listOf(detectedBrand) + (allBrands - detectedBrand)
 
                 for (sector in 0 until targetSectorCount) {
-                    logStep("步骤1/3 扇区$sector: 开始重置 trailer（优先品牌：$detectedBrand）")
+                    logStep("Step 1/3 sector $sector: reset trailer (priority brand: $detectedBrand)")
                     var sectorDone = false
                     for (brand in brandOrder) {
                         if (sectorDone) break
@@ -4023,10 +4039,10 @@ class MainActivity : ComponentActivity() {
                                     keysB = listOf(derivedKeysB[sector])
                                 )
                                 if (auth) {
-                                    logStep("扇区$sector: 拓竹派生秘钥认证成功，重置 trailer")
+                                    logStep("Sector $sector: Bambu derived key auth OK, reset trailer")
                                     if (!resetTrailerByDerivedKeyBStages(sector))
                                         return fail(uiString(R.string.format_failed_bambu_trailer_reset_format, sector))
-                                    logStep("扇区$sector: 拓竹 trailer 重置成功")
+                                    logStep("Sector $sector: Bambu trailer reset OK")
                                     sectorDone = true
                                 }
                             }
@@ -4037,25 +4053,25 @@ class MainActivity : ComponentActivity() {
                                     keysB = listOf(ffKey)
                                 )
                                 if (auth) {
-                                    logStep("扇区$sector: FF认证成功，检查权限位")
+                                    logStep("Sector $sector: FF auth OK, check access bits")
                                     val trailerBlock = mifare.sectorToBlock(sector) + 3
                                     val trailerData = readBlockWithRetry(mifare, trailerBlock)
                                     if (trailerData != null) {
                                         val currentAccess = trailerData.copyOfRange(6, 10)
                                         if (!currentAccess.contentEquals(accessDefault)) {
-                                            logStep("扇区$sector: 权限位非标准，修正为 FF078069")
+                                            logStep("Sector $sector: access bits non-standard, fix to FF078069")
                                             val reAuthKeyB = authenticateSectorWithRetry(
                                                 mifare, sector,
                                                 keysA = emptyList(),
                                                 keysB = listOf(ffKey)
                                             )
                                             if (reAuthKeyB && writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                                                logStep("扇区$sector: 权限位修正成功")
+                                                logStep("Sector $sector: access bits fixed OK")
                                             } else {
-                                                logStep("扇区$sector: 权限位修正失败，继续")
+                                                logStep("Sector $sector: access bits fix failed, continue")
                                             }
                                         } else {
-                                            logStep("扇区$sector: 权限位已是 FF078069")
+                                            logStep("Sector $sector: access bits already FF078069")
                                         }
                                     }
                                     sectorDone = true
@@ -4068,10 +4084,10 @@ class MainActivity : ComponentActivity() {
                                     keysB = listOf(ffKey)
                                 )
                                 if (auth) {
-                                    logStep("扇区$sector: 创想派生秘钥认证成功，重置 trailer")
+                                    logStep("Sector $sector: Creality derived key auth OK, reset trailer")
                                     if (!resetTrailerByCrealityDerivedKey(sector))
                                         return fail(uiString(R.string.format_failed_creality_trailer_reset_format, sector))
-                                    logStep("扇区$sector: 创想 trailer 重置成功")
+                                    logStep("Sector $sector: Creality trailer reset OK")
                                     sectorDone = true
                                 }
                             }
@@ -4082,10 +4098,10 @@ class MainActivity : ComponentActivity() {
                                     keysB = listOf(snapKeysB[sector])
                                 )
                                 if (auth) {
-                                    logStep("扇区$sector: 快造派生秘钥认证成功，重置 trailer")
+                                    logStep("Sector $sector: Snapmaker derived key auth OK, reset trailer")
                                     if (!resetTrailerBySnapmakerDerivedKeys(sector))
                                         return fail(uiString(R.string.format_failed_snapmaker_trailer_reset_format, sector))
-                                    logStep("扇区$sector: 快造 trailer 重置成功")
+                                    logStep("Sector $sector: Snapmaker trailer reset OK")
                                     sectorDone = true
                                 }
                             }
@@ -4093,11 +4109,11 @@ class MainActivity : ComponentActivity() {
                     }
                     if (!sectorDone) return fail(uiString(R.string.format_failed_all_keys_failed_format, sector))
                 }
-                logStep("已重置全部 trailer")
+                logStep("All trailers reset")
 
                 // 第二步：使用 FF/派生秘钥，将数据区块清零（不清 block0，不清 trailer）
                 for (sector in 0 until targetSectorCount) {
-                    logStep("步骤2/3 扇区$sector: 使用FF认证并清零区块")
+                    logStep("Step 2/3 sector $sector: FF auth and zero blocks")
                     val authOk = authenticateSectorWithRetry(
                         mifare = mifare,
                         sectorIndex = sector,
@@ -4117,19 +4133,19 @@ class MainActivity : ComponentActivity() {
                             return fail(uiString(R.string.format_failed_block_write_format, blockIndex))
                         }
                     }
-                    logStep("扇区$sector: 区块清零完成")
+                    logStep("Sector $sector: blocks zeroed")
                 }
-                logStep("已完成数据区块清零（跳过 block0 和 trailer）")
+                logStep("Data blocks zeroed (block 0 and trailers skipped)")
                 onStatusUpdate?.invoke(uiString(R.string.format_checking))
 
                 val verifyError = runStep3VerifyByFf()
                 if (verifyError == null) {
-                    logStep("校验通过")
+                    logStep("All verify passed")
                     return uiString(R.string.format_success)
                 }
 
                 if (attempt < maxStep3RetryCount) {
-                    logStep("$verifyError，准备从头重试（${attempt + 1}/$maxStep3RetryCount）")
+                    logStep("$verifyError — retrying from start (${attempt + 1}/$maxStep3RetryCount)")
                     continue
                 }
                 return fail(verifyError)
@@ -4137,9 +4153,9 @@ class MainActivity : ComponentActivity() {
 
             fail(uiString(R.string.format_failed_max_retry))
         } catch (e: Exception) {
-            logDebug("格式化标签失败: ${e.message}\n${Log.getStackTraceString(e)}")
-            LogCollector.append(this, "E", "格式化标签失败: ${e.message}")
-            appendDebugInfoDialog("异常: ${e.message.orEmpty()}")
+            logDebug("Format tag failed: ${e.message}\n${Log.getStackTraceString(e)}")
+            LogCollector.append(this, "E", "Format tag failed: ${e.message}")
+            appendDebugInfoDialog("Exception: ${e.message.orEmpty()}")
             uiString(R.string.format_failed_format, e.message.orEmpty())
         } finally {
             try {
@@ -4362,7 +4378,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // 按“每行16进制文本”逐行比对，和源文件格式一致。
+            // 按"每行16进制文本"逐行比对，和源文件格式一致。
             // trailer 块不校检秘钥位（0..5 和 10..15），仅校检访问位 6..9。
             fun maskForCompare(blockIndex: Int, block: ByteArray?): ByteArray {
                 val data = (block ?: ByteArray(16)).copyOf()
@@ -4399,7 +4415,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 断线后用“源标签密钥”探测写入进度，返回应继续写入的扇区/区块位置。
+     * 断线后用"源标签密钥"探测写入进度，返回应继续写入的扇区/区块位置。
      * 规则：
      * 1) 优先用源 trailer 里的 KeyA/KeyB 认证；
      * 2) 对已可读扇区逐块比较目标内容（trailer 仅比较访问位 6..9）；
@@ -5713,7 +5729,7 @@ private fun resolveColorName(colorNames: JSONObject?, language: String): String 
     return ""
 }
 
-class FilamentDbHelper(context: Context) :
+class FilamentDbHelper(val context: Context) :
     SQLiteOpenHelper(context, FILAMENT_DB_NAME, null, FILAMENT_DB_VERSION) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
@@ -6342,6 +6358,10 @@ class FilamentDbHelper(context: Context) :
             values,
             SQLiteDatabase.CONFLICT_REPLACE
         )
+    }
+
+    fun deleteMetaValue(db: SQLiteDatabase, key: String) {
+        db.delete(FILAMENT_META_TABLE, "meta_key = ?", arrayOf(key))
     }
 
     // ── Creality material queries ──────────────────────────────────────────────

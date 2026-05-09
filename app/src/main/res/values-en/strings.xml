@@ -35,6 +35,8 @@
     <string name="label_remaining">Remaining</string>
     <string name="label_other_info">Other Info</string>
     <string name="unit_grams">g</string>
+    <string name="unit_hours">h</string>
+    <string name="unit_mm">mm</string>
 
     <string name="message_tray_uid_missing">Tray UID missing, cannot save remaining.</string>
     <string name="message_weight_missing">Material weight missing, cannot set grams.</string>
@@ -656,4 +658,24 @@
     <string name="tag_cuid_keys_ff_fixed_header">=== FF固定秘钥 ===</string>
     <string name="tag_cuid_key_entry_a">S%1$d A: %2$s</string>
     <string name="tag_cuid_key_entry_b">S%1$d B: %2$s</string>
+
+    <!-- Color type values (stored as Chinese in DB, translated at display time) -->
+    <string name="color_type_single">Solid</string>
+    <string name="color_type_multi">Multicolor</string>
+    <string name="color_type_gradient">Gradient</string>
+
+    <!-- NfcTagProcessor field labels (displayed in Other Info section) -->
+    <string name="field_color_type">Color Type</string>
+    <string name="field_spool_weight">Spool Weight</string>
+    <string name="field_filament_diameter">Filament Diameter</string>
+    <string name="field_drying_temp">Drying Temp</string>
+    <string name="field_drying_time">Drying Time</string>
+    <string name="field_max_hotend_temp">Max Hotend Temp</string>
+    <string name="field_min_hotend_temp">Min Hotend Temp</string>
+    <string name="field_production_date">Production Date</string>
+
+    <!-- ConfigManager remote update dialog prompts -->
+    <string name="config_update_filaments_color">Color config updated. Apply now?</string>
+    <string name="config_update_type_mapping">Filament type mapping updated. Apply now?</string>
+    <string name="config_update_creality">Creality material list updated. Apply now?</string>
 </resources>

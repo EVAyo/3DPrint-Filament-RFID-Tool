@@ -15,7 +15,8 @@
       "Bash(ls C:/Users/jack8/StudioProjects/BambuRfidReader/*.md)",
       "Bash(grep *)",
       "PowerShell(.\\\\gradlew assembleDebug 2>&1 | Select-Object -Last 25)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(git stash *)"
     ]
   }
 }

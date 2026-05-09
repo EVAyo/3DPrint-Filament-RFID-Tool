@@ -208,7 +208,11 @@ fun WriteScreen(
                 val statusInProgress = statusMessage.contains("正在") ||
                     statusMessage.contains("请稍候") ||
                     statusMessage.contains("准备就绪") ||
-                    statusMessage.contains("请将目标")
+                    statusMessage.contains("请将目标") ||
+                    statusMessage.contains("in progress", ignoreCase = true) ||
+                    statusMessage.contains("please wait", ignoreCase = true) ||
+                    statusMessage.contains("ready:", ignoreCase = true) ||
+                    statusMessage.contains("keep the", ignoreCase = true)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -227,7 +231,11 @@ fun WriteScreen(
                 val pageInProgress = pageMessage.contains("正在") ||
                     pageMessage.contains("请稍候") ||
                     pageMessage.contains("准备就绪") ||
-                    pageMessage.contains("请将目标")
+                    pageMessage.contains("请将目标") ||
+                    pageMessage.contains("in progress", ignoreCase = true) ||
+                    pageMessage.contains("please wait", ignoreCase = true) ||
+                    pageMessage.contains("ready:", ignoreCase = true) ||
+                    pageMessage.contains("keep the", ignoreCase = true)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically

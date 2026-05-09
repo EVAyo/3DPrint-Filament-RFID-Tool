@@ -271,7 +271,13 @@ fun ReaderScreen(
                             val statusIsWaiting = displayStatus.contains("正在") ||
                                 displayStatus.contains("请稍候") ||
                                 displayStatus.contains("准备就绪") ||
-                                displayStatus.contains("请将目标")
+                                displayStatus.contains("请将目标") ||
+                                displayStatus.contains("in progress", ignoreCase = true) ||
+                                displayStatus.contains("please wait", ignoreCase = true) ||
+                                displayStatus.contains("ready:", ignoreCase = true) ||
+                                displayStatus.contains("keep the", ignoreCase = true) ||
+                                displayStatus.contains("downloading", ignoreCase = true) ||
+                                displayStatus.contains("waiting for rfid", ignoreCase = true)
                             if (statusIsWaiting) {
                                 AppCircularProgressIndicator(modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))

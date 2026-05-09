@@ -1,5 +1,7 @@
 package com.m0h31h31.bamburfidreader
 
+import android.content.Context
+import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.util.normalizeColorValue
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -44,7 +46,8 @@ object NfcTagProcessor {
         val block12 = rawBlocks.getOrNull(12)
         val block16 = rawBlocks.getOrNull(16)
 
-        val parsedBlockData = parseBlocks(blocksForParsing, block12, block16, logger)
+        val ctx = dbHelper?.context
+        val parsedBlockData = parseBlocks(blocksForParsing, block12, block16, logger, ctx)
         val displayData = buildDisplayData(parsedBlockData, dbHelper, logger)
         val totalWeightGrams = extractWeightGrams(parsedBlockData.fields)
         val trayUidHex = rawBlocks.getOrNull(9)?.toHex().orEmpty()
@@ -92,7 +95,7 @@ object NfcTagProcessor {
         val block12 = rawBlocks.getOrNull(12)
         val block16 = rawBlocks.getOrNull(16)
 
-        val parsedBlockData = parseBlocks(blocksForParsing, block12, block16, logger)
+        val parsedBlockData = parseBlocks(blocksForParsing, block12, block16, logger, dbHelper?.context)
 
         val totalWeightGrams = extractWeightGrams(parsedBlockData.fields)
 
@@ -174,7 +177,8 @@ private fun parseBlocks(
     blocks: List<ByteArray?>,
     block12: ByteArray?,
     block16: ByteArray?,
-    logger: (String) -> Unit
+    logger: (String) -> Unit,
+    context: Context? = null
 ): ParsedBlockData {
     val parsed = ArrayList<ParsedField>()
     var materialId = ""
@@ -223,9 +227,10 @@ private fun parseBlocks(
         normalizeColorValue(colorRgba).takeIf { it.isNotBlank() }?.let { colorValues.add(it) }
 
         toUInt16LE(block5, 4)?.let {
-            parsed.add(ParsedField("Block 5 Spool Weight", "$it 克"))
+            val grams = context?.getString(R.string.unit_grams) ?: "克"
+            parsed.add(ParsedField("Block 5 Spool Weight", "$it $grams"))
         }
-        parseDiameter(block5).takeIf { it.isNotBlank() }?.let {
+        parseDiameter(block5, context).takeIf { it.isNotBlank() }?.let {
             parsed.add(ParsedField("Block 5 Filament Diameter", it))
         }
     }
@@ -241,7 +246,10 @@ private fun parseBlocks(
                 )
             )
         }
-        toUInt16LE(block6, 2)?.let { parsed.add(ParsedField("Block 6 Drying Time", "$it 小时")) }
+        toUInt16LE(block6, 2)?.let {
+            val hours = context?.getString(R.string.unit_hours) ?: "小时"
+            parsed.add(ParsedField("Block 6 Drying Time", "$it $hours"))
+        }
         toUInt16LE(block6, 4)?.let {
             parsed.add(
                 ParsedField(
@@ -365,7 +373,8 @@ private fun parseAdditionalColors(block16: ByteArray?, logger: (String) -> Unit)
 private fun buildDisplayData(
     parsedBlockData: ParsedBlockData,
     dbHelper: FilamentDbHelper?,
-    logger: (String) -> Unit
+    logger: (String) -> Unit,
+    context: Context? = dbHelper?.context
 ): DisplayData {
     var type = ""
     var colorName = ""
@@ -403,9 +412,11 @@ private fun buildDisplayData(
         if (isLikelyHex(type)) type = ""
     }
 
-    val secondaryFields = buildSecondaryFields(parsedBlockData.fields).toMutableList()
+    val secondaryFields = buildSecondaryFields(parsedBlockData.fields, context).toMutableList()
     if (colorType.isNotBlank()) {
-        secondaryFields.add(0, ParsedField("颜色类型", colorType))
+        val colorTypeLabel = context?.getString(R.string.field_color_type) ?: "颜色类型"
+        val colorTypeDisplay = localizeColorType(colorType, context)
+        secondaryFields.add(0, ParsedField(colorTypeLabel, colorTypeDisplay))
     }
 
     return DisplayData(
@@ -420,15 +431,16 @@ private fun buildDisplayData(
 }
 
 // 将内部解析字段映射为 UI 二级信息展示。
-private fun buildSecondaryFields(fields: List<ParsedField>): List<ParsedField> {
+private fun buildSecondaryFields(fields: List<ParsedField>, context: Context?): List<ParsedField> {
+    fun s(id: Int, fallback: String) = context?.getString(id) ?: fallback
     val labelMap = linkedMapOf(
-        "Block 5 Spool Weight" to "耗材重量",
-        "Block 5 Filament Diameter" to "耗材直径",
-        "Block 6 Drying Temperature" to "烘干温度",
-        "Block 6 Drying Time" to "烘干时间",
-        "Block 6 Max Hotend Temperature" to "喷嘴最高温度",
-        "Block 6 Min Hotend Temperature" to "喷嘴最低温度",
-        "Block 12 Production Date" to "生产日期"
+        "Block 5 Spool Weight"          to s(R.string.field_spool_weight,      "耗材重量"),
+        "Block 5 Filament Diameter"     to s(R.string.field_filament_diameter, "耗材直径"),
+        "Block 6 Drying Temperature"    to s(R.string.field_drying_temp,       "烘干温度"),
+        "Block 6 Drying Time"           to s(R.string.field_drying_time,       "烘干时间"),
+        "Block 6 Max Hotend Temperature" to s(R.string.field_max_hotend_temp,  "喷嘴最高温度"),
+        "Block 6 Min Hotend Temperature" to s(R.string.field_min_hotend_temp,  "喷嘴最低温度"),
+        "Block 12 Production Date"      to s(R.string.field_production_date,   "生产日期")
     )
     val result = ArrayList<ParsedField>()
     for ((label, displayLabel) in labelMap) {
@@ -438,6 +450,17 @@ private fun buildSecondaryFields(fields: List<ParsedField>): List<ParsedField> {
         }
     }
     return result
+}
+
+// 将数据库中存储的中文颜色类型映射为本地化显示文本。
+private fun localizeColorType(raw: String, context: Context?): String {
+    if (context == null) return raw
+    return when (raw) {
+        "单色"  -> context.getString(R.string.color_type_single)
+        "多拼色" -> context.getString(R.string.color_type_multi)
+        "渐变色" -> context.getString(R.string.color_type_gradient)
+        else    -> raw
+    }
 }
 
 // 查询 filaments 表，按 materialId + 颜色数量（可选）定位候选项。
@@ -584,7 +607,7 @@ private fun trimPadding(bytes: ByteArray): ByteArray {
 }
 
 // 解析耗材直径，兼容 float32 / float64 两种编码方式。
-private fun parseDiameter(block5: ByteArray): String {
+private fun parseDiameter(block5: ByteArray, context: Context? = null): String {
     if (block5.size < 12) return ""
     val trailingZeros = block5.copyOfRange(12, 16).all { it == 0.toByte() }
     val diameter = if (trailingZeros) {
@@ -592,22 +615,23 @@ private fun parseDiameter(block5: ByteArray): String {
     } else {
         toFloat64LE(block5, 8) ?: return ""
     }
-    return String.format(Locale.US, "%.3f 毫米", diameter)
+    val mm = context?.getString(R.string.unit_mm) ?: "毫米"
+    return String.format(Locale.US, "%.3f $mm", diameter)
 }
 
-// 规范化生产日期格式：YYYY_MM_DD_HH_MM -> YYYY年MM月DD日 HH时MM分。
+// 规范化生产日期格式：YYYY_MM_DD_HH_MM -> YYYY-MM-DD HH:MM。
 private fun formatProductionDate(value: String): String {
     val raw = value.trim()
     val parts = raw.split('_')
     if (parts.size < 5) return raw
     val year = parts[0]
-    val month = parts[1]
-    val day = parts[2]
-    val hour = parts[3]
-    val minute = parts[4]
+    val month = parts[1].padStart(2, '0')
+    val day = parts[2].padStart(2, '0')
+    val hour = parts[3].padStart(2, '0')
+    val minute = parts[4].padStart(2, '0')
     val numeric = listOf(year, month, day, hour, minute).all { it.all(Char::isDigit) }
     if (!numeric) return raw
-    return "${year}年${month}月${day}日 ${hour}时${minute}分"
+    return "$year-$month-$day $hour:$minute"
 }
 
 // 读取 little-endian 16 位无符号整型。

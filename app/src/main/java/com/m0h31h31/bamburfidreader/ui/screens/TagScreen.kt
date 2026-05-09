@@ -1206,7 +1206,11 @@ fun TagScreen(
                 val writeInProgress = writeStatusMessage.contains("正在") ||
                     writeStatusMessage.contains("请稍候") ||
                     writeStatusMessage.contains("准备就绪") ||
-                    writeStatusMessage.contains("请将目标")
+                    writeStatusMessage.contains("请将目标") ||
+                    writeStatusMessage.contains("in progress", ignoreCase = true) ||
+                    writeStatusMessage.contains("please wait", ignoreCase = true) ||
+                    writeStatusMessage.contains("ready:", ignoreCase = true) ||
+                    writeStatusMessage.contains("keep the", ignoreCase = true)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically

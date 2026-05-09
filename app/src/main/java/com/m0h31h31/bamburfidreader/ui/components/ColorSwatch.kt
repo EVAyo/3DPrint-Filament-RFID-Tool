@@ -71,8 +71,8 @@ fun ColorSwatch(
     }
     val resolvedType = when {
         colorType.isNotBlank() -> colorType
-        colors.size > 1 -> "多拼色"
-        else -> "单色"
+        colors.size > 1 -> "multi"
+        else -> "single"
     }
     val shape = RoundedCornerShape(14.dp)
     val showCheckerboard = needsCheckerboard(colors)
@@ -87,8 +87,12 @@ fun ColorSwatch(
         modifier.neuCard(shape = shape).clip(shape)
     }
 
-    when (resolvedType) {
-        "渐变色" -> {
+    val isGradient = resolvedType == "渐变色" || resolvedType.equals("gradient", ignoreCase = true)
+    val isMulti = resolvedType == "多拼色" || resolvedType == "多色" ||
+        resolvedType.equals("multi", ignoreCase = true) || resolvedType.equals("multicolor", ignoreCase = true)
+
+    when {
+        isGradient -> {
             Box(
                 modifier = containerModifier
                     .border(1.dp, borderColor, shape)
@@ -104,7 +108,7 @@ fun ColorSwatch(
             }
         }
 
-        "多拼色" -> {
+        isMulti -> {
             Box(
                 modifier = containerModifier
                     .border(1.dp, borderColor, shape)

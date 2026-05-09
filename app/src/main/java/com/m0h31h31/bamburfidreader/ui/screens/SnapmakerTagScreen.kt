@@ -327,12 +327,21 @@ fun SnapmakerTagScreen(
 
             if (writeStatusMessage.isNotBlank()) {
                 val statusColor = when {
-                    writeStatusMessage.contains("成功", ignoreCase = true) -> MaterialTheme.colorScheme.primary
+                    writeStatusMessage.contains("成功", ignoreCase = true) ||
+                        writeStatusMessage.contains("success", ignoreCase = true) -> MaterialTheme.colorScheme.primary
                     writeStatusMessage.contains("失败", ignoreCase = true) ||
-                        writeStatusMessage.contains("error", ignoreCase = true) -> MaterialTheme.colorScheme.error
+                        writeStatusMessage.contains("error", ignoreCase = true) ||
+                        writeStatusMessage.contains("failed", ignoreCase = true) -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
-                val inProgress = writeStatusMessage.contains("正在") || writeStatusMessage.contains("请将")
+                val inProgress = writeStatusMessage.contains("正在") ||
+                    writeStatusMessage.contains("请将") ||
+                    writeStatusMessage.contains("in progress", ignoreCase = true) ||
+                    writeStatusMessage.contains("please wait", ignoreCase = true) ||
+                    writeStatusMessage.contains("ready:", ignoreCase = true) ||
+                    writeStatusMessage.contains("keep the", ignoreCase = true) ||
+                    writeStatusMessage.contains("resetting", ignoreCase = true) ||
+                    writeStatusMessage.contains("writing sector", ignoreCase = true)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically

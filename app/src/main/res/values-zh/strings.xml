@@ -31,6 +31,8 @@
     <string name="label_remaining">耗材余量</string>
     <string name="label_other_info">其他信息</string>
     <string name="unit_grams">克</string>
+    <string name="unit_hours">小时</string>
+    <string name="unit_mm">毫米</string>
 
     <string name="message_tray_uid_missing">未读取到托盘UID，无法保存余量</string>
     <string name="message_weight_missing">未读取到耗材重量，无法设置克重</string>
@@ -597,4 +599,24 @@
     <string name="cuid_detail_read_block0_failed">读取块0失败</string>
     <string name="cuid_detail_read_perms_failed">读取权限位失败</string>
     <string name="cuid_detail_modify_perms_failed">无法修改权限位</string>
+
+    <!-- Color type values (stored as Chinese in DB, translated at display time) -->
+    <string name="color_type_single">单色</string>
+    <string name="color_type_multi">多拼色</string>
+    <string name="color_type_gradient">渐变色</string>
+
+    <!-- NfcTagProcessor field labels (displayed in Other Info section) -->
+    <string name="field_color_type">颜色类型</string>
+    <string name="field_spool_weight">耗材重量</string>
+    <string name="field_filament_diameter">耗材直径</string>
+    <string name="field_drying_temp">烘干温度</string>
+    <string name="field_drying_time">烘干时间</string>
+    <string name="field_max_hotend_temp">喷嘴最高温度</string>
+    <string name="field_min_hotend_temp">喷嘴最低温度</string>
+    <string name="field_production_date">生产日期</string>
+
+    <!-- ConfigManager remote update dialog prompts -->
+    <string name="config_update_filaments_color">颜色配置文件有更新，是否更新？</string>
+    <string name="config_update_type_mapping">耗材类型映射文件有更新，是否更新？</string>
+    <string name="config_update_creality">创想三维耗材列表有更新，是否更新？</string>
 </resources>

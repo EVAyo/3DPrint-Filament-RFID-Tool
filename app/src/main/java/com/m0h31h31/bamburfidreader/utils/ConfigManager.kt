@@ -1,11 +1,13 @@
 package com.m0h31h31.bamburfidreader.utils
 
 import android.content.Context
+import com.m0h31h31.bamburfidreader.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 
 object ConfigManager {
     data class AppLinkConfig(
@@ -93,9 +95,8 @@ object ConfigManager {
                 val localHash = getLocalFileHash(context, FILAMENTS_COLOR_CODES_FILE)
                 
                 if (remoteHash != localHash) {
-                    // 哈希值不同，提示用户更新
                     withContext(Dispatchers.Main) {
-                        onUpdateAvailable("颜色配置文件有更新，是否更新？") {
+                        onUpdateAvailable(context.getString(R.string.config_update_filaments_color)) {
                             saveFile(context, FILAMENTS_COLOR_CODES_FILE, remoteContent)
                             try {
                                 val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
@@ -182,9 +183,8 @@ object ConfigManager {
                 val localHash = getLocalFileHash(context, FILAMENTS_TYPE_MAPPING_FILE)
                 
                 if (remoteHash != localHash) {
-                    // 哈希值不同，提示用户更新
                     withContext(Dispatchers.Main) {
-                        onUpdateAvailable("耗材类型映射文件有更新，是否更新？") {
+                        onUpdateAvailable(context.getString(R.string.config_update_type_mapping)) {
                             saveFile(context, FILAMENTS_TYPE_MAPPING_FILE, remoteContent)
                             try {
                                 val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
@@ -204,15 +204,19 @@ object ConfigManager {
         }
     }
 
+    private fun isEnglishMode(): Boolean =
+        Locale.getDefault().language.lowercase(Locale.US) != "zh"
+
     /**
-     * 获取AppConfig中的消息
+     * 获取AppConfig中的消息，英文模式优先读 messageEn
      */
     fun getAppConfigMessage(context: Context): String {
         val configContent = getLocalConfig(context, APP_CONFIG_FILE)
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                return json.optString("message", "")
+                val key = if (isEnglishMode()) "messageEn" else "message"
+                return json.optString(key, "").ifBlank { json.optString("message", "") }
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig: ${e.message}")
             }
@@ -225,7 +229,8 @@ object ConfigManager {
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                return json.optString("adMessage", "")
+                val key = if (isEnglishMode()) "adMessageEn" else "adMessage"
+                return json.optString(key, "").ifBlank { json.optString("adMessage", "") }
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig adMessage: ${e.message}")
             }
@@ -239,11 +244,10 @@ object ConfigManager {
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                return parseLinkConfig(
-                    json = json,
-                    key = "boostLink",
-                    defaultValue = defaultValue
-                ) ?: defaultValue
+                val key = if (isEnglishMode()) "boostLinkEn" else "boostLink"
+                return (parseLinkConfig(json, key, null)
+                    ?: parseLinkConfig(json, "boostLink", defaultValue))
+                    ?: defaultValue
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig boostLink: ${e.message}")
             }
@@ -256,11 +260,21 @@ object ConfigManager {
         return try {
             val json = JSONObject(configContent)
             val logoLinks = json.optJSONObject("logoLinks") ?: return emptyMap()
+            val englishMode = isEnglishMode()
             buildMap {
                 val keys = logoLinks.keys()
                 while (keys.hasNext()) {
                     val key = keys.next()
-                    parseLinkConfig(logoLinks, key, null)?.let { put(key.lowercase(), it) }
+                    // Skip the *En variant keys — they are resolved below
+                    if (key.endsWith("En")) continue
+                    val link = parseLinkConfig(logoLinks, key, null) ?: continue
+                    if (englishMode) {
+                        // Prefer the *En variant when available
+                        val enLink = parseLinkConfig(logoLinks, "${key}En", null)
+                        put(key.lowercase(), enLink ?: link)
+                    } else {
+                        put(key.lowercase(), link)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -373,7 +387,7 @@ object ConfigManager {
                 val localHash = getLocalFileHash(context, CREALITY_MATERIAL_FILE)
                 if (remoteHash != localHash) {
                     withContext(Dispatchers.Main) {
-                        onUpdateAvailable("创想三维耗材列表有更新，是否更新？") {
+                        onUpdateAvailable(context.getString(R.string.config_update_creality)) {
                             saveFile(context, CREALITY_MATERIAL_FILE, remoteContent)
                             try {
                                 val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
