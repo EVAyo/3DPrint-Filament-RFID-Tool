@@ -204,8 +204,8 @@ object ConfigManager {
         }
     }
 
-    private fun isEnglishMode(): Boolean =
-        Locale.getDefault().language.lowercase(Locale.US) != "zh"
+    private fun isEnglishMode(context: Context): Boolean =
+        context.resources.configuration.locales[0].language.lowercase(Locale.US) != "zh"
 
     /**
      * 获取AppConfig中的消息，英文模式优先读 messageEn
@@ -215,7 +215,7 @@ object ConfigManager {
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                val key = if (isEnglishMode()) "messageEn" else "message"
+                val key = if (isEnglishMode(context)) "messageEn" else "message"
                 return json.optString(key, "").ifBlank { json.optString("message", "") }
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig: ${e.message}")
@@ -229,7 +229,7 @@ object ConfigManager {
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                val key = if (isEnglishMode()) "adMessageEn" else "adMessage"
+                val key = if (isEnglishMode(context)) "adMessageEn" else "adMessage"
                 return json.optString(key, "").ifBlank { json.optString("adMessage", "") }
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig adMessage: ${e.message}")
@@ -244,7 +244,7 @@ object ConfigManager {
         if (configContent != null) {
             try {
                 val json = JSONObject(configContent)
-                val key = if (isEnglishMode()) "boostLinkEn" else "boostLink"
+                val key = if (isEnglishMode(context)) "boostLinkEn" else "boostLink"
                 return (parseLinkConfig(json, key, null)
                     ?: parseLinkConfig(json, "boostLink", defaultValue))
                     ?: defaultValue
@@ -260,7 +260,7 @@ object ConfigManager {
         return try {
             val json = JSONObject(configContent)
             val logoLinks = json.optJSONObject("logoLinks") ?: return emptyMap()
-            val englishMode = isEnglishMode()
+            val englishMode = isEnglishMode(context)
             buildMap {
                 val keys = logoLinks.keys()
                 while (keys.hasNext()) {
