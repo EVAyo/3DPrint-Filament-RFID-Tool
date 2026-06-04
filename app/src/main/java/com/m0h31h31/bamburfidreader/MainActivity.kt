@@ -82,6 +82,9 @@ import java.util.zip.ZipOutputStream
 import java.util.zip.ZipInputStream
 import javax.crypto.Cipher
 import javax.crypto.Mac
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.ceil
 import kotlinx.coroutines.GlobalScope
@@ -1447,6 +1450,9 @@ class MainActivity : ComponentActivity() {
                         refreshShareTagItemsAsync()
                         result
                     },
+                    onLoadMySharedUids = {
+                        com.m0h31h31.bamburfidreader.utils.TagShareUploader.fetchMySharesWithTime(this@MainActivity)
+                    },
                     hideCopiedTags = hideCopiedTags,
                     onHideCopiedTagsChange = { enabled ->
                         hideCopiedTags = enabled
@@ -2206,6 +2212,8 @@ class MainActivity : ComponentActivity() {
         onProgress: (Int) -> Unit,
         onImportStatus: (String) -> Unit
     ): String {
+        val t0 = System.currentTimeMillis()
+        logDebug("DL_IMPORT[$brand] ── 开始")
         val installId = com.m0h31h31.bamburfidreader.utils.AnalyticsReporter.getInstallId(this)
         val endpoint = com.m0h31h31.bamburfidreader.utils.ConfigManager.getTagDownloadEndpoint(this)
         val payload = org.json.JSONObject().apply {
@@ -2215,9 +2223,12 @@ class MainActivity : ComponentActivity() {
         val tmp = java.io.File(cacheDir, "dl_${brand}_${System.currentTimeMillis()}.zip")
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
         return try {
+            logDebug("DL_IMPORT[$brand] ── 开始下载 endpoint=$endpoint")
+            val tDl = System.currentTimeMillis()
             val result = com.m0h31h31.bamburfidreader.utils.NetworkUtils.postJsonDownloadToFile(
                 endpoint, payload, tmp, onProgress = onProgress
             ) ?: return getString(R.string.download_tag_package_failed)
+            logDebug("DL_IMPORT[$brand] ── 下载完成 size=${tmp.length()}B 耗时=${System.currentTimeMillis()-tDl}ms")
 
             val (code, errBody) = result
             if (code !in 200..299) {
@@ -2227,9 +2238,17 @@ class MainActivity : ComponentActivity() {
                 return if (detail.isNotBlank()) detail
                        else getString(R.string.download_tag_package_failed)
             }
-            importTagPackageFromZipFile(tmp, snapmaker = brand == "snapmaker") { cur, total ->
-                mainHandler.post { onImportStatus(uiString(R.string.tag_import_progress_format, cur, total)) }
+            logDebug("DL_IMPORT[$brand] ── 开始导入 file=${tmp.name}")
+            val tImp = System.currentTimeMillis()
+            val msg = importTagPackageFromZipFile(tmp, snapmaker = brand == "snapmaker") { cur, total ->
+                mainHandler.post {
+                    val pct = if (total > 0) minOf(cur * 100 / total, 99) else 0
+                    onProgress(pct)
+                    onImportStatus(uiString(R.string.tag_import_progress_format, cur, total))
+                }
             }
+            logDebug("DL_IMPORT[$brand] ── 导入完成 耗时=${System.currentTimeMillis()-tImp}ms 总耗时=${System.currentTimeMillis()-t0}ms 结果=$msg")
+            msg
         } finally {
             tmp.delete()
         }
@@ -2238,6 +2257,10 @@ class MainActivity : ComponentActivity() {
     /**
      * 直接从 zip 文件导入标签包（不经过 ContentResolver/FileProvider），
      * 复用现有解析逻辑，适用于下载后的临时文件。
+     *
+     * 支持两种格式：
+     *  - M0RF 格式（新）：整文件 AES-GCM，一次 PBKDF2 推导 → 毫秒级解密
+     *  - zip4j WZ_AES（旧）：逐条目加密，慢但保留兼容
      */
     private fun importTagPackageFromZipFile(
         zipFile: java.io.File,
@@ -2247,20 +2270,69 @@ class MainActivity : ComponentActivity() {
         val dbHelper = filamentDbHelper ?: return uiString(R.string.db_unavailable)
         val db = dbHelper.writableDatabase
         return try {
-            // 用 zip4j 直接打开文件（与 extractZipEntries 相同逻辑，跳过 URI 拷贝）
-            val zip4j = net.lingala.zip4j.ZipFile(zipFile)
-            if (zip4j.isEncrypted) {
-                zip4j.setPassword(computeTagZipPassword().toCharArray())
-            }
-            val entries = mutableListOf<Pair<String, ByteArray>>()
-            for (header in zip4j.fileHeaders) {
-                if (!header.isDirectory) {
-                    val bytes = zip4j.getInputStream(header).use { it.readBytes() }
-                    entries.add(Pair(header.fileName, bytes))
+            val t0 = System.currentTimeMillis()
+            val allBytes = zipFile.readBytes()
+            val isM0RF = allBytes.size >= 4 &&
+                allBytes[0] == 'M'.code.toByte() &&
+                allBytes[1] == '0'.code.toByte() &&
+                allBytes[2] == 'R'.code.toByte() &&
+                allBytes[3] == 'F'.code.toByte()
+            logDebug("DL_IMPORT 检测格式 isM0RF=$isM0RF size=${allBytes.size}B 耗时=${System.currentTimeMillis()-t0}ms")
+
+            val tRead = System.currentTimeMillis()
+            val list = mutableListOf<Pair<String, ByteArray>>()
+
+            if (isM0RF) {
+                // 新格式：M0RF(4) + salt(16) + nonce(12) + AES-GCM ciphertext
+                val salt       = allBytes.copyOfRange(4, 20)
+                val nonce      = allBytes.copyOfRange(20, 32)
+                val ciphertext = allBytes.copyOfRange(32, allBytes.size)
+                val password   = computeTagZipPassword()
+                val keySpec    = PBEKeySpec(password.toCharArray(), salt, 100000, 256)
+                val key        = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(keySpec).encoded
+                val cipher     = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, nonce))
+                val plainZip = cipher.doFinal(ciphertext)
+                logDebug("DL_IMPORT AES-GCM 解密完成 plainSize=${plainZip.size}B 耗时=${System.currentTimeMillis()-tRead}ms")
+                val tZip = System.currentTimeMillis()
+                ZipInputStream(plainZip.inputStream()).use { zis ->
+                    var entry: ZipEntry? = zis.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory) {
+                            list.add(Pair(entry.name, zis.readBytes()))
+                        }
+                        zis.closeEntry()
+                        entry = zis.nextEntry
+                    }
                 }
+                logDebug("DL_IMPORT M0RF 解压完成 条目=${list.size} 耗时=${System.currentTimeMillis()-tZip}ms")
+            } else {
+                // 旧格式：zip4j WZ_AES 逐条目加密
+                val encrypted = net.lingala.zip4j.ZipFile(zipFile).isEncrypted
+                val password  = if (encrypted) computeTagZipPassword().toCharArray() else null
+                net.lingala.zip4j.io.inputstream.ZipInputStream(
+                    allBytes.inputStream().buffered(65536), password
+                ).use { zis ->
+                    var header = zis.nextEntry
+                    while (header != null) {
+                        if (!header.isDirectory) {
+                            list.add(Pair(header.fileName, zis.readAllBytes()))
+                        }
+                        header = zis.nextEntry
+                    }
+                }
+                logDebug("DL_IMPORT zip4j ZipInputStream(encrypted=$encrypted) 读入完成 条目=${list.size} 耗时=${System.currentTimeMillis()-tRead}ms")
             }
-            if (snapmaker) processSnapmakerZipEntries(entries, db, dbHelper, onProgress)
-            else processBambuZipEntries(entries, db, dbHelper, onProgress)
+
+            val entries: List<Pair<String, ByteArray>> = list
+            val totalBytes = entries.sumOf { it.second.size }
+            logDebug("DL_IMPORT 读入完成 条目=${entries.size} 总字节=${totalBytes}B 总耗时=${System.currentTimeMillis()-t0}ms")
+
+            val tProc = System.currentTimeMillis()
+            val result = if (snapmaker) processSnapmakerZipEntries(entries, db, dbHelper, onProgress)
+                         else processBambuZipEntries(entries, db, dbHelper, onProgress)
+            logDebug("DL_IMPORT process 耗时=${System.currentTimeMillis()-tProc}ms")
+            result
         } catch (e: Exception) {
             logDebug("importTagPackageFromZipFile error: ${e.message}")
             uiString(R.string.tag_import_failed_general_format, e.message.orEmpty())
@@ -2351,45 +2423,64 @@ class MainActivity : ComponentActivity() {
         val txtEntries = entries.filter { it.first.lowercase(Locale.US).endsWith(".txt") }
         val total = txtEntries.size
         var processed = 0
+        val reportEvery = maxOf(1, total / 200)
+        val tExist = System.currentTimeMillis()
         val existingRows = helper.getAllShareTagRows(db)
         val existingFileUidSet = existingRows.map { it.fileUid.uppercase(Locale.US) }.toMutableSet()
-        for ((entryName, bytes) in txtEntries) {
-            val incomingUid = File(entryName).nameWithoutExtension.uppercase(Locale.US)
-            val alreadyExists = incomingUid.isNotBlank() && existingFileUidSet.contains(incomingUid)
-            if (alreadyExists && !forceOverwriteImport) { skippedCount++; processed++; onProgress?.invoke(processed, total); continue }
-            val content = String(bytes, Charsets.UTF_8)
-            val rawBlocks = parseHexTagFileStrict(content)
-            if (rawBlocks == null) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
-            if (!isImportableBambuTag(rawBlocks)) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
-            val preview = NfcTagProcessor.parseForPreview(rawBlocks, filamentDbHelper) { }
-            val trayUid = preview.trayUidHex.trim()
-            if (alreadyExists && forceOverwriteImport && incomingUid.isNotBlank()) {
-                helper.deleteShareTagByFileUid(db, incomingUid)
+        logDebug("DL_IMPORT [bambu] 查已有记录=${existingRows.size}条 耗时=${System.currentTimeMillis()-tExist}ms 待处理txt=$total")
+        val filamentCache = HashMap<String, List<FilamentColorEntry>>()
+        val tTx = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            for ((entryName, bytes) in txtEntries) {
+                val incomingUid = File(entryName).nameWithoutExtension.uppercase(Locale.US)
+                val alreadyExists = incomingUid.isNotBlank() && existingFileUidSet.contains(incomingUid)
+                if (alreadyExists && !forceOverwriteImport) {
+                    skippedCount++; processed++
+                    if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
+                    continue
+                }
+                val content = String(bytes, Charsets.UTF_8)
+                val rawBlocks = parseHexTagFileStrict(content)
+                if (rawBlocks == null) {
+                    invalidCount++; processed++
+                    if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
+                    continue
+                }
+                val preview = NfcTagProcessor.parseForPreview(rawBlocks, filamentDbHelper, filamentCache) { }
+                val trayUid = preview.trayUidHex.trim()
+                if (alreadyExists && forceOverwriteImport && incomingUid.isNotBlank()) {
+                    helper.deleteShareTagByFileUid(db, incomingUid)
+                }
+                val normalized = content.trim().lines()
+                    .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
+                val productionDate = extractProductionDate(rawBlocks)
+                val rowId = helper.insertShareTag(
+                    db, fileUid = incomingUid, trayUid = trayUid.ifBlank { null },
+                    materialType = preview.displayData.type.ifBlank { null },
+                    colorUid = preview.displayData.colorCode.ifBlank { null },
+                    colorName = preview.displayData.colorName.ifBlank { null },
+                    colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
+                    colorType = preview.displayData.colorType.ifBlank { null },
+                    colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
+                    rawData = normalized, productionDate = productionDate
+                )
+                if (rowId >= 0) {
+                    extractedCount++
+                    if (alreadyExists && forceOverwriteImport) overwrittenCount++
+                    if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
+                } else {
+                    logDebug("insertShareTag conflict for fileUid=$incomingUid")
+                    skippedCount++
+                }
+                processed++
+                if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
             }
-            val normalized = content.trim().lines()
-                .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
-            val productionDate = extractProductionDate(rawBlocks)
-            val rowId = helper.insertShareTag(
-                db, fileUid = incomingUid, trayUid = trayUid.ifBlank { null },
-                materialType = preview.displayData.type.ifBlank { null },
-                colorUid = preview.displayData.colorCode.ifBlank { null },
-                colorName = preview.displayData.colorName.ifBlank { null },
-                colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
-                colorType = preview.displayData.colorType.ifBlank { null },
-                colorValues = preview.displayData.colorValues.joinToString(",").ifBlank { null },
-                rawData = normalized, productionDate = productionDate
-            )
-            if (rowId >= 0) {
-                extractedCount++
-                if (alreadyExists && forceOverwriteImport) overwrittenCount++
-                if (incomingUid.isNotBlank()) existingFileUidSet.add(incomingUid)
-            } else {
-                logDebug("insertShareTag conflict for fileUid=$incomingUid")
-                skippedCount++
-            }
-            processed++
-            onProgress?.invoke(processed, total)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
+        logDebug("DL_IMPORT [bambu] 事务提交完成 耗时=${System.currentTimeMillis()-tTx}ms extracted=$extractedCount skipped=$skippedCount invalid=$invalidCount filamentCacheSize=${filamentCache.size}")
         return when {
             extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
                 uiString(R.string.tag_import_no_data)
@@ -2413,31 +2504,47 @@ class MainActivity : ComponentActivity() {
         val txtEntries = entries.filter { it.first.lowercase(Locale.US).endsWith(".txt") }
         val total = txtEntries.size
         var processed = 0
+        val reportEvery = maxOf(1, total / 200)
+        val tExist = System.currentTimeMillis()
         val existingUidSet = helper.getAllSnapmakerShareTagUids(db)
             .map { it.uppercase(Locale.US) }.toMutableSet()
-        for ((entryName, bytes) in txtEntries) {
-            val incomingUid = File(entryName).nameWithoutExtension.uppercase(Locale.US)
-            if (incomingUid.isNotBlank() && existingUidSet.contains(incomingUid)) {
-                skippedCount++; processed++; onProgress?.invoke(processed, total); continue
+        logDebug("DL_IMPORT [snapmaker] 查已有记录=${existingUidSet.size}条 耗时=${System.currentTimeMillis()-tExist}ms 待处理txt=$total")
+        val tTx = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            for ((entryName, bytes) in txtEntries) {
+                val incomingUid = File(entryName).nameWithoutExtension.uppercase(Locale.US)
+                if (incomingUid.isNotBlank() && existingUidSet.contains(incomingUid)) {
+                    skippedCount++; processed++
+                    if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
+                    continue
+                }
+                val content = String(bytes, Charsets.UTF_8)
+                val rawBlocks = parseHexTagFileStrict(content)
+                if (rawBlocks == null) {
+                    invalidCount++; processed++
+                    if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
+                    continue
+                }
+                val fields = parseSnapmakerShareFields(rawBlocks)
+                val normalized = content.trim().lines()
+                    .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
+                helper.insertSnapmakerShareTag(
+                    db, uid = incomingUid, vendor = fields.vendor,
+                    manufacturer = fields.manufacturer, mainType = fields.mainType,
+                    diameter = fields.diameter, weight = fields.weight,
+                    rgb1 = fields.rgb1, mfDate = fields.mfDate, rawData = normalized
+                )
+                extractedCount++
+                existingUidSet.add(incomingUid)
+                processed++
+                if (processed % reportEvery == 0 || processed == total) onProgress?.invoke(processed, total)
             }
-            val content = String(bytes, Charsets.UTF_8)
-            val rawBlocks = parseHexTagFileStrict(content)
-            if (rawBlocks == null) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
-            if (!isValidSnapmakerTag(rawBlocks)) { invalidCount++; processed++; onProgress?.invoke(processed, total); continue }
-            val fields = parseSnapmakerShareFields(rawBlocks)
-            val normalized = content.trim().lines()
-                .map { it.trim() }.filter { it.isNotBlank() }.take(64).joinToString("\n")
-            helper.insertSnapmakerShareTag(
-                db, uid = incomingUid, vendor = fields.vendor,
-                manufacturer = fields.manufacturer, mainType = fields.mainType,
-                diameter = fields.diameter, weight = fields.weight,
-                rgb1 = fields.rgb1, mfDate = fields.mfDate, rawData = normalized
-            )
-            extractedCount++
-            existingUidSet.add(incomingUid)
-            processed++
-            onProgress?.invoke(processed, total)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
+        logDebug("DL_IMPORT [snapmaker] 事务提交完成 耗时=${System.currentTimeMillis()-tTx}ms extracted=$extractedCount skipped=$skippedCount invalid=$invalidCount")
         return when {
             extractedCount == 0 && skippedCount == 0 && invalidCount == 0 ->
                 uiString(R.string.tag_import_no_data)

@@ -175,6 +175,7 @@ object NetworkUtils {
                 }
                 val total = connection.contentLengthLong
                 var downloaded = 0L
+                var firstChunk = true
                 val buf = ByteArray(8192)
                 destFile.outputStream().use { out ->
                     connection.inputStream.use { inp ->
@@ -183,7 +184,11 @@ object NetworkUtils {
                             out.write(buf, 0, read)
                             downloaded += read
                             if (total > 0) {
-                                onProgress?.invoke((downloaded * 100 / total).toInt().coerceIn(0, 99))
+                                onProgress?.invoke((downloaded * 100 / total).toInt().coerceIn(1, 99))
+                            } else if (firstChunk) {
+                                // 大小未知：推 1 表示"已开始下载"，切换出连接中状态
+                                onProgress?.invoke(1)
+                                firstChunk = false
                             }
                         }
                     }
@@ -193,6 +198,42 @@ object NetworkUtils {
                 Pair(code, null)
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logDebug("NetworkUtils POST(download) exception: ${e.message}")
+                null
+            } finally {
+                connection.disconnect()
+            }
+        }
+    }
+
+    /**
+     * POST JSON，返回服务端响应的 JSONArray。网络或解析失败返回 null。
+     */
+    suspend fun postJsonGetResponseArray(
+        urlString: String,
+        payload: JSONObject,
+        headers: Map<String, String> = emptyMap()
+    ): org.json.JSONArray? {
+        return withContext(Dispatchers.IO) {
+            com.m0h31h31.bamburfidreader.logDebug("NetworkUtils POST(array) $urlString")
+            val url = URL(urlString)
+            val connection = url.openConnection() as HttpURLConnection
+            connection.apply {
+                connectTimeout = TIMEOUT_MS
+                readTimeout = TIMEOUT_MS
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                setRequestProperty("Accept", "application/json")
+                headers.forEach { (k, v) -> if (v.isNotBlank()) setRequestProperty(k, v) }
+            }
+            try {
+                connection.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
+                val code = connection.responseCode
+                if (code !in 200..299) return@withContext null
+                val body = connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+                org.json.JSONArray(body)
+            } catch (e: Exception) {
+                com.m0h31h31.bamburfidreader.logDebug("NetworkUtils POST(array) exception: ${e.message}")
                 null
             } finally {
                 connection.disconnect()

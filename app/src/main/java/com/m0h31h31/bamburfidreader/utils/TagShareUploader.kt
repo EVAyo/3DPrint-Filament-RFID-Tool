@@ -35,6 +35,38 @@ object TagShareUploader {
         prefs.edit().putStringSet(KEY_UPLOADED_UIDS, set).apply()
     }
 
+    fun getUploadedUidsSorted(context: Context): List<String> =
+        getUploadedUids(context).sorted()
+
+    // ── 查询我的共享（含服务端 createdAt）────────────────────────────────────
+
+    /**
+     * 从服务端查询本设备上传的标签列表（uid + createdAt）。
+     * 网络不可用或接口失败时回退为本地 SharedPreferences UID 列表（无时间）。
+     * 返回格式每项："{uid}\n{yyyy-MM-dd HH:mm}" 或仅 "{uid}"。
+     */
+    suspend fun fetchMySharesWithTime(context: Context): List<String> {
+        val endpoint = ConfigManager.getTagShareEndpoint(context)
+        if (!endpoint.isUsable) return getUploadedUidsSorted(context)
+        val deviceId = AnalyticsReporter.getInstallId(context)
+        val mineUrl = endpoint.value.trimEnd('/') + "/mine"
+        return try {
+            val payload = JSONObject().put("device_id", deviceId)
+            val arr = NetworkUtils.postJsonGetResponseArray(
+                mineUrl, payload, AnalyticsReporter.apiKeyHeaders()
+            ) ?: return getUploadedUidsSorted(context)
+            (0 until arr.length()).mapNotNull { i ->
+                val item = arr.optJSONObject(i) ?: return@mapNotNull null
+                val uid = item.optString("uid").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val time = item.optString("createdAt")
+                if (time.isNotBlank()) "$uid\n$time" else uid
+            }
+        } catch (e: Exception) {
+            logDebug("TagShareUploader.fetchMySharesWithTime failed: ${e.message}")
+            getUploadedUidsSorted(context)
+        }
+    }
+
     // ── 上传 ─────────────────────────────────────────────────────────────────
 
     /**
@@ -57,7 +89,6 @@ object TagShareUploader {
         return try {
             val ok = NetworkUtils.postJson(endpoint.value, buildRawPayload(brand, rawData, deviceId), AnalyticsReporter.apiKeyHeaders())
             if (ok) {
-                // 服务端返回 2xx（无论是新插入还是已存在），本地标记为已上传
                 markUploaded(context, uid)
                 logDebug("TagShareUploader: 上传成功 brand=$brand uid=$uid")
             } else {
@@ -79,7 +110,6 @@ object TagShareUploader {
             rawData.rawBlocks.forEachIndexed { blockIndex, block ->
                 val blockInSector = blockIndex % 4
                 if (blockInSector == 3 && block != null) {
-                    // 重建 trailer：用真实密钥替换硬件返回的 0x00 占位
                     val sector = blockIndex / 4
                     val trailer = block.copyOf()
                     rawData.sectorKeys.getOrNull(sector)?.first

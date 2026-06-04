@@ -30,7 +30,7 @@ private val HKDF_SALT = byteArrayOf(
 
 // 派生 KeyA / KeyB 时使用的 info 参数。
 private val INFO_A = "RFID-A\u0000".toByteArray(Charsets.US_ASCII)
-private val INFO_B = "RFID-A\u0000".toByteArray(Charsets.US_ASCII)
+private val INFO_B = "RFID-B\u0000".toByteArray(Charsets.US_ASCII)
 
 /**
  * 原始读卡结果（仅包含"读取层"的数据，不做业务解析）。

@@ -58,7 +58,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -217,6 +221,7 @@ fun MiscScreen(
     onAutoShareTagChange: (Boolean) -> Unit = {},
     onCheckDownloadPermission: suspend () -> String? = { null },
     onDownloadTagPackage: suspend (brand: String, onProgress: (Int) -> Unit, onImportStatus: (String) -> Unit) -> String = { _, _, _ -> "" },
+    onLoadMySharedUids: suspend () -> List<String> = { emptyList() },
     hideCopiedTags: Boolean = true,
     onHideCopiedTagsChange: (Boolean) -> Unit = {},
     dualTagMode: Boolean = false,
@@ -882,13 +887,25 @@ fun MiscScreen(
                         var dlBrand         by remember { mutableStateOf("") }
                         var dlImportStatus  by remember { mutableStateOf("") }
                         val dlScope = rememberCoroutineScope()
+                        // ── 我的共享状态（同样提到外层）──────────────────────
+                        var mySharesDialogVisible by remember { mutableStateOf(false) }
+                        var mySharesUids by remember { mutableStateOf<List<String>>(emptyList()) }
 
                         // 权限拒绝提示弹窗
                         if (dlDeniedMsg.isNotBlank()) {
                             AlertDialog(
                                 onDismissRequest = { dlDeniedMsg = "" },
                                 title = { Text(stringResource(R.string.download_not_allowed_title)) },
-                                text  = { Text(dlDeniedMsg) },
+                                text  = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(dlDeniedMsg)
+                                        Text(
+                                            text = stringResource(R.string.download_not_allowed_boost_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
                                 confirmButton = {
                                     TextButton(onClick = { dlDeniedMsg = "" }) {
                                         Text(stringResource(R.string.action_ok))
@@ -909,29 +926,43 @@ fun MiscScreen(
                                 },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (dlProgress in 1..99) {
-                                            androidx.compose.material3.LinearProgressIndicator(
-                                                progress = { dlProgress / 100f },
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Text(
-                                                stringResource(R.string.format_percent, dlProgress),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        } else {
-                                            androidx.compose.material3.LinearProgressIndicator(
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Text(
-                                                when {
-                                                    dlProgress == 0 -> stringResource(R.string.dl_state_connecting)
-                                                    dlImportStatus.isNotBlank() -> dlImportStatus
-                                                    else -> stringResource(R.string.dl_state_importing)
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                        when {
+                                            dlImportStatus.isNotBlank() -> {
+                                                // 导入阶段：确定性进度条 + "正在导入 X/Y"
+                                                androidx.compose.material3.LinearProgressIndicator(
+                                                    progress = { dlProgress / 100f },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Text(
+                                                    dlImportStatus,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            dlProgress in 1..99 -> {
+                                                // 下载阶段（已知大小）：确定性进度条 + 百分比
+                                                androidx.compose.material3.LinearProgressIndicator(
+                                                    progress = { dlProgress / 100f },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Text(
+                                                    stringResource(R.string.format_percent, dlProgress),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            else -> {
+                                                // 连接中 / 未知大小下载中 / 下载完等待导入
+                                                androidx.compose.material3.LinearProgressIndicator(
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Text(
+                                                    if (dlProgress == 0) stringResource(R.string.dl_state_connecting)
+                                                    else stringResource(R.string.dl_state_importing),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                     }
                                 },
@@ -1006,6 +1037,128 @@ fun MiscScreen(
                                             }
                                         }
                                     )
+                                }
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = autoShareTag,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            NeuButton(
+                                text = stringResource(R.string.misc_my_shares),
+                                onClick = {
+                                    dlScope.launch {
+                                        mySharesUids = kotlinx.coroutines.withContext(
+                                            kotlinx.coroutines.Dispatchers.IO
+                                        ) { onLoadMySharedUids() }
+                                        mySharesDialogVisible = true
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (mySharesDialogVisible) {
+                            androidx.compose.ui.window.Dialog(
+                                onDismissRequest = { mySharesDialogVisible = false }
+                            ) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.large,
+                                    tonalElevation = 6.dp
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.misc_my_shares_dialog_title),
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        if (mySharesUids.isEmpty()) {
+                                            Text(
+                                                text = stringResource(R.string.misc_my_shares_empty),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        } else {
+                                            // 表头
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "#",
+                                                    modifier = Modifier.weight(0.5f),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "UID",
+                                                    modifier = Modifier.weight(1.5f),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = stringResource(R.string.misc_my_shares_col_time),
+                                                    modifier = Modifier.weight(2f),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            HorizontalDivider()
+                                            // 表格行
+                                            androidx.compose.foundation.lazy.LazyColumn(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .heightIn(max = 360.dp)
+                                            ) {
+                                                itemsIndexed(mySharesUids) { index, entry ->
+                                                    val parts = entry.split("\n", limit = 2)
+                                                    val uid  = parts[0]
+                                                    val time = if (parts.size > 1) parts[1] else ""
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 5.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "${index + 1}",
+                                                            modifier = Modifier.weight(0.5f),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                        Text(
+                                                            text = uid,
+                                                            modifier = Modifier.weight(1.5f),
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                        Text(
+                                                            text = time,
+                                                            modifier = Modifier.weight(2f),
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    HorizontalDivider(
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        TextButton(
+                                            onClick = { mySharesDialogVisible = false },
+                                            modifier = Modifier.align(Alignment.End)
+                                        ) {
+                                            Text(stringResource(android.R.string.ok))
+                                        }
+                                    }
                                 }
                             }
                         }

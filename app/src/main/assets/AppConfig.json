@@ -53,6 +53,7 @@
             "type": "scheme",
             "value": "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1074926713&card_type=group&source=qrcode"
         },
+        
         "gitee": {
             "type": "url",
             "value": "https://gitee.com/JackMoHeiHei/BambuRfidReader"

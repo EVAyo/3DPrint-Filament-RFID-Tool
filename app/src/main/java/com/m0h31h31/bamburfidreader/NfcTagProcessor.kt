@@ -31,6 +31,7 @@ object NfcTagProcessor {
     fun parseForPreview(
         rawBlocks: List<ByteArray?>,
         dbHelper: FilamentDbHelper?,
+        filamentCache: HashMap<String, List<FilamentColorEntry>>? = null,
         logger: (String) -> Unit
     ): ProcessedTagData {
         val blocksForParsing = listOf(
@@ -48,7 +49,7 @@ object NfcTagProcessor {
 
         val ctx = dbHelper?.context
         val parsedBlockData = parseBlocks(blocksForParsing, block12, block16, logger, ctx)
-        val displayData = buildDisplayData(parsedBlockData, dbHelper, logger)
+        val displayData = buildDisplayData(parsedBlockData, dbHelper, logger, filamentCache = filamentCache)
         val totalWeightGrams = extractWeightGrams(parsedBlockData.fields)
         val trayUidHex = rawBlocks.getOrNull(9)?.toHex().orEmpty()
 
@@ -374,7 +375,8 @@ private fun buildDisplayData(
     parsedBlockData: ParsedBlockData,
     dbHelper: FilamentDbHelper?,
     logger: (String) -> Unit,
-    context: Context? = dbHelper?.context
+    context: Context? = dbHelper?.context,
+    filamentCache: HashMap<String, List<FilamentColorEntry>>? = null
 ): DisplayData {
     var type = ""
     var colorName = ""
@@ -388,7 +390,8 @@ private fun buildDisplayData(
             dbHelper,
             parsedBlockData.materialId,
             parsedBlockData.colorValues,
-            logger = logger
+            logger = logger,
+            filamentCache = filamentCache
         )
         val matched = findMatchingEntry(entries, parsedBlockData.colorValues)
         val entry =
@@ -464,17 +467,20 @@ private fun localizeColorType(raw: String, context: Context?): String {
 }
 
 // 查询 filaments 表，按 materialId + 颜色数量（可选）定位候选项。
+// filamentCache：批量导入时传入，按 "filaId:colorCount" 缓存结果，避免重复查询。
 private fun queryFilamentEntries(
     dbHelper: FilamentDbHelper,
     filaId: String,
     readColors: List<String>,
-    logger: (String) -> Unit
+    logger: (String) -> Unit,
+    filamentCache: HashMap<String, List<FilamentColorEntry>>? = null
 ): List<FilamentColorEntry> {
     val db = dbHelper.readableDatabase
     val normalizedColors = readColors.map { normalizeColorValue(it) }.filter { it.isNotBlank() }
     logger("查询颜色: ${normalizedColors.joinToString(", ")}")
 
-    fun queryBy(selection: String, selectionArgs: Array<String>): List<FilamentColorEntry> {
+    fun queryBy(selection: String, selectionArgs: Array<String>, cacheKey: String): List<FilamentColorEntry> {
+        filamentCache?.get(cacheKey)?.let { return it }
         val entries = ArrayList<FilamentColorEntry>()
         val cursor = db.query(
             "filaments",
@@ -517,13 +523,15 @@ private fun queryFilamentEntries(
                 )
             }
         }
+        filamentCache?.set(cacheKey, entries)
         return entries
     }
 
     if (normalizedColors.isNotEmpty()) {
         val exactCountEntries = queryBy(
             selection = "fila_id = ? AND color_count = ?",
-            selectionArgs = arrayOf(filaId, normalizedColors.size.toString())
+            selectionArgs = arrayOf(filaId, normalizedColors.size.toString()),
+            cacheKey = "$filaId:${normalizedColors.size}"
         )
         if (exactCountEntries.isNotEmpty()) {
             return exactCountEntries
@@ -532,7 +540,8 @@ private fun queryFilamentEntries(
     }
     return queryBy(
         selection = "fila_id = ?",
-        selectionArgs = arrayOf(filaId)
+        selectionArgs = arrayOf(filaId),
+        cacheKey = "$filaId:*"
     )
 }
 

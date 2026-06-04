@@ -354,11 +354,16 @@
     <string name="snapmaker_tag_screen_hint">Select Tag and Write to Card</string>
     <string name="snapmaker_diameter_label">Filament Diameter</string>
     <string name="download_shared_tag_library">Download Shared Tag Library</string>
+    <string name="misc_my_shares">My Shares</string>
+    <string name="misc_my_shares_dialog_title">Successfully Shared Tags</string>
+    <string name="misc_my_shares_empty">No shared tags yet</string>
+    <string name="misc_my_shares_col_time">Time</string>
     <string name="download_bambu_tag_package">Download Bambu Tag Package</string>
     <string name="download_snapmaker_tag_package">Download Snapmaker Tag Package</string>
     <string name="downloading_tag_package">Downloading…</string>
     <string name="download_tag_package_failed">Download failed, please check your network and try again</string>
     <string name="download_not_allowed_title">Download Not Allowed</string>
+    <string name="download_not_allowed_boost_hint">If you have boosted MakerWord, contact the admin to enable download access.</string>
     <string name="action_ok">OK</string>
     <string name="downloading_tag_package_brand">Downloading %1$s tag package…</string>
     <string name="dl_state_connecting">Connecting to server…</string>

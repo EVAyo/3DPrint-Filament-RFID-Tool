@@ -342,11 +342,16 @@
     <string name="snapmaker_tag_screen_hint">选择标签后贴卡写入</string>
     <string name="snapmaker_diameter_label">线径</string>
     <string name="download_shared_tag_library">下载共享标签库</string>
+    <string name="misc_my_shares">我的共享</string>
+    <string name="misc_my_shares_dialog_title">成功共享的标签</string>
+    <string name="misc_my_shares_empty">暂无共享标签</string>
+    <string name="misc_my_shares_col_time">时间</string>
     <string name="download_bambu_tag_package">下载 Bambu 标签包</string>
     <string name="download_snapmaker_tag_package">下载 Snapmaker 标签包</string>
     <string name="downloading_tag_package">下载中…</string>
     <string name="download_tag_package_failed">下载失败，请检查网络或稍后重试</string>
     <string name="download_not_allowed_title">无法下载</string>
+    <string name="download_not_allowed_boost_hint">如果你已助力 MakerWorld，可联系管理员开通下载权限。</string>
     <string name="action_ok">确定</string>
     <string name="downloading_tag_package_brand">正在下载 %1$s 标签包…</string>
     <string name="dl_state_connecting">正在连接服务器…</string>
