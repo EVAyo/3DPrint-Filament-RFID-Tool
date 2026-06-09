@@ -16,7 +16,19 @@
       "Bash(grep *)",
       "PowerShell(.\\\\gradlew assembleDebug 2>&1 | Select-Object -Last 25)",
       "Bash(python3 *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(adb devices *)",
+      "PowerShell(adb devices *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(& \"F:\\\\Android\\\\platform-tools\\\\adb.exe\" devices)",
+      "Bash(\"F:/Android/platform-tools/adb.exe\" exec-out *)",
+      "Bash(python -c ' *)",
+      "PowerShell(python -c $script)",
+      "PowerShell($adb = \"F:\\\\Android\\\\platform-tools\\\\adb.exe\")",
+      "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\export_db.py)",
+      "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\check_db.py)",
+      "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\export_db2.py)",
+      "Bash(python *)"
     ]
   }
 }

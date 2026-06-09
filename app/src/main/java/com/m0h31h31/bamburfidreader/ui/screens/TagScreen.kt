@@ -1061,7 +1061,7 @@ fun TagScreen(
                             Text(stringResource(R.string.tag_write_notice_2), fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
                             Text(stringResource(R.string.tag_write_notice_3), fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
                             Text(stringResource(R.string.tag_write_notice_4), color = MaterialTheme.colorScheme.error, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(stringResource(R.string.tag_write_notice_5), color = MaterialTheme.colorScheme.error, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
+//                            Text(stringResource(R.string.tag_write_notice_5), color = MaterialTheme.colorScheme.error, fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
