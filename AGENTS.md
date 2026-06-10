@@ -200,6 +200,42 @@ Bambu NFC core rules:
   authentication behavior: more retries and less reconnecting after ordinary
   authentication false results, while preserving stale-tag reconnect handling.
 
+Android NFC stability rules verified in local testing:
+- The current Android `MifareClassic` read/write path is considered stable.
+  Do not refactor or simplify the NFC authentication, reconnect, delay, or
+  format logic unless testing on real Android phones shows a concrete issue.
+- Keep Bambu read/write/format/verify operations on the unified NFC operator.
+  Avoid reintroducing separate block read/write loops in `MainActivity` or
+  `NfcTagReader`.
+- Keep Bambu read authentication strict: UID-derived KeyA is the normal read
+  key. UID-derived KeyB is for trailer reset/format logic, not a normal read
+  fallback.
+- Keep the mode-specific `postKeyDerivationDelayMs` before MIFARE
+  authentication. This delay is part of the old-phone compatibility fix.
+- Keep Stable mode's MifareClassicTool-like behavior:
+  `reconnectAfterFailedAuth = false`, more retries, and less reconnect churn
+  after ordinary auth false results. Do not change it back to reconnect after
+  every failed auth without real-device evidence.
+- Config-page "format tag" must auto-detect the card family and use matching
+  keys. The supported detection families are Bambu, Snapmaker/快造,
+  Creality/创想三维, and default `FF`/blank cards.
+- Format detection must not classify a tag as default `FF` only because sector 0
+  authenticates with `FF`. Partially formatted cards can have sector 0 reset
+  while later sectors still use brand keys. Detection should check Bambu and
+  Snapmaker sectors 0/1 and Creality sector 1 before falling back to `FF`.
+- Snapmaker/快造 formatting must use the two-step trailer reset:
+  derived KeyB auth -> write derived KeyA + `FF078069` + derived KeyB -> then
+  authenticate again and write default `FF` KeyA/KeyB. Do not replace this with
+  a one-step default trailer write.
+- Creality/创想三维 formatting uses `deriveCrealityKeyA(uid)` plus `FF`
+  fallback where applicable, then resets sectors to the default `FF` trailer.
+- Non-Bambu format should preserve block 0, reset trailers to
+  `FF FF FF FF FF FF FF 07 80 69 FF FF FF FF FF FF`, clear data blocks, and
+  verify with `FF`.
+- NFC debug logs for key derivation, brand detection, trailer reset stages, and
+  stale tag handling are intentional. Do not remove them while real-device NFC
+  compatibility remains an active concern.
+
 Bambu parsing and inventory:
 - Bambu parsing currently uses blocks 0..7 plus block 12 and block 16.
 - Parsed fields include material variant/id, base filament type, detailed
