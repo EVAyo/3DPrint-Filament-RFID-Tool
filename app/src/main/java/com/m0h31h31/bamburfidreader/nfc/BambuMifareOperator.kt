@@ -1,7 +1,10 @@
 package com.m0h31h31.bamburfidreader.nfc
 
+import android.content.Context
 import android.nfc.Tag
 import android.nfc.tech.MifareClassic
+import androidx.annotation.StringRes
+import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.RawTagReadData
 import com.m0h31h31.bamburfidreader.deriveBambuKeys
 import java.io.IOException
@@ -22,6 +25,7 @@ sealed class BambuNfcResult {
     data class Message(val success: Boolean, val message: String) : BambuNfcResult()
     data class Failure(
         val message: String,
+        val reason: BambuNfcFailureReason = BambuNfcFailureReason.EXCEPTION,
         val uidHex: String = "",
         val keyA0Hex: String = "",
         val keyB0Hex: String = "",
@@ -29,6 +33,12 @@ sealed class BambuNfcResult {
         val keyB1Hex: String = "",
         val staleTag: Boolean = false
     ) : BambuNfcResult()
+}
+
+enum class BambuNfcFailureReason {
+    UID_MISSING,
+    MIFARE_UNSUPPORTED,
+    EXCEPTION
 }
 
 data class BambuTrailerResetStage(
@@ -84,15 +94,22 @@ object BambuMifareOperator {
         tag: Tag,
         config: NfcCompatibilityConfig,
         operation: BambuNfcOperation,
+        context: Context,
         logger: (String) -> Unit = {},
         appendLog: (String, String) -> Unit = { _, _ -> },
         onStatus: (String) -> Unit = {}
     ): BambuNfcResult {
-        val uid = tag.id ?: return BambuNfcResult.Failure("UID missing")
+        val uid = tag.id ?: return BambuNfcResult.Failure(
+            message = context.nfcText(R.string.bambu_nfc_uid_missing),
+            reason = BambuNfcFailureReason.UID_MISSING
+        )
         val uidHex = uid.toHex()
         val sectorKeys = runCatching { deriveBambuKeys(uid) }.getOrElse { error ->
             return BambuNfcResult.Failure(
-                message = "Bambu key derivation failed: ${error.message.orEmpty()}",
+                message = context.nfcText(
+                    R.string.bambu_nfc_key_derivation_failed_format,
+                    error.message.orEmpty()
+                ),
                 uidHex = uidHex
             )
         }
@@ -100,9 +117,17 @@ object BambuMifareOperator {
         val keyB0Hex = sectorKeys.getOrNull(0)?.second?.toHex().orEmpty()
         val keyA1Hex = sectorKeys.getOrNull(1)?.first?.toHex().orEmpty()
         val keyB1Hex = sectorKeys.getOrNull(1)?.second?.toHex().orEmpty()
+        logDerivedKeys(uidHex, uid.size, sectorKeys, config, logger, appendLog)
+        if (config.postKeyDerivationDelayMs > 0) {
+            appendLog("D", "Waiting ${config.postKeyDerivationDelayMs}ms after Bambu key derivation before MIFARE access")
+            Thread.sleep(config.postKeyDerivationDelayMs)
+        }
 
         val mifare = MifareClassic.get(tag) ?: return BambuNfcResult.Failure(
-            message = "MIFARE Classic not supported",
+            message = context.nfcText(
+                R.string.bambu_nfc_mifare_unsupported
+            ),
+            reason = BambuNfcFailureReason.MIFARE_UNSUPPORTED,
             uidHex = uidHex,
             keyA0Hex = keyA0Hex,
             keyB0Hex = keyB0Hex,
@@ -123,6 +148,7 @@ object BambuMifareOperator {
                     sectorKeys = sectorKeys,
                     readAllSectors = operation.readAllSectors,
                     config = config,
+                    context = context,
                     logger = logger,
                     appendLog = appendLog
                 )
@@ -131,6 +157,7 @@ object BambuMifareOperator {
                     mifare = mifare,
                     sectorKeys = sectorKeys,
                     config = config,
+                    context = context,
                     appendLog = appendLog,
                     onStatus = onStatus
                 )
@@ -139,6 +166,7 @@ object BambuMifareOperator {
                     mifare = mifare,
                     sourceBlocks = operation.sourceBlocks,
                     config = config,
+                    context = context,
                     appendLog = appendLog,
                     onStatus = onStatus
                 )
@@ -148,6 +176,7 @@ object BambuMifareOperator {
                         mifare = mifare,
                         sectorKeys = sectorKeys,
                         config = config,
+                        context = context,
                         appendLog = appendLog,
                         onStatus = onStatus
                     )
@@ -156,6 +185,7 @@ object BambuMifareOperator {
                             mifare = mifare,
                             sourceBlocks = operation.sourceBlocks,
                             config = config,
+                            context = context,
                             appendLog = appendLog,
                             onStatus = onStatus
                         )
@@ -168,6 +198,7 @@ object BambuMifareOperator {
                     mifare = mifare,
                     sourceBlocks = operation.sourceBlocks,
                     config = config,
+                    context = context,
                     appendLog = appendLog
                 )
             }
@@ -175,7 +206,7 @@ object BambuMifareOperator {
             appendLog("E", "Bambu operator failed: ${e.javaClass.simpleName}: ${e.message}")
             BambuNfcResult.Failure(
                 message = if (MifareClassicSession.isStaleTagException(e)) {
-                    "Tag handle expired. Remove the tag and tap again."
+                    context.nfcText(R.string.bambu_nfc_tag_expired)
                 } else {
                     e.message.orEmpty()
                 },
@@ -195,12 +226,32 @@ object BambuMifareOperator {
         }
     }
 
+    private fun logDerivedKeys(
+        uidHex: String,
+        uidLength: Int,
+        sectorKeys: List<Pair<ByteArray, ByteArray>>,
+        config: NfcCompatibilityConfig,
+        logger: (String) -> Unit,
+        appendLog: (String, String) -> Unit
+    ) {
+        val preview = sectorKeys.take(4).mapIndexed { sector, keys ->
+            "S$sector A=${keys.first.toHex()} B=${keys.second.toHex()}"
+        }.joinToString(separator = " | ")
+        val summary = "Bambu key derivation UID=$uidHex uidBytes=$uidLength sectors=${sectorKeys.size} mode=${config.mode} postKeyDelay=${config.postKeyDerivationDelayMs}ms $preview"
+        logger(summary)
+        appendLog("I", summary)
+        sectorKeys.forEachIndexed { sector, keys ->
+            appendLog("D", "Bambu derived key S$sector KeyA=${keys.first.toHex()} KeyB=${keys.second.toHex()}")
+        }
+    }
+
     private fun readRaw(
         mifare: MifareClassic,
         uidHex: String,
         sectorKeys: List<Pair<ByteArray, ByteArray>>,
         readAllSectors: Boolean,
         config: NfcCompatibilityConfig,
+        context: Context,
         logger: (String) -> Unit,
         appendLog: (String, String) -> Unit
     ): BambuNfcResult {
@@ -218,7 +269,7 @@ object BambuMifareOperator {
         for (sector in sectorsToRead) {
             val keyA = sectorKeys.getOrNull(sector)?.first
             if (keyA == null) {
-                errors.add("sector $sector missing derived KeyA")
+                errors.add(context.nfcText(R.string.bambu_nfc_read_missing_keya_format, sector))
                 continue
             }
             val auth = authenticate(
@@ -230,10 +281,10 @@ object BambuMifareOperator {
                 appendLog = appendLog
             )
             if (auth is MifareClassicSession.AuthResult.StaleTag) {
-                return staleFailure(auth.message, uidHex, sectorKeys)
+                return staleFailure(context, auth.message, uidHex, sectorKeys)
             }
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                val error = "sector $sector derived KeyA auth failed"
+                val error = context.nfcText(R.string.bambu_nfc_read_auth_failed_format, sector)
                 logger(error)
                 appendLog("W", error)
                 if (sector == 0 || sector == 1) errors.add(error)
@@ -248,15 +299,19 @@ object BambuMifareOperator {
                     mifare = mifare,
                     blockIndex = blockIndex,
                     config = config,
+                    context = context,
                     appendLog = appendLog
                 ) {
                     authenticate(mifare, sector, listOf(keyA), emptyList(), config, appendLog)
                 }
                 when (block) {
                     is BlockReadResult.Success -> rawBlocks[blockIndex] = block.data
-                    is BlockReadResult.Stale -> return staleFailure(block.message, uidHex, sectorKeys)
+                    is BlockReadResult.Stale -> return staleFailure(context, block.message, uidHex, sectorKeys)
                     is BlockReadResult.Failure -> {
-                        val error = "read block=$blockIndex failed: ${block.message}"
+                        val error = context.nfcText(R.string.bambu_nfc_read_block_failed_format,
+                            blockIndex,
+                            block.message
+                        )
                         appendLog("W", error)
                         if (sector == 0 || sector == 1) errors.add(error)
                         break
@@ -285,46 +340,58 @@ object BambuMifareOperator {
         mifare: MifareClassic,
         sectorKeys: List<Pair<ByteArray, ByteArray>>,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit,
         onStatus: (String) -> Unit
     ): BambuNfcResult {
         if (mifare.sectorCount < BAMBU_SECTOR_COUNT) {
-            return BambuNfcResult.Message(false, "Format failed: tag has insufficient sectors ${mifare.sectorCount}")
+            return BambuNfcResult.Message(
+                false,
+                context.nfcText(R.string.bambu_nfc_format_insufficient_sectors_format,
+                    mifare.sectorCount
+                )
+            )
         }
         val ffKey = ByteArray(6) { 0xFF.toByte() }
         val zeroBlock = ByteArray(16)
         val originalBlock0 = run {
             val auth = authenticate(mifare, 0, listOf(sectorKeys[0].first), listOf(ffKey), config, appendLog)
-            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(auth.message)
+            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                return BambuNfcResult.Message(false, "Format failed: sector 0 auth failed")
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_sector0_auth_failed))
             }
-            when (val block = readBlockWithRetry(mifare, 0, config, appendLog) {
+            when (val block = readBlockWithRetry(mifare, 0, config, context, appendLog) {
                 authenticate(mifare, 0, listOf(sectorKeys[0].first), listOf(ffKey), config, appendLog)
             }) {
                 is BlockReadResult.Success -> block.data
-                is BlockReadResult.Stale -> return staleMessage(block.message)
-                is BlockReadResult.Failure -> return BambuNfcResult.Message(false, "Format failed: cannot read block 0")
+                is BlockReadResult.Stale -> return staleMessage(context, block.message)
+                is BlockReadResult.Failure -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_read_block0_failed))
             }
         }
 
         val targetSectorCount = minOf(BAMBU_SECTOR_COUNT, mifare.sectorCount)
         for (sector in 0 until targetSectorCount) {
-            onStatus("Formatting trailer ${sector + 1}/$targetSectorCount")
-            val reset = resetTrailerToDefaultFf(mifare, sector, sectorKeys[sector], config, appendLog)
+            onStatus(context.nfcText(R.string.bambu_nfc_format_trailer_status_format, sector + 1, targetSectorCount))
+            val reset = resetTrailerToDefaultFf(mifare, sector, sectorKeys[sector], config, context, appendLog)
             when (reset) {
                 is StepResult.Ok -> Unit
-                is StepResult.Stale -> return staleMessage(reset.message)
-                is StepResult.Failed -> return BambuNfcResult.Message(false, "Format failed: sector $sector trailer reset failed: ${reset.message}")
+                is StepResult.Stale -> return staleMessage(context, reset.message)
+                is StepResult.Failed -> return BambuNfcResult.Message(
+                    false,
+                    context.nfcText(R.string.bambu_nfc_format_trailer_reset_failed_format,
+                        sector,
+                        reset.message
+                    )
+                )
             }
         }
 
         for (sector in 0 until targetSectorCount) {
-            onStatus("Clearing data ${sector + 1}/$targetSectorCount")
+            onStatus(context.nfcText(R.string.bambu_nfc_format_clearing_status_format, sector + 1, targetSectorCount))
             val auth = authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
-            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(auth.message)
+            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                return BambuNfcResult.Message(false, "Format failed: sector $sector FF auth failed")
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_sector_ff_auth_failed_format, sector))
             }
             val startBlock = mifare.sectorToBlock(sector)
             val blockCount = mifare.getBlockCountInSector(sector)
@@ -332,21 +399,21 @@ object BambuMifareOperator {
                 val blockIndex = startBlock + offset
                 val isTrailer = offset == blockCount - 1
                 if (blockIndex == 0 || isTrailer) continue
-                when (val write = writeBlockWithRetry(mifare, blockIndex, zeroBlock, config, appendLog) {
+                when (val write = writeBlockWithRetry(mifare, blockIndex, zeroBlock, config, context, appendLog) {
                     authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
                 }) {
                     is StepResult.Ok -> Unit
-                    is StepResult.Stale -> return staleMessage(write.message)
-                    is StepResult.Failed -> return BambuNfcResult.Message(false, "Format failed: block $blockIndex zero-write failed")
+                    is StepResult.Stale -> return staleMessage(context, write.message)
+                    is StepResult.Failed -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_zero_write_failed_format, blockIndex))
                 }
             }
         }
 
         for (sector in 0 until targetSectorCount) {
             val auth = authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
-            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(auth.message)
+            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                return BambuNfcResult.Message(false, "Format verify failed: sector $sector FF auth failed")
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_verify_ff_auth_failed_format, sector))
             }
             val startBlock = mifare.sectorToBlock(sector)
             val blockCount = mifare.getBlockCountInSector(sector)
@@ -354,24 +421,24 @@ object BambuMifareOperator {
                 val blockIndex = startBlock + offset
                 val isTrailer = offset == blockCount - 1
                 if (isTrailer) continue
-                val block = readBlockWithRetry(mifare, blockIndex, config, appendLog) {
+                val block = readBlockWithRetry(mifare, blockIndex, config, context, appendLog) {
                     authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
                 }
                 when (block) {
                     is BlockReadResult.Success -> {
                         if (blockIndex == 0 && !block.data.contentEquals(originalBlock0)) {
-                            return BambuNfcResult.Message(false, "Format verify failed: block 0 changed")
+                            return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_verify_block0_changed))
                         }
                         if (blockIndex != 0 && !block.data.all { it == 0.toByte() }) {
-                            return BambuNfcResult.Message(false, "Format verify failed: block $blockIndex is not zero")
+                            return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_verify_block_not_zero_format, blockIndex))
                         }
                     }
-                    is BlockReadResult.Stale -> return staleMessage(block.message)
-                    is BlockReadResult.Failure -> return BambuNfcResult.Message(false, "Format verify failed: read block $blockIndex failed")
+                    is BlockReadResult.Stale -> return staleMessage(context, block.message)
+                    is BlockReadResult.Failure -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_verify_read_failed_format, blockIndex))
                 }
             }
         }
-        return BambuNfcResult.Message(true, "Tag formatted successfully: reset and verified")
+        return BambuNfcResult.Message(true, context.nfcText(R.string.bambu_nfc_format_success))
     }
 
     private fun resetTrailerToDefaultFf(
@@ -379,6 +446,7 @@ object BambuMifareOperator {
         sector: Int,
         sectorKey: Pair<ByteArray, ByteArray>,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit
     ): StepResult {
         val trailerBlock = mifare.sectorToBlock(sector) + mifare.getBlockCountInSector(sector) - 1
@@ -387,9 +455,9 @@ object BambuMifareOperator {
             val auth = authenticate(mifare, sector, emptyList(), listOf(stage.requiredKeyB), config, appendLog)
             if (auth is MifareClassicSession.AuthResult.StaleTag) return StepResult.Stale(auth.message)
             if (!BambuFormatPlanner.canResetTrailer(auth)) {
-                return tryResetDefaultTrailerWithFf(mifare, sector, trailerBlock, config, appendLog)
+                return tryResetDefaultTrailerWithFf(mifare, sector, trailerBlock, config, context, appendLog)
             }
-            when (val write = writeBlockWithRetry(mifare, trailerBlock, stage.trailer, config, appendLog) {
+            when (val write = writeBlockWithRetry(mifare, trailerBlock, stage.trailer, config, context, appendLog) {
                 authenticate(mifare, sector, emptyList(), listOf(stage.requiredKeyB), config, appendLog)
             }) {
                 is StepResult.Ok -> Unit
@@ -404,7 +472,7 @@ object BambuMifareOperator {
         return if (verify is MifareClassicSession.AuthResult.Success) {
             StepResult.Ok
         } else {
-            StepResult.Failed("FF auth failed after trailer reset")
+            StepResult.Failed(context.nfcText(R.string.bambu_nfc_trailer_ff_verify_failed))
         }
     }
 
@@ -413,13 +481,16 @@ object BambuMifareOperator {
         sector: Int,
         trailerBlock: Int,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit
     ): StepResult {
         val ffKey = ByteArray(6) { 0xFF.toByte() }
         val auth = authenticate(mifare, sector, emptyList(), listOf(ffKey), config, appendLog)
         if (auth is MifareClassicSession.AuthResult.StaleTag) return StepResult.Stale(auth.message)
-        if (!BambuFormatPlanner.canResetTrailer(auth)) return StepResult.Failed("derived KeyB and FF KeyB auth failed")
-        return writeBlockWithRetry(mifare, trailerBlock, BambuFormatPlanner.defaultFfTrailer(), config, appendLog) {
+        if (!BambuFormatPlanner.canResetTrailer(auth)) {
+            return StepResult.Failed(context.nfcText(R.string.bambu_nfc_trailer_keyb_auth_failed))
+        }
+        return writeBlockWithRetry(mifare, trailerBlock, BambuFormatPlanner.defaultFfTrailer(), config, context, appendLog) {
             authenticate(mifare, sector, emptyList(), listOf(ffKey), config, appendLog)
         }
     }
@@ -428,18 +499,21 @@ object BambuMifareOperator {
         mifare: MifareClassic,
         sourceBlocks: List<ByteArray?>,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit,
         onStatus: (String) -> Unit
     ): BambuNfcResult {
-        if (sourceBlocks.isEmpty()) return BambuNfcResult.Message(false, "Write failed: source data is empty")
+        if (sourceBlocks.isEmpty()) {
+            return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_source_empty))
+        }
         val ffKey = ByteArray(6) { 0xFF.toByte() }
         val targetSectorCount = minOf(BAMBU_SECTOR_COUNT, mifare.sectorCount)
         for (sector in 0 until targetSectorCount) {
-            onStatus("Writing sector ${sector + 1}/$targetSectorCount")
+            onStatus(context.nfcText(R.string.bambu_nfc_write_sector_status_format, sector + 1, targetSectorCount))
             val auth = authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
-            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(auth.message)
+            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                return BambuNfcResult.Message(false, "Write failed: sector $sector FF auth failed")
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_sector_ff_auth_failed_format, sector))
             }
             val startBlock = mifare.sectorToBlock(sector)
             val blockCount = mifare.getBlockCountInSector(sector)
@@ -447,62 +521,67 @@ object BambuMifareOperator {
                 val blockIndex = startBlock + offset
                 val sourceIndex = sector * 4 + offset
                 val data = sourceBlocks.getOrNull(sourceIndex)
-                    ?: return BambuNfcResult.Message(false, "Write failed: block $sourceIndex source data missing")
+                    ?: return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_missing_format, sourceIndex))
                 if (data.size != 16) {
-                    return BambuNfcResult.Message(false, "Write failed: block $sourceIndex data length invalid")
+                    return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_size_format, sourceIndex))
                 }
-                when (val write = writeBlockWithRetry(mifare, blockIndex, data, config, appendLog) {
+                when (val write = writeBlockWithRetry(mifare, blockIndex, data, config, context, appendLog) {
                     authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
                 }) {
                     is StepResult.Ok -> Unit
-                    is StepResult.Stale -> return staleMessage(write.message)
-                    is StepResult.Failed -> return BambuNfcResult.Message(false, "Write failed: block $blockIndex write error")
+                    is StepResult.Stale -> return staleMessage(context, write.message)
+                    is StepResult.Failed -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_error_format, blockIndex))
                 }
             }
         }
-        return BambuNfcResult.Message(true, "Write successful")
+        return BambuNfcResult.Message(true, context.nfcText(R.string.bambu_nfc_write_success))
     }
 
     private fun verifyDump(
         mifare: MifareClassic,
         sourceBlocks: List<ByteArray?>,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit
     ): BambuNfcResult {
-        if (sourceBlocks.size < 64) return BambuNfcResult.Message(false, "Verify failed: insufficient source blocks")
+        if (sourceBlocks.size < 64) {
+            return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_insufficient_blocks))
+        }
         val targetSectorCount = minOf(BAMBU_SECTOR_COUNT, mifare.sectorCount)
         for (sector in 0 until targetSectorCount) {
             val trailer = sourceBlocks.getOrNull(sector * 4 + 3)
-                ?: return BambuNfcResult.Message(false, "Verify failed: sector $sector trailer missing")
-            if (trailer.size != 16) return BambuNfcResult.Message(false, "Verify failed: sector $sector trailer length invalid")
+                ?: return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_trailer_missing_format, sector))
+            if (trailer.size != 16) {
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_trailer_size_format, sector))
+            }
             val sourceKeyA = trailer.copyOfRange(0, 6)
             val sourceKeyB = trailer.copyOfRange(10, 16)
             val auth = authenticate(mifare, sector, listOf(sourceKeyA), listOf(sourceKeyB), config, appendLog)
-            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(auth.message)
+            if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
-                return BambuNfcResult.Message(false, "Verify failed: sector $sector auth failed")
+                return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_sector_auth_failed_format, sector))
             }
             val startBlock = mifare.sectorToBlock(sector)
             val blockCount = mifare.getBlockCountInSector(sector)
             for (offset in 0 until blockCount) {
                 val blockIndex = startBlock + offset
                 val expected = sourceBlocks.getOrNull(sector * 4 + offset)
-                    ?: return BambuNfcResult.Message(false, "Verify failed: block $blockIndex source data missing")
-                val actual = readBlockWithRetry(mifare, blockIndex, config, appendLog) {
+                    ?: return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_block_missing_format, blockIndex))
+                val actual = readBlockWithRetry(mifare, blockIndex, config, context, appendLog) {
                     authenticate(mifare, sector, listOf(sourceKeyA), listOf(sourceKeyB), config, appendLog)
                 }
                 when (actual) {
                     is BlockReadResult.Success -> {
                         if (!equivalentBlock(blockIndex, expected, actual.data)) {
-                            return BambuNfcResult.Message(false, "Verify failed: block $blockIndex data mismatch")
+                            return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_block_mismatch_format, blockIndex))
                         }
                     }
-                    is BlockReadResult.Stale -> return staleMessage(actual.message)
-                    is BlockReadResult.Failure -> return BambuNfcResult.Message(false, "Verify failed: block $blockIndex read failed")
+                    is BlockReadResult.Stale -> return staleMessage(context, actual.message)
+                    is BlockReadResult.Failure -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_verify_block_read_failed_format, blockIndex))
                 }
             }
         }
-        return BambuNfcResult.Message(true, "Verify successful")
+        return BambuNfcResult.Message(true, context.nfcText(R.string.bambu_nfc_verify_success))
     }
 
     private fun authenticate(
@@ -533,6 +612,7 @@ object BambuMifareOperator {
         mifare: MifareClassic,
         blockIndex: Int,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit,
         reauthenticate: () -> MifareClassicSession.AuthResult
     ): BlockReadResult {
@@ -542,7 +622,9 @@ object BambuMifareOperator {
                 val data = when {
                     raw.size == 16 -> raw
                     raw.size > 16 -> raw.copyOf(16)
-                    else -> return BlockReadResult.Failure("invalid length ${raw.size}")
+                    else -> return BlockReadResult.Failure(
+                        context.nfcText(R.string.bambu_nfc_io_invalid_length_format, raw.size)
+                    )
                 }
                 return BlockReadResult.Success(data)
             } catch (e: Exception) {
@@ -557,10 +639,12 @@ object BambuMifareOperator {
                 )
                 val auth = reauthenticate()
                 if (auth is MifareClassicSession.AuthResult.StaleTag) return BlockReadResult.Stale(auth.message)
-                if (auth !is MifareClassicSession.AuthResult.Success) return BlockReadResult.Failure("reauth failed")
+                if (auth !is MifareClassicSession.AuthResult.Success) {
+                    return BlockReadResult.Failure(context.nfcText(R.string.bambu_nfc_io_reauth_failed))
+                }
             }
         }
-        return BlockReadResult.Failure("retry exhausted")
+        return BlockReadResult.Failure(context.nfcText(R.string.bambu_nfc_io_retry_exhausted))
     }
 
     private fun writeBlockWithRetry(
@@ -568,6 +652,7 @@ object BambuMifareOperator {
         blockIndex: Int,
         data: ByteArray,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit,
         reauthenticate: () -> MifareClassicSession.AuthResult
     ): StepResult {
@@ -577,7 +662,7 @@ object BambuMifareOperator {
                 mifare.writeBlock(blockIndex, data)
                 if (config.writeVerificationDelayMs > 0) Thread.sleep(config.writeVerificationDelayMs)
                 if (!config.verifyEachWriteBlock || isTrailerBlock(mifare, blockIndex)) return StepResult.Ok
-                val verify = readBlockWithRetry(mifare, blockIndex, config, appendLog, reauthenticate)
+                val verify = readBlockWithRetry(mifare, blockIndex, config, context, appendLog, reauthenticate)
                 when (verify) {
                     is BlockReadResult.Success -> if (verify.data.contentEquals(data)) return StepResult.Ok
                     is BlockReadResult.Stale -> return StepResult.Stale(verify.message)
@@ -595,20 +680,25 @@ object BambuMifareOperator {
                 )
                 val auth = reauthenticate()
                 if (auth is MifareClassicSession.AuthResult.StaleTag) return StepResult.Stale(auth.message)
-                if (auth !is MifareClassicSession.AuthResult.Success) return StepResult.Failed("reauth failed")
+                if (auth !is MifareClassicSession.AuthResult.Success) {
+                    return StepResult.Failed(context.nfcText(R.string.bambu_nfc_io_reauth_failed))
+                }
             }
         }
-        return StepResult.Failed("retry exhausted")
+        return StepResult.Failed(context.nfcText(R.string.bambu_nfc_io_retry_exhausted))
     }
 
     private fun readBlockWithRetry(
         mifare: MifareClassic,
         blockIndex: Int,
         config: NfcCompatibilityConfig,
+        context: Context,
         appendLog: (String, String) -> Unit
     ): BlockReadResult {
-        return readBlockWithRetry(mifare, blockIndex, config, appendLog) {
-            MifareClassicSession.AuthResult.Failure("no reauth available")
+        return readBlockWithRetry(mifare, blockIndex, config, context, appendLog) {
+            MifareClassicSession.AuthResult.Failure(
+                context.nfcText(R.string.bambu_nfc_io_no_reauth_available)
+            )
         }
     }
 
@@ -634,12 +724,13 @@ object BambuMifareOperator {
     }
 
     private fun staleFailure(
+        context: Context,
         message: String,
         uidHex: String,
         sectorKeys: List<Pair<ByteArray, ByteArray>>
     ): BambuNfcResult.Failure {
         return BambuNfcResult.Failure(
-            message = "Tag handle expired. Remove the tag and tap again.",
+            message = context.nfcText(R.string.bambu_nfc_tag_expired),
             uidHex = uidHex,
             keyA0Hex = sectorKeys.getOrNull(0)?.first?.toHex().orEmpty(),
             keyB0Hex = sectorKeys.getOrNull(0)?.second?.toHex().orEmpty(),
@@ -653,9 +744,15 @@ object BambuMifareOperator {
         }
     }
 
-    private fun staleMessage(message: String): BambuNfcResult.Message {
-        val suffix = if (message.isBlank()) "" else " ($message)"
-        return BambuNfcResult.Message(false, "Tag handle expired. Remove the tag and tap again.$suffix")
+    private fun staleMessage(context: Context, message: String): BambuNfcResult.Message {
+        val text = if (message.isBlank()) {
+            context.nfcText(R.string.bambu_nfc_tag_expired)
+        } else {
+            context.nfcText(R.string.bambu_nfc_tag_expired_detail_format,
+                message
+            )
+        }
+        return BambuNfcResult.Message(false, text)
     }
 }
 
@@ -673,3 +770,7 @@ private sealed class StepResult {
 
 private fun ByteArray.toHex(): String =
     joinToString(separator = "") { "%02X".format(Locale.US, it) }
+
+private fun Context.nfcText(@StringRes resId: Int, vararg args: Any): String {
+    return getString(resId, *args)
+}

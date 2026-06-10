@@ -666,7 +666,7 @@ class MainActivity : ComponentActivity() {
                 } else if (pendingCuidTest) {
                     miscStatusMessage = uiString(R.string.misc_status_testing)
                 } else if (pendingNfcCompatibilityTest != null) {
-                    val message = "正在执行NFC兼容性测试..."
+                    val message = uiString(R.string.nfc_compat_test_running)
                     nfcCompatibilityStatusMessage = message
                     miscStatusMessage = message
                 } else if (pendingSnapmakerWriteItem != null) {
@@ -1541,7 +1541,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setNfcCompatibilityMode(mode: NfcCompatibilityMode) {
         nfcCompatibilityConfig = NfcCompatibilityPreferences.saveMode(this, mode)
-        val message = "NFC兼容模式已切换为：${nfcCompatibilityModeLabel(mode)}"
+        val message = uiString(R.string.nfc_compat_mode_changed_format, nfcCompatibilityModeLabel(mode))
         nfcCompatibilityStatusMessage = message
         miscStatusMessage = message
         refreshNfcReaderMode()
@@ -1549,15 +1549,15 @@ class MainActivity : ComponentActivity() {
 
     private fun nfcCompatibilityModeLabel(mode: NfcCompatibilityMode): String {
         return when (mode) {
-            NfcCompatibilityMode.FAST -> "快速"
-            NfcCompatibilityMode.BALANCED -> "均衡"
-            NfcCompatibilityMode.STABLE -> "稳定"
+            NfcCompatibilityMode.FAST -> uiString(R.string.nfc_compat_mode_fast)
+            NfcCompatibilityMode.BALANCED -> uiString(R.string.nfc_compat_mode_balanced)
+            NfcCompatibilityMode.STABLE -> uiString(R.string.nfc_compat_mode_stable)
         }
     }
 
     private fun enqueueNfcCompatibilityTest(includeWrite: Boolean): String {
         if (hasPendingNfcWriteOrMaintenanceTask()) {
-            return "已有NFC任务在等待，请先完成或取消当前任务"
+            return uiString(R.string.nfc_task_waiting)
         }
         pendingNfcCompatibilityTest = if (includeWrite) {
             PendingNfcCompatibilityTest.WRITE_VERIFY
@@ -1565,9 +1565,9 @@ class MainActivity : ComponentActivity() {
             PendingNfcCompatibilityTest.READ_ONLY
         }
         val message = if (includeWrite) {
-            "NFC写入兼容性测试已准备，请贴近一张可写测试卡；会读取一个数据块并原样写回"
+            uiString(R.string.nfc_compat_write_ready)
         } else {
-            "NFC只读兼容性测试已准备，请贴近一张Mifare Classic标签"
+            uiString(R.string.nfc_compat_read_ready)
         }
         nfcCompatibilityStatusMessage = message
         miscStatusMessage = message
@@ -1576,7 +1576,7 @@ class MainActivity : ComponentActivity() {
 
     private fun cancelNfcCompatibilityTest(): String {
         pendingNfcCompatibilityTest = null
-        val message = "NFC兼容性测试已取消"
+        val message = uiString(R.string.nfc_compat_cancelled)
         nfcCompatibilityStatusMessage = message
         miscStatusMessage = message
         return message
@@ -3482,13 +3482,14 @@ class MainActivity : ComponentActivity() {
             tag = tag,
             config = nfcCompatibilityConfig,
             operation = BambuNfcOperation.WriteDumpWithFf(item.rawBlocks),
+            context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
             onStatus = { status -> onStatusUpdate?.invoke(status) }
         )) {
             is BambuNfcResult.Message -> result.message
             is BambuNfcResult.Failure -> result.message
-            is BambuNfcResult.RawRead -> uiString(R.string.write_failed_format, "unexpected read result")
+            is BambuNfcResult.RawRead -> uiString(R.string.write_failed_format, uiString(R.string.bambu_nfc_unexpected_read_result))
         }
     }
 
@@ -3508,13 +3509,14 @@ class MainActivity : ComponentActivity() {
             tag = tag,
             config = nfcCompatibilityConfig,
             operation = BambuNfcOperation.FormatThenWriteDump(item.rawBlocks),
+            context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
             onStatus = { status -> onStatusUpdate?.invoke(status) }
         )) {
             is BambuNfcResult.Message -> result.message
             is BambuNfcResult.Failure -> result.message
-            is BambuNfcResult.RawRead -> uiString(R.string.cmodify_failed_format, "unexpected read result", uiString(R.string.cmodify_retry_hint))
+            is BambuNfcResult.RawRead -> uiString(R.string.cmodify_failed_format, uiString(R.string.bambu_nfc_unexpected_read_result), uiString(R.string.cmodify_retry_hint))
         }
     }
 
@@ -3526,13 +3528,14 @@ class MainActivity : ComponentActivity() {
             tag = tag,
             config = nfcCompatibilityConfig,
             operation = BambuNfcOperation.FormatToDefaultFf,
+            context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
             onStatus = { status -> onStatusUpdate?.invoke(status) }
         )) {
             is BambuNfcResult.Message -> result.message
             is BambuNfcResult.Failure -> result.message
-            is BambuNfcResult.RawRead -> uiString(R.string.format_failed_format, "unexpected read result")
+            is BambuNfcResult.RawRead -> uiString(R.string.format_failed_format, uiString(R.string.bambu_nfc_unexpected_read_result))
         }
     }
 
@@ -3715,12 +3718,13 @@ class MainActivity : ComponentActivity() {
             tag = tag,
             config = nfcCompatibilityConfig,
             operation = BambuNfcOperation.VerifyDump(item.rawBlocks),
+            context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }
         )) {
             is BambuNfcResult.Message -> result.message
             is BambuNfcResult.Failure -> result.message
-            is BambuNfcResult.RawRead -> uiString(R.string.verify_failed_format, "unexpected read result")
+            is BambuNfcResult.RawRead -> uiString(R.string.verify_failed_format, uiString(R.string.bambu_nfc_unexpected_read_result))
         }
     }
 
@@ -4298,14 +4302,14 @@ class MainActivity : ComponentActivity() {
         includeWrite: Boolean,
         onStatusUpdate: (String) -> Unit
     ): String {
-        val uid = tag.id ?: return "NFC兼容性测试失败：无法读取UID"
+        val uid = tag.id ?: return uiString(R.string.nfc_compat_fail_no_uid)
         if (MifareClassic.get(tag) == null) {
-            return "NFC兼容性测试失败：当前标签不是Mifare Classic，或手机系统未开放Mifare Classic"
+            return uiString(R.string.nfc_compat_fail_no_mifare)
         }
 
         val results = NfcCompatibilityMode.values().map { mode ->
             val config = NfcCompatibilityConfig.forMode(mode)
-            onStatusUpdate("正在测试 ${nfcCompatibilityModeLabel(mode)} 模式...")
+            onStatusUpdate(uiString(R.string.nfc_compat_testing_mode_format, nfcCompatibilityModeLabel(mode)))
             testNfcCompatibilityMode(tag, uid, config, includeWrite)
         }
 
@@ -4320,10 +4324,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val summary = results.joinToString(separator = "；") { result ->
-            val readText = if (result.readOk) "读OK" else "读失败"
+        val summary = results.joinToString(separator = uiString(R.string.nfc_compat_summary_separator)) { result ->
+            val readText = if (result.readOk) {
+                uiString(R.string.nfc_compat_read_ok)
+            } else {
+                uiString(R.string.nfc_compat_read_failed)
+            }
             val writeText = if (includeWrite) {
-                if (result.writeOk) "/写OK" else "/写失败"
+                if (result.writeOk) {
+                    uiString(R.string.nfc_compat_write_ok)
+                } else {
+                    uiString(R.string.nfc_compat_write_failed)
+                }
             } else {
                 ""
             }
@@ -4331,11 +4343,11 @@ class MainActivity : ComponentActivity() {
         }
 
         return if (successful != null) {
-            "NFC兼容性测试成功，推荐并已应用：${nfcCompatibilityModeLabel(successful.mode)}。$summary"
+            uiString(R.string.nfc_compat_success_format, nfcCompatibilityModeLabel(successful.mode), summary)
         } else if (includeWrite && results.any { it.readOk }) {
-            "NFC写入兼容性测试未找到可靠写入模式；只读可用。$summary"
+            uiString(R.string.nfc_compat_write_no_reliable_mode_format, summary)
         } else {
-            "NFC兼容性测试未找到可用模式。$summary"
+            uiString(R.string.nfc_compat_no_available_mode_format, summary)
         }
     }
 
@@ -4351,7 +4363,7 @@ class MainActivity : ComponentActivity() {
             readOk = false,
             writeOk = false,
             durationMs = 0L,
-            message = "No MifareClassic"
+            message = uiString(R.string.nfc_compat_result_no_mifare)
         )
         return try {
             mifare.connect()
@@ -4360,6 +4372,10 @@ class MainActivity : ComponentActivity() {
 
             val ffKey = ByteArray(6) { 0xFF.toByte() }
             val bambuKeys = deriveBambuKeys(uid)
+            logNfcCompatibilityDerivedKeys(uid, bambuKeys, config)
+            if (config.postKeyDerivationDelayMs > 0) {
+                Thread.sleep(config.postKeyDerivationDelayMs)
+            }
             val sector = if (mifare.sectorCount > 1) 1 else 0
             val keys = bambuKeys.getOrNull(sector)
             val authenticated = MifareClassicSession.authenticateSectorWithRetry(
@@ -4381,7 +4397,7 @@ class MainActivity : ComponentActivity() {
                     readOk = false,
                     writeOk = false,
                     durationMs = System.currentTimeMillis() - startedAt,
-                    message = "Auth failed"
+                    message = uiString(R.string.nfc_compat_result_auth_failed)
                 )
             }
 
@@ -4392,7 +4408,7 @@ class MainActivity : ComponentActivity() {
                     readOk = false,
                     writeOk = false,
                     durationMs = System.currentTimeMillis() - startedAt,
-                    message = "Read failed"
+                    message = uiString(R.string.nfc_compat_result_read_failed)
                 )
 
             val writeOk = if (includeWrite) {
@@ -4420,6 +4436,27 @@ class MainActivity : ComponentActivity() {
                 mifare.close()
             } catch (_: Exception) {
             }
+        }
+    }
+
+    private fun logNfcCompatibilityDerivedKeys(
+        uid: ByteArray,
+        keys: List<Pair<ByteArray, ByteArray>>,
+        config: NfcCompatibilityConfig
+    ) {
+        val uidHex = uid.toHex()
+        val preview = keys.take(4).mapIndexed { sector, sectorKeys ->
+            "S$sector A=${sectorKeys.first.toHex()} B=${sectorKeys.second.toHex()}"
+        }.joinToString(separator = " | ")
+        val summary = "NFC compatibility ${config.mode} derived keys UID=$uidHex uidBytes=${uid.size} sectors=${keys.size} postKeyDelay=${config.postKeyDerivationDelayMs}ms $preview"
+        logDebug(summary)
+        LogCollector.append(this, "I", summary)
+        keys.forEachIndexed { sector, sectorKeys ->
+            LogCollector.append(
+                this,
+                "D",
+                "NFC compatibility ${config.mode} S$sector KeyA=${sectorKeys.first.toHex()} KeyB=${sectorKeys.second.toHex()}"
+            )
         }
     }
 
@@ -4742,6 +4779,7 @@ class MainActivity : ComponentActivity() {
         val rawResult = NfcTagReader.readRaw(
             tag = tag,
             readAllSectors = readAllSectors || autoShareTag,
+            context = this,
             compatibilityConfig = nfcCompatibilityConfig,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }

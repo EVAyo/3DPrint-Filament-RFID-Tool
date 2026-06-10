@@ -752,15 +752,15 @@ fun MiscScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(text = "NFC兼容模式")
+                            Text(text = stringResource(R.string.nfc_compat_mode_title))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 listOf(
-                                    NfcCompatibilityMode.FAST to "快速",
-                                    NfcCompatibilityMode.BALANCED to "均衡",
-                                    NfcCompatibilityMode.STABLE to "稳定"
+                                    NfcCompatibilityMode.FAST to stringResource(R.string.nfc_compat_mode_fast),
+                                    NfcCompatibilityMode.BALANCED to stringResource(R.string.nfc_compat_mode_balanced),
+                                    NfcCompatibilityMode.STABLE to stringResource(R.string.nfc_compat_mode_stable)
                                 ).forEach { (mode, label) ->
                                     val selected = nfcCompatibilityMode == mode
                                     Surface(
@@ -794,9 +794,9 @@ fun MiscScreen(
                             }
                             Text(
                                 text = when (nfcCompatibilityMode) {
-                                    NfcCompatibilityMode.FAST -> "低延迟，适合兼容性好的手机。"
-                                    NfcCompatibilityMode.BALANCED -> "默认推荐：NFC-A轮询、延长超时、写后校验。"
-                                    NfcCompatibilityMode.STABLE -> "更长等待和更多重试，适合读写偶发失败的手机。"
+                                    NfcCompatibilityMode.FAST -> stringResource(R.string.nfc_compat_mode_fast_desc)
+                                    NfcCompatibilityMode.BALANCED -> stringResource(R.string.nfc_compat_mode_balanced_desc)
+                                    NfcCompatibilityMode.STABLE -> stringResource(R.string.nfc_compat_mode_stable_desc)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -806,7 +806,11 @@ fun MiscScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 NeuButton(
-                                    text = if (nfcCompatibilityTestInProgress) "取消测试" else "只读测试",
+                                    text = if (nfcCompatibilityTestInProgress) {
+                                        stringResource(R.string.nfc_compat_cancel_test)
+                                    } else {
+                                        stringResource(R.string.nfc_compat_read_test)
+                                    },
                                     onClick = {
                                         message = if (nfcCompatibilityTestInProgress) {
                                             onCancelNfcCompatibilityTest()
@@ -817,7 +821,7 @@ fun MiscScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 NeuButton(
-                                    text = "写入测试",
+                                    text = stringResource(R.string.nfc_compat_write_test),
                                     onClick = { message = onStartNfcCompatibilityWriteTest() },
                                     modifier = Modifier.weight(1f)
                                 )

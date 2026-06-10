@@ -152,6 +152,17 @@ Encoding note:
 - Some source comments/documentation may render as mojibake in a default
   terminal. Do not rewrite large comment blocks just to normalize encoding.
 
+Localization rule:
+- 新增用户可见文本必须加入 Android 多语言资源，不要在 Kotlin/Compose
+  代码中直接写死可见文案。
+- 新增字符串至少同步更新 `app/src/main/res/values/strings.xml`,
+  `app/src/main/res/values-en/strings.xml`, and
+  `app/src/main/res/values-zh-rCN/strings.xml`; if the Chinese fallback file
+  `app/src/main/res/values-zh/strings.xml` exists for the touched feature,
+  keep it in sync as well.
+- Kotlin/Compose should read localized text through `stringResource(...)`,
+  `getString(...)`, or this app's helper wrappers such as `uiString(...)`.
+
 ## Business Rules Discovered From Code
 
 NFC and read behavior:
@@ -182,6 +193,9 @@ Bambu NFC core rules:
 - Android stale tag errors such as `Tag is out of date` should abort the current
   NFC operation with a re-tap instruction instead of being retried as ordinary
   auth failures.
+- NFC compatibility presets include a mode-specific post-key-derivation delay
+  before MIFARE authentication. Keep this delay in mind when tuning old-phone
+  read/write stability.
 
 Bambu parsing and inventory:
 - Bambu parsing currently uses blocks 0..7 plus block 12 and block 16.

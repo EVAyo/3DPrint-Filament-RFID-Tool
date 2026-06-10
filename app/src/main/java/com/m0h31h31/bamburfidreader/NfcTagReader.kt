@@ -1,7 +1,9 @@
 package com.m0h31h31.bamburfidreader
 
+import android.content.Context
 import android.nfc.Tag
 import com.m0h31h31.bamburfidreader.nfc.BambuMifareOperator
+import com.m0h31h31.bamburfidreader.nfc.BambuNfcFailureReason
 import com.m0h31h31.bamburfidreader.nfc.BambuNfcOperation
 import com.m0h31h31.bamburfidreader.nfc.BambuNfcResult
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityConfig
@@ -58,6 +60,7 @@ object NfcTagReader {
     fun readRaw(
         tag: Tag,
         readAllSectors: Boolean,
+        context: Context,
         compatibilityConfig: NfcCompatibilityConfig = NfcCompatibilityConfig.default(),
         logger: (String) -> Unit,
         appendLog: (String, String) -> Unit
@@ -66,15 +69,16 @@ object NfcTagReader {
             tag = tag,
             config = compatibilityConfig,
             operation = BambuNfcOperation.ReadRaw(readAllSectors),
+            context = context,
             logger = logger,
             appendLog = appendLog
         )) {
             is BambuNfcResult.RawRead -> RawTagReadResult.Success(result.data)
             is BambuNfcResult.Failure -> RawTagReadResult.Failure(
-                reason = when (result.message) {
-                    "UID missing" -> RawTagReadFailureReason.UID_MISSING
-                    "MIFARE Classic not supported" -> RawTagReadFailureReason.MIFARE_UNSUPPORTED
-                    else -> RawTagReadFailureReason.EXCEPTION
+                reason = when (result.reason) {
+                    BambuNfcFailureReason.UID_MISSING -> RawTagReadFailureReason.UID_MISSING
+                    BambuNfcFailureReason.MIFARE_UNSUPPORTED -> RawTagReadFailureReason.MIFARE_UNSUPPORTED
+                    BambuNfcFailureReason.EXCEPTION -> RawTagReadFailureReason.EXCEPTION
                 },
                 message = result.message,
                 uidHex = result.uidHex,
