@@ -3568,15 +3568,17 @@ class MainActivity : ComponentActivity() {
             val snapmakerKeys = runCatching { deriveSnapmakerKeys(uid) }.getOrElse { Pair(emptyList(), emptyList()) }
             val crealityKey = runCatching { deriveCrealityKeyA(uid) }.getOrNull()
 
-            val bambuAuth = bambuKeys.getOrNull(0)?.second?.let { keyB ->
+            val bambuAuth = listOf(0, 1).any { sector ->
+                val keyB = bambuKeys.getOrNull(sector)?.second ?: return@any false
                 reconnectMifareClassic(mifare)
-                authenticateSectorWithRetry(mifare, 0, emptyList(), listOf(keyB))
-            } ?: false
+                authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(keyB))
+            }
 
-            val snapmakerAuth = snapmakerKeys.second.getOrNull(0)?.let { keyB ->
+            val snapmakerAuth = listOf(0, 1).any { sector ->
+                val keyB = snapmakerKeys.second.getOrNull(sector) ?: return@any false
                 reconnectMifareClassic(mifare)
-                authenticateSectorWithRetry(mifare, 0, emptyList(), listOf(keyB))
-            } ?: false
+                authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(keyB))
+            }
 
             val crealitySector = if (mifare.sectorCount > 1) 1 else 0
             val crealityAuth = crealityKey?.let { key ->
@@ -3600,11 +3602,7 @@ class MainActivity : ComponentActivity() {
                 crealityAuth = crealityAuth,
                 ffAuth = ffAuth
             )
-            LogCollector.append(
-                applicationContext,
-                "I",
-                "Format brand detect UID=${uid.toHex()} bambu=$bambuAuth snapmaker=$snapmakerAuth creality=$crealityAuth ff=$ffAuth result=$result"
-            )
+            logFormatEvent("Format brand detect UID=${uid.toHex()} bambu=$bambuAuth snapmaker=$snapmakerAuth creality=$crealityAuth ff=$ffAuth result=$result")
             result
         } catch (e: Exception) {
             LogCollector.append(applicationContext, "E", "Format brand detect failed: ${e.javaClass.simpleName}: ${e.message}")
@@ -3694,13 +3692,19 @@ class MainActivity : ComponentActivity() {
 
             for (sector in 0 until targetSectorCount) {
                 onStatusUpdate?.invoke(uiString(R.string.bambu_nfc_format_trailer_status_format, sector + 1, targetSectorCount))
-                reconnectMifareClassic(mifare)
-                val keys = formatSectorKeys(brand, uid, sector, ffKey, snapmakerKeys, crealityKey)
-                if (!authenticateSectorWithRetry(mifare, sector, keys.keysA, keys.keysB)) {
-                    return formatTrailerResetFailedMessage(brand, sector)
-                }
                 val trailerBlock = mifare.sectorToBlock(sector) + mifare.getBlockCountInSector(sector) - 1
-                if (!writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)) {
+                if (!resetNonBambuTrailerToDefaultFf(
+                        mifare = mifare,
+                        brand = brand,
+                        uid = uid,
+                        sector = sector,
+                        trailerBlock = trailerBlock,
+                        defaultTrailer = defaultTrailer,
+                        ffKey = ffKey,
+                        snapmakerKeys = snapmakerKeys,
+                        crealityKey = crealityKey
+                    )
+                ) {
                     return formatTrailerResetFailedMessage(brand, sector)
                 }
                 reconnectMifareClassic(mifare)
@@ -3754,6 +3758,114 @@ class MainActivity : ComponentActivity() {
         } finally {
             try { mifare.close() } catch (_: Exception) {}
         }
+    }
+
+    private fun resetNonBambuTrailerToDefaultFf(
+        mifare: MifareClassic,
+        brand: FormatTagBrand,
+        uid: ByteArray,
+        sector: Int,
+        trailerBlock: Int,
+        defaultTrailer: ByteArray,
+        ffKey: ByteArray,
+        snapmakerKeys: Pair<List<ByteArray>, List<ByteArray>>,
+        crealityKey: ByteArray?
+    ): Boolean {
+        logFormatEvent("Format trailer reset brand=$brand sector=$sector trailerBlock=$trailerBlock")
+        return when (brand) {
+            FormatTagBrand.SNAPMAKER -> {
+                val keyA = snapmakerKeys.first.getOrNull(sector) ?: return false
+                val keyB = snapmakerKeys.second.getOrNull(sector) ?: return false
+                reconnectMifareClassic(mifare)
+                val step1Auth = authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(keyB))
+                logFormatEvent("Snapmaker sector=$sector step1 derived KeyB auth=$step1Auth")
+                if (!step1Auth) {
+                    reconnectMifareClassic(mifare)
+                    val ffAuth = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
+                    logFormatEvent("Snapmaker sector=$sector FF fallback auth=$ffAuth")
+                    if (!ffAuth) return false
+                    val ffWrite = writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)
+                    logFormatEvent("Snapmaker sector=$sector FF fallback trailer write=$ffWrite")
+                    return ffWrite
+                }
+                val step1Trailer = ByteArray(16).apply {
+                    System.arraycopy(keyA, 0, this, 0, 6)
+                    this[6] = 0xFF.toByte()
+                    this[7] = 0x07.toByte()
+                    this[8] = 0x80.toByte()
+                    this[9] = 0x69.toByte()
+                    System.arraycopy(keyB, 0, this, 10, 6)
+                }
+                if (!writeBlockWithRetry(mifare, trailerBlock, step1Trailer)) {
+                    logFormatEvent("Snapmaker sector=$sector step1 trailer write failed")
+                    return false
+                }
+                if (nfcCompatibilityConfig.writeInterBlockDelayMs > 0) {
+                    Thread.sleep(nfcCompatibilityConfig.writeInterBlockDelayMs)
+                }
+                reconnectMifareClassic(mifare)
+                val step2Auth = authenticateSectorWithRetry(
+                    mifare = mifare,
+                    sectorIndex = sector,
+                    keysA = listOf(keyA, ffKey),
+                    keysB = listOf(keyB, ffKey)
+                )
+                logFormatEvent("Snapmaker sector=$sector step2 derived/FF auth=$step2Auth")
+                if (!step2Auth) return false
+                val step2Write = writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)
+                logFormatEvent("Snapmaker sector=$sector step2 default trailer write=$step2Write")
+                step2Write
+            }
+
+            FormatTagBrand.CREALITY -> {
+                val key = crealityKey ?: return false
+                reconnectMifareClassic(mifare)
+                val derivedAuth = authenticateSectorWithRetry(
+                    mifare = mifare,
+                    sectorIndex = sector,
+                    keysA = listOf(key),
+                    keysB = listOf(key, ffKey)
+                )
+                logFormatEvent("Creality sector=$sector derived/FF auth=$derivedAuth")
+                if (derivedAuth && writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)) {
+                    logFormatEvent("Creality sector=$sector default trailer write=true")
+                    return true
+                }
+                reconnectMifareClassic(mifare)
+                val ffAuth = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
+                logFormatEvent("Creality sector=$sector FF fallback auth=$ffAuth")
+                if (!ffAuth) return false
+                val ffWrite = writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)
+                logFormatEvent("Creality sector=$sector FF fallback trailer write=$ffWrite")
+                ffWrite
+            }
+
+            FormatTagBrand.DEFAULT_FF -> {
+                reconnectMifareClassic(mifare)
+                val ffAuth = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
+                logFormatEvent("FF sector=$sector auth=$ffAuth")
+                if (!ffAuth) return false
+                val write = writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)
+                logFormatEvent("FF sector=$sector default trailer write=$write")
+                write
+            }
+
+            FormatTagBrand.BAMBU -> {
+                val keys = formatSectorKeys(brand, uid, sector, ffKey, snapmakerKeys, crealityKey)
+                reconnectMifareClassic(mifare)
+                val auth = authenticateSectorWithRetry(mifare, sector, keys.keysA, keys.keysB)
+                logFormatEvent("Bambu fallback sector=$sector auth=$auth")
+                if (!auth) return false
+                val write = writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)
+                logFormatEvent("Bambu fallback sector=$sector default trailer write=$write")
+                write
+            }
+        }
+    }
+
+    private fun logFormatEvent(message: String) {
+        logDebug(message)
+        LogCollector.append(applicationContext, "D", message)
     }
 
     private fun formatTrailerResetFailedMessage(brand: FormatTagBrand, sector: Int): String {
