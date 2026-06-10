@@ -90,6 +90,8 @@ import com.m0h31h31.bamburfidreader.model.SnapmakerTagData
 import com.m0h31h31.bamburfidreader.nfc.BambuMifareOperator
 import com.m0h31h31.bamburfidreader.nfc.BambuNfcOperation
 import com.m0h31h31.bamburfidreader.nfc.BambuNfcResult
+import com.m0h31h31.bamburfidreader.nfc.FormatTagBrand
+import com.m0h31h31.bamburfidreader.nfc.FormatTagBrandDetector
 import com.m0h31h31.bamburfidreader.nfc.MifareClassicSession
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityConfig
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
@@ -3524,6 +3526,14 @@ class MainActivity : ComponentActivity() {
         tag: Tag,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
+        val brand = detectFormatTagBrand(tag) ?: return uiString(R.string.format_failed_sector0_all_failed)
+        val detectedMessage = uiString(R.string.format_detected_brand_format, formatTagBrandLabel(brand))
+        logDebug(detectedMessage)
+        LogCollector.append(applicationContext, "I", detectedMessage)
+        onStatusUpdate?.invoke(detectedMessage)
+        if (brand != FormatTagBrand.BAMBU) {
+            return formatNonBambuTagToDefaultFf(tag, brand, onStatusUpdate)
+        }
         return when (val result = BambuMifareOperator.run(
             tag = tag,
             config = nfcCompatibilityConfig,
@@ -3536,6 +3546,222 @@ class MainActivity : ComponentActivity() {
             is BambuNfcResult.Message -> result.message
             is BambuNfcResult.Failure -> result.message
             is BambuNfcResult.RawRead -> uiString(R.string.format_failed_format, uiString(R.string.bambu_nfc_unexpected_read_result))
+        }
+    }
+
+    private data class FormatSectorKeys(
+        val keysA: List<ByteArray?>,
+        val keysB: List<ByteArray?>
+    )
+
+    private fun detectFormatTagBrand(tag: Tag): FormatTagBrand? {
+        val mifare = MifareClassic.get(tag) ?: return null
+        return try {
+            mifare.connect()
+            MifareClassicSession.applyTimeout(mifare, nfcCompatibilityConfig.mifareTimeoutMs)
+            if (nfcCompatibilityConfig.postConnectDelayMs > 0) {
+                Thread.sleep(nfcCompatibilityConfig.postConnectDelayMs)
+            }
+            val uid = tag.id ?: return null
+            val ffKey = ByteArray(6) { 0xFF.toByte() }
+            val bambuKeys = runCatching { deriveBambuKeys(uid) }.getOrNull().orEmpty()
+            val snapmakerKeys = runCatching { deriveSnapmakerKeys(uid) }.getOrElse { Pair(emptyList(), emptyList()) }
+            val crealityKey = runCatching { deriveCrealityKeyA(uid) }.getOrNull()
+
+            val bambuAuth = bambuKeys.getOrNull(0)?.second?.let { keyB ->
+                reconnectMifareClassic(mifare)
+                authenticateSectorWithRetry(mifare, 0, emptyList(), listOf(keyB))
+            } ?: false
+
+            val snapmakerAuth = snapmakerKeys.second.getOrNull(0)?.let { keyB ->
+                reconnectMifareClassic(mifare)
+                authenticateSectorWithRetry(mifare, 0, emptyList(), listOf(keyB))
+            } ?: false
+
+            val crealitySector = if (mifare.sectorCount > 1) 1 else 0
+            val crealityAuth = crealityKey?.let { key ->
+                reconnectMifareClassic(mifare)
+                authenticateSectorWithRetry(
+                    mifare = mifare,
+                    sectorIndex = crealitySector,
+                    keysA = listOf(key),
+                    keysB = listOf(key, ffKey)
+                )
+            } ?: false
+
+            val ffAuth = run {
+                reconnectMifareClassic(mifare)
+                authenticateSectorWithRetry(mifare, 0, listOf(ffKey), listOf(ffKey))
+            }
+
+            val result = FormatTagBrandDetector.choose(
+                bambuAuth = bambuAuth,
+                snapmakerAuth = snapmakerAuth,
+                crealityAuth = crealityAuth,
+                ffAuth = ffAuth
+            )
+            LogCollector.append(
+                applicationContext,
+                "I",
+                "Format brand detect UID=${uid.toHex()} bambu=$bambuAuth snapmaker=$snapmakerAuth creality=$crealityAuth ff=$ffAuth result=$result"
+            )
+            result
+        } catch (e: Exception) {
+            LogCollector.append(applicationContext, "E", "Format brand detect failed: ${e.javaClass.simpleName}: ${e.message}")
+            null
+        } finally {
+            try { mifare.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun formatTagBrandLabel(brand: FormatTagBrand): String {
+        return when (brand) {
+            FormatTagBrand.BAMBU -> uiString(R.string.format_brand_bambu)
+            FormatTagBrand.SNAPMAKER -> uiString(R.string.format_brand_snapmaker)
+            FormatTagBrand.CREALITY -> uiString(R.string.format_brand_creality)
+            FormatTagBrand.DEFAULT_FF -> uiString(R.string.format_brand_ff)
+        }
+    }
+
+    private fun formatSectorKeys(
+        brand: FormatTagBrand,
+        uid: ByteArray,
+        sector: Int,
+        ffKey: ByteArray,
+        snapmakerKeys: Pair<List<ByteArray>, List<ByteArray>>,
+        crealityKey: ByteArray?
+    ): FormatSectorKeys {
+        return when (brand) {
+            FormatTagBrand.SNAPMAKER -> FormatSectorKeys(
+                keysA = listOf(snapmakerKeys.first.getOrNull(sector), ffKey),
+                keysB = listOf(snapmakerKeys.second.getOrNull(sector), ffKey)
+            )
+            FormatTagBrand.CREALITY -> FormatSectorKeys(
+                keysA = listOf(crealityKey, ffKey),
+                keysB = listOf(crealityKey, ffKey)
+            )
+            FormatTagBrand.DEFAULT_FF -> FormatSectorKeys(
+                keysA = listOf(ffKey),
+                keysB = listOf(ffKey)
+            )
+            FormatTagBrand.BAMBU -> {
+                val bambuKeys = deriveBambuKeys(uid).getOrNull(sector)
+                FormatSectorKeys(
+                    keysA = listOf(bambuKeys?.first, ffKey),
+                    keysB = listOf(bambuKeys?.second, ffKey)
+                )
+            }
+        }
+    }
+
+    private fun formatNonBambuTagToDefaultFf(
+        tag: Tag,
+        brand: FormatTagBrand,
+        onStatusUpdate: ((String) -> Unit)? = null
+    ): String {
+        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.format_failed_no_mifare)
+        val uid = tag.id ?: return uiString(R.string.format_failed_no_uid)
+        val ffKey = ByteArray(6) { 0xFF.toByte() }
+        val zeroBlock = ByteArray(16)
+        val defaultTrailer = ByteArray(16).apply {
+            for (i in 0..5) this[i] = 0xFF.toByte()
+            this[6] = 0xFF.toByte()
+            this[7] = 0x07.toByte()
+            this[8] = 0x80.toByte()
+            this[9] = 0x69.toByte()
+            for (i in 10..15) this[i] = 0xFF.toByte()
+        }
+        val snapmakerKeys = runCatching { deriveSnapmakerKeys(uid) }.getOrElse { Pair(emptyList(), emptyList()) }
+        val crealityKey = runCatching { deriveCrealityKeyA(uid) }.getOrNull()
+
+        return try {
+            mifare.connect()
+            MifareClassicSession.applyTimeout(mifare, nfcCompatibilityConfig.mifareTimeoutMs)
+            if (nfcCompatibilityConfig.postConnectDelayMs > 0) {
+                Thread.sleep(nfcCompatibilityConfig.postConnectDelayMs)
+            }
+            val targetSectorCount = minOf(16, mifare.sectorCount)
+            if (targetSectorCount <= 0) {
+                return uiString(R.string.format_failed_sector_count_format, mifare.sectorCount)
+            }
+            val originalBlock0 = run {
+                val keys = formatSectorKeys(brand, uid, 0, ffKey, snapmakerKeys, crealityKey)
+                if (!authenticateSectorWithRetry(mifare, 0, keys.keysA, keys.keysB)) {
+                    return uiString(R.string.format_failed_sector0_all_failed)
+                }
+                readBlockWithRetry(mifare, 0) ?: return uiString(R.string.format_failed_read_block0)
+            }
+
+            for (sector in 0 until targetSectorCount) {
+                onStatusUpdate?.invoke(uiString(R.string.bambu_nfc_format_trailer_status_format, sector + 1, targetSectorCount))
+                reconnectMifareClassic(mifare)
+                val keys = formatSectorKeys(brand, uid, sector, ffKey, snapmakerKeys, crealityKey)
+                if (!authenticateSectorWithRetry(mifare, sector, keys.keysA, keys.keysB)) {
+                    return formatTrailerResetFailedMessage(brand, sector)
+                }
+                val trailerBlock = mifare.sectorToBlock(sector) + mifare.getBlockCountInSector(sector) - 1
+                if (!writeBlockWithRetry(mifare, trailerBlock, defaultTrailer)) {
+                    return formatTrailerResetFailedMessage(brand, sector)
+                }
+                reconnectMifareClassic(mifare)
+                if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
+                    return uiString(R.string.format_failed_ff_auth_format, sector)
+                }
+            }
+
+            for (sector in 0 until targetSectorCount) {
+                onStatusUpdate?.invoke(uiString(R.string.bambu_nfc_format_clearing_status_format, sector + 1, targetSectorCount))
+                reconnectMifareClassic(mifare)
+                if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
+                    return uiString(R.string.format_failed_ff_auth_format, sector)
+                }
+                val startBlock = mifare.sectorToBlock(sector)
+                val blockCount = mifare.getBlockCountInSector(sector)
+                for (offset in 0 until blockCount) {
+                    val blockIndex = startBlock + offset
+                    val isTrailer = offset == blockCount - 1
+                    if (blockIndex == 0 || isTrailer) continue
+                    if (!writeBlockWithRetry(mifare, blockIndex, zeroBlock)) {
+                        return uiString(R.string.format_failed_block_write_format, blockIndex)
+                    }
+                }
+            }
+
+            for (sector in 0 until targetSectorCount) {
+                reconnectMifareClassic(mifare)
+                if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
+                    return uiString(R.string.format_failed_ff_auth_format, sector)
+                }
+                val startBlock = mifare.sectorToBlock(sector)
+                val blockCount = mifare.getBlockCountInSector(sector)
+                for (offset in 0 until blockCount) {
+                    val blockIndex = startBlock + offset
+                    val isTrailer = offset == blockCount - 1
+                    if (isTrailer) continue
+                    val block = readBlockWithRetry(mifare, blockIndex)
+                        ?: return uiString(R.string.bambu_nfc_format_verify_read_failed_format, blockIndex)
+                    if (blockIndex == 0 && !block.contentEquals(originalBlock0)) {
+                        return uiString(R.string.bambu_nfc_format_verify_block0_changed)
+                    }
+                    if (blockIndex != 0 && !block.all { it == 0.toByte() }) {
+                        return uiString(R.string.bambu_nfc_format_verify_block_not_zero_format, blockIndex)
+                    }
+                }
+            }
+            uiString(R.string.format_success)
+        } catch (e: Exception) {
+            uiString(R.string.format_failed_format, e.message.orEmpty())
+        } finally {
+            try { mifare.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun formatTrailerResetFailedMessage(brand: FormatTagBrand, sector: Int): String {
+        return when (brand) {
+            FormatTagBrand.SNAPMAKER -> uiString(R.string.format_failed_snapmaker_trailer_reset_format, sector)
+            FormatTagBrand.CREALITY -> uiString(R.string.format_failed_creality_trailer_reset_format, sector)
+            FormatTagBrand.BAMBU -> uiString(R.string.format_failed_bambu_trailer_reset_format, sector)
+            FormatTagBrand.DEFAULT_FF -> uiString(R.string.format_failed_ff_auth_format, sector)
         }
     }
 

@@ -495,6 +495,11 @@
     <string name="format_failed_all_keys_failed_format">格式化失败：扇区 %1$d 拓竹/FF/创想/快造 秘钥认证均失败</string>
     <string name="format_failed_ff_auth_format">格式化失败：扇区 %1$d 使用FF/派生秘钥认证失败</string>
     <string name="format_failed_block_write_format">格式化失败：区块 %1$d 写零失败</string>
+    <string name="format_detected_brand_format">检测到卡类型：%1$s，正在使用对应密钥格式化。</string>
+    <string name="format_brand_bambu">拓竹</string>
+    <string name="format_brand_snapmaker">快造</string>
+    <string name="format_brand_creality">创想三维</string>
+    <string name="format_brand_ff">默认 FF / 空白卡</string>
     <string name="format_checking">格式化完成，正在校检</string>
     <string name="format_success">格式化标签成功：已重置并校验通过</string>
     <string name="format_failed_format">格式化失败：%1$s</string>

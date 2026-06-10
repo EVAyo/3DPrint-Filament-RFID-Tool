@@ -27,7 +27,12 @@ class LocalizationResourcesTest {
         "nfc_compat_cancel_test",
         "nfc_compat_read_test",
         "nfc_compat_write_test",
-        "nfc_compat_success_format"
+        "nfc_compat_success_format",
+        "format_detected_brand_format",
+        "format_brand_bambu",
+        "format_brand_snapmaker",
+        "format_brand_creality",
+        "format_brand_ff"
     )
 
     @Test

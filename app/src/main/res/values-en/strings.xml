@@ -528,6 +528,11 @@
     <string name="format_failed_all_keys_failed_format">Format failed: sector %1$d Bambu/FF/Creality/Snapmaker key auth all failed</string>
     <string name="format_failed_ff_auth_format">Format failed: sector %1$d FF/derived key auth failed</string>
     <string name="format_failed_block_write_format">Format failed: block %1$d zero-write failed</string>
+    <string name="format_detected_brand_format">Detected card type: %1$s. Formatting with matching keys.</string>
+    <string name="format_brand_bambu">Bambu</string>
+    <string name="format_brand_snapmaker">Snapmaker</string>
+    <string name="format_brand_creality">Creality</string>
+    <string name="format_brand_ff">Default FF / blank card</string>
     <string name="format_checking">Format complete, verifying</string>
     <string name="format_success">Tag formatted successfully: reset and verified</string>
     <string name="format_failed_format">Format failed: %1$s</string>
