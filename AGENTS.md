@@ -196,6 +196,9 @@ Bambu NFC core rules:
 - NFC compatibility presets include a mode-specific post-key-derivation delay
   before MIFARE authentication. Keep this delay in mind when tuning old-phone
   read/write stability.
+- Stable NFC compatibility mode should stay close to MifareClassicTool-style
+  authentication behavior: more retries and less reconnecting after ordinary
+  authentication false results, while preserving stale-tag reconnect handling.
 
 Bambu parsing and inventory:
 - Bambu parsing currently uses blocks 0..7 plus block 12 and block 16.

@@ -4387,7 +4387,7 @@ class MainActivity : ComponentActivity() {
                 reconnectDelayMs = config.reconnectDelayMs,
                 keyOrder = MifareClassicSession.KeyOrder.INTERLEAVED_BY_INDEX,
                 ensureConnectedBeforeAttempt = true,
-                reconnectAfterFailedAttempt = true,
+                reconnectAfterFailedAttempt = config.reconnectAfterFailedAuth,
                 mifareTimeoutMs = config.mifareTimeoutMs,
                 postConnectDelayMs = config.postConnectDelayMs
             )
@@ -4448,7 +4448,7 @@ class MainActivity : ComponentActivity() {
         val preview = keys.take(4).mapIndexed { sector, sectorKeys ->
             "S$sector A=${sectorKeys.first.toHex()} B=${sectorKeys.second.toHex()}"
         }.joinToString(separator = " | ")
-        val summary = "NFC compatibility ${config.mode} derived keys UID=$uidHex uidBytes=${uid.size} sectors=${keys.size} postKeyDelay=${config.postKeyDerivationDelayMs}ms $preview"
+        val summary = "NFC compatibility ${config.mode} derived keys UID=$uidHex uidBytes=${uid.size} sectors=${keys.size} postKeyDelay=${config.postKeyDerivationDelayMs}ms reconnectAfterFailedAuth=${config.reconnectAfterFailedAuth} $preview"
         logDebug(summary)
         LogCollector.append(this, "I", summary)
         keys.forEachIndexed { sector, sectorKeys ->

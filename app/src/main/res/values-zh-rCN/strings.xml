@@ -674,7 +674,7 @@
     <string name="nfc_compat_mode_stable">稳定</string>
     <string name="nfc_compat_mode_fast_desc">低延迟，适合兼容性好的手机。</string>
     <string name="nfc_compat_mode_balanced_desc">默认推荐：NFC-A 轮询、延长超时、派生后等待、写后校验。</string>
-    <string name="nfc_compat_mode_stable_desc">更长派生后等待和更多重试，适合读写偶发失败的手机。</string>
+    <string name="nfc_compat_mode_stable_desc">更长派生后等待、更多重试，并减少认证失败后的重连；更接近 MCT 行为。</string>
     <string name="nfc_task_waiting">已有 NFC 任务在等待，请先完成或取消当前任务</string>
     <string name="nfc_compat_write_ready">NFC 写入兼容性测试已准备，请贴近一张可写测试卡；会读取一个数据块并原样写回</string>
     <string name="nfc_compat_read_ready">NFC 只读兼容性测试已准备，请贴近一张 MIFARE Classic 标签</string>

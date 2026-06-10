@@ -237,7 +237,7 @@ object BambuMifareOperator {
         val preview = sectorKeys.take(4).mapIndexed { sector, keys ->
             "S$sector A=${keys.first.toHex()} B=${keys.second.toHex()}"
         }.joinToString(separator = " | ")
-        val summary = "Bambu key derivation UID=$uidHex uidBytes=$uidLength sectors=${sectorKeys.size} mode=${config.mode} postKeyDelay=${config.postKeyDerivationDelayMs}ms $preview"
+        val summary = "Bambu key derivation UID=$uidHex uidBytes=$uidLength sectors=${sectorKeys.size} mode=${config.mode} postKeyDelay=${config.postKeyDerivationDelayMs}ms reconnectAfterFailedAuth=${config.reconnectAfterFailedAuth} $preview"
         logger(summary)
         appendLog("I", summary)
         sectorKeys.forEachIndexed { sector, keys ->
@@ -601,7 +601,7 @@ object BambuMifareOperator {
             reconnectDelayMs = config.reconnectDelayMs,
             keyOrder = MifareClassicSession.KeyOrder.INTERLEAVED_BY_INDEX,
             ensureConnectedBeforeAttempt = true,
-            reconnectAfterFailedAttempt = true,
+            reconnectAfterFailedAttempt = config.reconnectAfterFailedAuth,
             mifareTimeoutMs = config.mifareTimeoutMs,
             postConnectDelayMs = config.postConnectDelayMs,
             appendLog = appendLog

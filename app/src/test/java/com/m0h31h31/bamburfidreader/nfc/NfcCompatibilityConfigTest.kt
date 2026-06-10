@@ -14,6 +14,7 @@ class NfcCompatibilityConfigTest {
         assertTrue(stable.authRetryCount > fast.authRetryCount)
         assertTrue(stable.blockRetryCount > fast.blockRetryCount)
         assertTrue(stable.postKeyDerivationDelayMs > fast.postKeyDerivationDelayMs)
+        assertFalse(stable.reconnectAfterFailedAuth)
         assertEquals(0L, fast.readInterBlockDelayMs)
         assertEquals(0L, stable.readInterBlockDelayMs)
         assertTrue(stable.writeInterBlockDelayMs > fast.writeInterBlockDelayMs)
@@ -30,6 +31,7 @@ class NfcCompatibilityConfigTest {
         assertTrue(balanced.mifareTimeoutMs >= 900)
         assertTrue(balanced.postConnectDelayMs >= 30)
         assertTrue(balanced.postKeyDerivationDelayMs >= 80)
+        assertTrue(balanced.reconnectAfterFailedAuth)
     }
 
     @Test

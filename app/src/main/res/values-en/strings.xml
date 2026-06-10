@@ -738,7 +738,7 @@
     <string name="nfc_compat_mode_stable">Stable</string>
     <string name="nfc_compat_mode_fast_desc">Low delay, suitable for phones with good compatibility.</string>
     <string name="nfc_compat_mode_balanced_desc">Recommended default: NFC-A polling, longer timeout, key-derivation wait, and write verification.</string>
-    <string name="nfc_compat_mode_stable_desc">Longer key-derivation wait and more retries, suitable for phones with occasional read/write failures.</string>
+    <string name="nfc_compat_mode_stable_desc">Longer key-derivation wait, more retries, and less reconnecting after auth failure; closer to MCT behavior.</string>
     <string name="nfc_task_waiting">An NFC task is already waiting. Finish or cancel it first.</string>
     <string name="nfc_compat_write_ready">NFC write compatibility test is ready. Tap a writable test card; one data block will be read and written back unchanged.</string>
     <string name="nfc_compat_read_ready">NFC read-only compatibility test is ready. Tap a MIFARE Classic tag.</string>
