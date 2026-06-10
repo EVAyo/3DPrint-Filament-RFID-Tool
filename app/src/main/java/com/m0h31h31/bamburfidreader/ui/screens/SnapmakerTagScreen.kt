@@ -63,7 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.m0h31h31.bamburfidreader.R
-import com.m0h31h31.bamburfidreader.SnapmakerShareTagItem
+import com.m0h31h31.bamburfidreader.model.SnapmakerShareTagItem
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.AppSearchBar
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton

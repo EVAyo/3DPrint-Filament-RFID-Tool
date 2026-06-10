@@ -44,8 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.m0h31h31.bamburfidreader.FilamentDbHelper
-import com.m0h31h31.bamburfidreader.InventoryItem
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.model.InventoryItem
 import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.ui.components.AppLinearProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch

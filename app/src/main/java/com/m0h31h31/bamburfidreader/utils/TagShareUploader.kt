@@ -2,7 +2,7 @@ package com.m0h31h31.bamburfidreader.utils
 
 import android.content.Context
 import com.m0h31h31.bamburfidreader.RawTagReadData
-import com.m0h31h31.bamburfidreader.logDebug
+import com.m0h31h31.bamburfidreader.logging.logDebug
 import org.json.JSONArray
 import org.json.JSONObject
 

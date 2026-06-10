@@ -36,10 +36,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.m0h31h31.bamburfidreader.NfcUiState
+import com.m0h31h31.bamburfidreader.model.NfcUiState
 import com.m0h31h31.bamburfidreader.R
-import com.m0h31h31.bamburfidreader.FilamentDbHelper
-import com.m0h31h31.bamburfidreader.ShareTagItem
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.model.ShareTagItem
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
 import com.m0h31h31.bamburfidreader.ui.screens.InventoryScreen
@@ -51,11 +51,12 @@ import com.m0h31h31.bamburfidreader.ui.screens.NdefWriteRequest
 import com.m0h31h31.bamburfidreader.ui.screens.WriteScreen
 import com.m0h31h31.bamburfidreader.ui.screens.CrealityScreen
 import com.m0h31h31.bamburfidreader.ui.screens.SnapmakerTagScreen
-import com.m0h31h31.bamburfidreader.SnapmakerShareTagItem
-import com.m0h31h31.bamburfidreader.CrealityMaterial
-import com.m0h31h31.bamburfidreader.CrealityTagData
-import com.m0h31h31.bamburfidreader.ReaderBrand
-import com.m0h31h31.bamburfidreader.SnapmakerTagData
+import com.m0h31h31.bamburfidreader.model.SnapmakerShareTagItem
+import com.m0h31h31.bamburfidreader.model.CrealityMaterial
+import com.m0h31h31.bamburfidreader.model.CrealityTagData
+import com.m0h31h31.bamburfidreader.model.ReaderBrand
+import com.m0h31h31.bamburfidreader.model.SnapmakerTagData
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
 import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ColorPalette
 import com.m0h31h31.bamburfidreader.ui.theme.LocalAppUiStyle
@@ -89,6 +90,13 @@ fun AppNavigation(
     saveKeysToFile: Boolean,
     formatTagDebugEnabled: Boolean,
     forceOverwriteImport: Boolean,
+    nfcCompatibilityMode: NfcCompatibilityMode = NfcCompatibilityMode.BALANCED,
+    onNfcCompatibilityModeChange: (NfcCompatibilityMode) -> Unit = {},
+    nfcCompatibilityStatusMessage: String = "",
+    nfcCompatibilityTestInProgress: Boolean = false,
+    onStartNfcCompatibilityReadTest: () -> String = { "" },
+    onStartNfcCompatibilityWriteTest: () -> String = { "" },
+    onCancelNfcCompatibilityTest: () -> String = { "" },
     ttsReady: Boolean,
     ttsLanguageReady: Boolean,
     onVoiceEnabledChange: (Boolean) -> Unit,
@@ -175,7 +183,7 @@ fun AppNavigation(
     onCancelWriteTag: () -> Unit,
     onStartCModifyTag: (ShareTagItem) -> Unit = {},
     cModifyInProgress: Boolean = false,
-    cModifyRecoveryInfo: com.m0h31h31.bamburfidreader.CModifyRecoveryInfo? = null,
+    cModifyRecoveryInfo: com.m0h31h31.bamburfidreader.model.CModifyRecoveryInfo? = null,
     onDismissCModifyRecovery: () -> Unit = {},
     onStartNdefWrite: (NdefWriteRequest) -> String,
     onActiveRouteChange: (String) -> Unit = {},
@@ -269,6 +277,11 @@ fun AppNavigation(
     LaunchedEffect(currentRoute, cuidTestInProgress) {
         if (currentRoute != "misc" && cuidTestInProgress) {
             onCancelCuidTest()
+        }
+    }
+    LaunchedEffect(currentRoute, nfcCompatibilityTestInProgress) {
+        if (currentRoute != "misc" && nfcCompatibilityTestInProgress) {
+            onCancelNfcCompatibilityTest()
         }
     }
     
@@ -563,6 +576,13 @@ fun AppNavigation(
                                 onReadAllSectorsChange = onReadAllSectorsChange,
                                 saveKeysToFile = saveKeysToFile,
                                 onSaveKeysToFileChange = onSaveKeysToFileChange,
+                                nfcCompatibilityMode = nfcCompatibilityMode,
+                                onNfcCompatibilityModeChange = onNfcCompatibilityModeChange,
+                                nfcCompatibilityStatusMessage = nfcCompatibilityStatusMessage,
+                                nfcCompatibilityTestInProgress = nfcCompatibilityTestInProgress,
+                                onStartNfcCompatibilityReadTest = onStartNfcCompatibilityReadTest,
+                                onStartNfcCompatibilityWriteTest = onStartNfcCompatibilityWriteTest,
+                                onCancelNfcCompatibilityTest = onCancelNfcCompatibilityTest,
                                 formatTagDebugEnabled = formatTagDebugEnabled,
                                 onFormatTagDebugEnabledChange = onFormatTagDebugEnabledChange,
                                 forceOverwriteImport = forceOverwriteImport,

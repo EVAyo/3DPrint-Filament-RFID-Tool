@@ -44,8 +44,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.m0h31h31.bamburfidreader.R
-import com.m0h31h31.bamburfidreader.FilamentDbHelper
-import com.m0h31h31.bamburfidreader.InventoryItem
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.model.InventoryItem
 import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch
 import com.m0h31h31.bamburfidreader.ui.components.AppSwitch
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator

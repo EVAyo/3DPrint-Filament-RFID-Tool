@@ -19,3 +19,9 @@ QA2.md
 server/*
 /CLAUDE.md
 /.claude
+/AGENTS.md
+/OPTIMIZATION_REPORT.md
+/.claude/
+/.idea/
+/.kotlin/
+/server/

@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.net.Uri
@@ -63,6 +62,39 @@ import com.m0h31h31.bamburfidreader.ui.theme.ThemeMode
 import com.m0h31h31.bamburfidreader.ui.theme.BambuRfidReaderTheme
 import com.m0h31h31.bamburfidreader.util.normalizeColorValue
 import androidx.core.content.FileProvider
+import com.m0h31h31.bamburfidreader.data.FILAMENT_DB_NAME
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.data.SHARE_TAGS_TABLE
+import com.m0h31h31.bamburfidreader.data.SNAPMAKER_SHARE_TAGS_TABLE
+import com.m0h31h31.bamburfidreader.data.TRAY_UID_TABLE
+import com.m0h31h31.bamburfidreader.data.syncCrealityMaterialDatabase
+import com.m0h31h31.bamburfidreader.data.syncFilamentDatabase
+import com.m0h31h31.bamburfidreader.logging.LogCollector
+import com.m0h31h31.bamburfidreader.logging.logDebug
+import com.m0h31h31.bamburfidreader.model.CModifyRecoveryInfo
+import com.m0h31h31.bamburfidreader.model.CrealityMaterial
+import com.m0h31h31.bamburfidreader.model.CrealityTagData
+import com.m0h31h31.bamburfidreader.model.CrealityWritePending
+import com.m0h31h31.bamburfidreader.model.DEFAULT_REMAINING_PERCENT
+import com.m0h31h31.bamburfidreader.model.DisplayData
+import com.m0h31h31.bamburfidreader.model.FilamentColorEntry
+import com.m0h31h31.bamburfidreader.model.InventoryItem
+import com.m0h31h31.bamburfidreader.model.NfcUiState
+import com.m0h31h31.bamburfidreader.model.ParsedBlockData
+import com.m0h31h31.bamburfidreader.model.ParsedField
+import com.m0h31h31.bamburfidreader.model.ReaderBrand
+import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
+import com.m0h31h31.bamburfidreader.model.ShareTagItem
+import com.m0h31h31.bamburfidreader.model.SnapmakerShareTagItem
+import com.m0h31h31.bamburfidreader.model.SnapmakerTagData
+import com.m0h31h31.bamburfidreader.nfc.BambuMifareOperator
+import com.m0h31h31.bamburfidreader.nfc.BambuNfcOperation
+import com.m0h31h31.bamburfidreader.nfc.BambuNfcResult
+import com.m0h31h31.bamburfidreader.nfc.MifareClassicSession
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityConfig
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityPreferences
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityTestResult
 import com.m0h31h31.bamburfidreader.utils.AnalyticsReporter
 import com.m0h31h31.bamburfidreader.utils.UpdateInfo
 import com.m0h31h31.bamburfidreader.utils.ConfigManager
@@ -96,25 +128,6 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
-private const val LOG_TAG = "BambuRfidReader"
-private const val FILAMENT_JSON_NAME = "filaments_color_codes.json"
-private const val FILAMENTS_TYPE_MAPPING_FILE = "filaments_type_mapping.json"
-private const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 23
-private const val CREALITY_MATERIAL_FILE = "creality_material_list.json"
-private const val CREALITY_MATERIAL_TABLE = "creality_materials"
-private const val FILAMENT_TABLE = "filaments"
-private const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
-private const val FILAMENT_META_TABLE = "meta_v2"
-private const val FILAMENT_META_KEY_LAST_MODIFIED = "filaments_last_modified"
-private const val FILAMENT_META_KEY_LOCALE = "filaments_locale"
-private const val TRAY_UID_TABLE = "filament_inventory"
-private const val SHARE_TAGS_TABLE = "share_tags"
-private const val SNAPMAKER_SHARE_TAGS_TABLE = "snapmaker_share_tags"
-private const val ANOMALY_UIDS_TABLE = "anomaly_uids"
-private const val DEFAULT_REMAINING_PERCENT = 100
-private const val LOG_DIR_NAME = "logs"
-private const val LOG_FILE_NAME = "bambu_rfid.log"
 private const val SHARE_BUNDLE_ZIP_NAME = "rfid_data.zip"
 private const val SHARE_EXTRACT_MARKER_FILE = ".bundle_extracted"
 private const val SHARE_IMPORT_ZIP_MIME = "application/zip"
@@ -144,6 +157,12 @@ private const val KEY_SNAPMAKER_TAG_ENABLED = "snapmaker_tag_enabled"
 private const val KEY_AUTO_SHARE_TAG = "auto_share_tag"
 private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
 private const val KEY_NOTICE_GUIDE_SHOWN = "notice_guide_shown"
+private const val KEY_LAST_WRITTEN_SOURCE_UID = "last_written_source_uid"
+
+private enum class PendingNfcCompatibilityTest {
+    READ_ONLY,
+    WRITE_VERIFY
+}
 
 // Creality AES keys
 private val CREALITY_KEY_DERIVE = byteArrayOf(
@@ -424,273 +443,6 @@ private fun UserAgreementDialog(
     }
 }
 
-object LogCollector {
-    private val lock = Any()
-    private val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
-    @Volatile
-    private var appContext: Context? = null
-
-    fun init(context: Context) {
-        appContext = context.applicationContext
-    }
-
-    fun append(context: Context?, level: String, message: String) {
-        val targetContext = context ?: appContext ?: return
-        val baseDir = targetContext.getExternalFilesDir(null) ?: targetContext.filesDir
-        val logDir = File(baseDir, LOG_DIR_NAME)
-        if (!logDir.exists()) {
-            logDir.mkdirs()
-        }
-        val line = "${formatter.format(Date())} [$level] $message\n"
-        synchronized(lock) {
-            File(logDir, LOG_FILE_NAME).appendText(line, Charsets.UTF_8)
-        }
-    }
-
-    fun packageLogs(context: Context): String {
-        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
-        val logDir = File(baseDir, LOG_DIR_NAME)
-        if (!logDir.exists()) {
-            return context.getString(R.string.log_none_to_pack)
-        }
-        val logFiles = logDir.listFiles { file -> file.isFile }?.toList().orEmpty()
-        if (logFiles.isEmpty()) {
-            return context.getString(R.string.log_none_to_pack)
-        }
-        val archiveName =
-            "logs_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}.zip"
-        val archive = File(baseDir, archiveName)
-        return try {
-            ZipOutputStream(archive.outputStream().buffered()).use { zip ->
-                logFiles.forEach { file ->
-                    FileInputStream(file).use { input ->
-                        zip.putNextEntry(ZipEntry("${LOG_DIR_NAME}/${file.name}"))
-                        input.copyTo(zip)
-                        zip.closeEntry()
-                    }
-                }
-            }
-            context.getString(R.string.log_packed_format, archive.absolutePath)
-        } catch (e: Exception) {
-            logDebug("日志打包失败: ${e.message}")
-            context.getString(R.string.log_pack_failed)
-        }
-    }
-}
-
-fun logDebug(message: String) {
-    Log.d(LOG_TAG, message)
-    LogCollector.append(null, "D", message)
-}
-
-data class NfcUiState(
-    val status: String,
-    val uidHex: String = "",
-    val keyA0Hex: String = "",
-    val keyB0Hex: String = "",
-    val keyA1Hex: String = "",
-    val keyB1Hex: String = "",
-    val blockHexes: List<String> = List(8) { "" },
-    val parsedFields: List<ParsedField> = emptyList(),
-    val displayType: String = "",
-    val displayColorName: String = "",
-    val displayColorCode: String = "",
-    val displayColorType: String = "",
-    val displayColors: List<String> = emptyList(),
-    val secondaryFields: List<ParsedField> = emptyList(),
-    val trayUidHex: String = "",
-    val remainingPercent: Float = DEFAULT_REMAINING_PERCENT.toFloat(),
-    val remainingGrams: Int = 0,
-    val totalWeightGrams: Int = 0,
-    val originalMaterial: String = "",
-    val notes: String = "",
-    val error: String = ""
-)
-
-data class ParsedField(
-    val label: String,
-    val value: String
-)
-
-data class DisplayData(
-    val type: String,
-    val colorName: String,
-    val colorNameEn: String = "",
-    val colorCode: String,
-    val colorType: String,
-    val colorValues: List<String>,
-    val secondaryFields: List<ParsedField>
-)
-
-data class FilamentColorEntry(
-    val colorCode: String,
-    val filaId: String,
-    val colorType: String,
-    val filaType: String,
-    val filaDetailedType: String = "",
-    val colorNameZh: String,
-    val colorNameEn: String = "",
-    val colorValues: List<String>,
-    val colorCount: Int
-) {
-    fun resolvedColorName(): String {
-        val lang = Locale.getDefault().language.lowercase(Locale.US)
-        return if (lang == "zh") colorNameZh else colorNameEn.ifBlank { colorNameZh }
-    }
-}
-
-data class ParsedBlockData(
-    val fields: List<ParsedField>,
-    val materialId: String,
-    val filamentType: String = "",
-    val detailedFilamentType: String = "",
-    val colorValues: List<String>
-)
-
-data class InventoryItem(
-    val trayUid: String,
-    val materialType: String,
-    val materialDetailedType: String = "",
-    val colorName: String,
-    val colorNameEn: String = "",
-    val colorCode: String,
-    val colorType: String,
-    val colorValues: List<String>,
-    val remainingPercent: Float,
-    val remainingGrams: Int? = null,
-    val originalMaterial: String = "",
-    val notes: String = ""
-) {
-    fun resolvedColorName(): String {
-        val lang = Locale.getDefault().language.lowercase(Locale.US)
-        return if (lang == "zh") colorName else colorNameEn.ifBlank { colorName }
-    }
-}
-
-data class ShareTagDbMeta(
-    val id: Long = -1L,
-    val copyCount: Int = 0,
-    val verified: Boolean = false
-)
-
-data class ShareTagDbRow(
-    val id: Long,
-    val fileUid: String,
-    val trayUid: String?,
-    val materialType: String?,
-    val colorUid: String?,
-    val colorName: String?,
-    val colorNameEn: String?,
-    val colorType: String?,
-    val colorValues: String?,
-    val rawData: String?,
-    val copyCount: Int,
-    val verified: Boolean,
-    val productionDate: String?
-)
-
-data class ShareTagItem(
-    val relativePath: String,
-    val fileName: String,
-    val sourceUid: String,
-    val trayUid: String,
-    val materialType: String,
-    val colorUid: String,
-    val colorName: String,
-    val colorNameEn: String = "",
-    val colorType: String,
-    val colorValues: List<String>,
-    val rawBlocks: List<ByteArray?>,
-    val dbId: Long = -1L,
-    val copyCount: Int = 0,
-    val verified: Boolean = false,
-    val productionDate: String = ""
-) {
-    fun resolvedColorName(): String {
-        val lang = Locale.getDefault().language.lowercase(Locale.US)
-        return if (lang == "zh") colorName else colorNameEn.ifBlank { colorName }
-    }
-}
-
-data class CModifyRecoveryInfo(
-    val originalUid: String,
-    val targetUid: String,
-    val originalKeysA: List<String>,
-    val originalKeysB: List<String>,
-    val targetKeysA: List<String>,
-    val targetKeysB: List<String>
-)
-
-data class CrealityMaterial(
-    val materialId: String,
-    val brand: String,
-    val materialType: String,
-    val name: String,
-    val minTemp: Int,
-    val maxTemp: Int,
-    val diameter: String
-)
-
-data class CrealityTagData(
-    val materialId: String,
-    val colorHex: String,
-    val weight: String,
-    val serial: String,
-    val vendorId: String,
-    val batch: String,
-    val lengthCode: String,
-    val rawPlaintext: String,
-    val uidHex: String = "",
-    val mfDate: String = ""
-)
-
-data class SnapmakerTagData(
-    val vendor: String,
-    val manufacturer: String,
-    val mainType: String,
-    val subType: String,
-    val colorCount: Int,
-    val rgb1: Int,
-    val rgb2: Int,
-    val rgb3: Int,
-    val rgb4: Int,
-    val rgb5: Int,
-    val diameter: Int,   // unit: 0.01 mm, e.g. 175 = 1.75 mm
-    val weight: Int,     // grams
-    val dryingTemp: Int,
-    val dryingTime: Int, // hours
-    val hotendMaxTemp: Int,
-    val hotendMinTemp: Int,
-    val bedTemp: Int,
-    val mfDate: String,
-    val isOfficial: Boolean,
-    val uidHex: String,
-    val rsaKeyVersion: Int
-)
-
-enum class ReaderBrand { BAMBU, CREALITY, SNAPMAKER }
-
-data class SnapmakerShareTagItem(
-    val uid: String,
-    val vendor: String,
-    val manufacturer: String,
-    val mainType: Int,
-    val subType: Int = 0,
-    val diameter: Int,   // unit: 0.01 mm
-    val weight: Int,     // grams
-    val rgb1: Int,
-    val mfDate: String,
-    val rawBlocks: List<ByteArray?>,
-    val dbId: Long = -1L,
-    val copyCount: Int = 0
-)
-
-data class CrealityWritePending(
-    val materialId: String,
-    val colorHex: String,
-    val weight: String
-)
-
 private data class WriteResumePoint(
     val sector: Int,
     val blockOffset: Int
@@ -775,11 +527,15 @@ class MainActivity : ComponentActivity() {
     private var cModifyRecoveryInfo by mutableStateOf<CModifyRecoveryInfo?>(null)
     private var pendingClearFuid by mutableStateOf(false)
     private var pendingCuidTest by mutableStateOf(false)
+    private var pendingNfcCompatibilityTest by mutableStateOf<PendingNfcCompatibilityTest?>(null)
     private var pendingNdefWriteRequest by mutableStateOf<NdefWriteRequest?>(null)
     private var shareLoading by mutableStateOf(false)
     private var shareRefreshStatusMessage by mutableStateOf("")
     private var shareRefreshStatusClearJob: Job? = null
     private var miscStatusMessage by mutableStateOf("")
+    private var nfcCompatibilityConfig by mutableStateOf(NfcCompatibilityConfig.default())
+    private var nfcCompatibilityStatusMessage by mutableStateOf("")
+    private var lastWrittenSourceUidHex = ""
     private var anomalyUids by mutableStateOf<Map<String, Int>>(emptyMap())
     private var selectedTagCopyCount by mutableStateOf<Int?>(null)
     private var pendingUpdateInfo by mutableStateOf<UpdateInfo?>(null)
@@ -909,6 +665,10 @@ class MainActivity : ComponentActivity() {
                     miscStatusMessage = uiString(R.string.misc_status_formatting)
                 } else if (pendingCuidTest) {
                     miscStatusMessage = uiString(R.string.misc_status_testing)
+                } else if (pendingNfcCompatibilityTest != null) {
+                    val message = "正在执行NFC兼容性测试..."
+                    nfcCompatibilityStatusMessage = message
+                    miscStatusMessage = message
                 } else if (pendingSnapmakerWriteItem != null) {
                     snapmakerWriteStatusMessage = uiString(R.string.snapmaker_write_in_progress_status)
                 } else if (pendingCrealityWrite != null) {
@@ -925,6 +685,7 @@ class MainActivity : ComponentActivity() {
                     uiString(R.string.copy_write_task_empty)
                 }
                 if (writeResult.contains("成功") || writeResult.contains("success", ignoreCase = true)) {
+                    targetItem?.sourceUid?.let { rememberLastWrittenSourceUid(it) }
                     // 写入成功后自动校验（无需重复贴卡）
                     runOnUiThread { writeStatusMessage = uiString(R.string.copy_write_done_verifying) }
                     val verifyResult = if (targetItem != null) {
@@ -1078,6 +839,27 @@ class MainActivity : ComponentActivity() {
                         playFeedbackTone(FeedbackTone.FAILURE)
                     }
                     pendingCuidTest = false
+                }
+            } else if (pendingNfcCompatibilityTest != null) {
+                val testKind = pendingNfcCompatibilityTest
+                val result = runNfcCompatibilityTest(
+                    tag = tag,
+                    includeWrite = testKind == PendingNfcCompatibilityTest.WRITE_VERIFY
+                ) { status ->
+                    runOnUiThread {
+                        nfcCompatibilityStatusMessage = status
+                        miscStatusMessage = status
+                    }
+                }
+                runOnUiThread {
+                    nfcCompatibilityStatusMessage = result
+                    miscStatusMessage = result
+                    if (result.contains("成功") || result.contains("推荐") || result.contains("success", ignoreCase = true)) {
+                        playFeedbackTone(FeedbackTone.SUCCESS)
+                    } else {
+                        playFeedbackTone(FeedbackTone.FAILURE)
+                    }
+                    pendingNfcCompatibilityTest = null
                 }
             } else if (pendingSnapmakerWriteItem != null) {
                 val targetItem = pendingSnapmakerWriteItem!!
@@ -1252,6 +1034,8 @@ class MainActivity : ComponentActivity() {
         hideCopiedTags = uiPrefs.getBoolean(KEY_HIDE_COPIED_TAGS, true)
         dualTagMode = uiPrefs.getBoolean(KEY_DUAL_TAG_MODE, false)
         tagViewMode = uiPrefs.getString(KEY_TAG_VIEW_MODE, "list") ?: "list"
+        nfcCompatibilityConfig = NfcCompatibilityPreferences.load(this)
+        lastWrittenSourceUidHex = uiPrefs.getString(KEY_LAST_WRITTEN_SOURCE_UID, "").orEmpty()
         uiStyle = runCatching {
             AppUiStyle.valueOf(uiPrefs.getString(KEY_UI_STYLE, AppUiStyle.NEUMORPHIC.name).orEmpty())
         }.getOrDefault(AppUiStyle.NEUMORPHIC)
@@ -1320,6 +1104,13 @@ class MainActivity : ComponentActivity() {
                     saveKeysToFile = saveKeysToFile,
                     formatTagDebugEnabled = formatTagDebugEnabled,
                     forceOverwriteImport = forceOverwriteImport,
+                    nfcCompatibilityMode = nfcCompatibilityConfig.mode,
+                    onNfcCompatibilityModeChange = { mode -> setNfcCompatibilityMode(mode) },
+                    nfcCompatibilityStatusMessage = nfcCompatibilityStatusMessage,
+                    nfcCompatibilityTestInProgress = pendingNfcCompatibilityTest != null,
+                    onStartNfcCompatibilityReadTest = { enqueueNfcCompatibilityTest(includeWrite = false) },
+                    onStartNfcCompatibilityWriteTest = { enqueueNfcCompatibilityTest(includeWrite = true) },
+                    onCancelNfcCompatibilityTest = { cancelNfcCompatibilityTest() },
                     ttsReady = ttsReady,
                     ttsLanguageReady = ttsLanguageReady,
                     onVoiceEnabledChange = {
@@ -1714,6 +1505,106 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun buildNfcReaderModeFlags(): Int {
+        var flags = NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or
+            NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS or
+            NfcAdapter.FLAG_READER_NFC_A
+        if (!nfcCompatibilityConfig.forceNfcAOnly) {
+            flags = flags or
+                NfcAdapter.FLAG_READER_NFC_B or
+                NfcAdapter.FLAG_READER_NFC_F or
+                NfcAdapter.FLAG_READER_NFC_V
+        }
+        return flags
+    }
+
+    private fun buildNfcReaderModeExtras(): Bundle {
+        return Bundle().apply {
+            putInt(
+                NfcAdapter.EXTRA_READER_PRESENCE_CHECK_DELAY,
+                nfcCompatibilityConfig.presenceCheckDelayMs
+            )
+        }
+    }
+
+    private fun refreshNfcReaderMode() {
+        val adapter = nfcAdapter ?: return
+        if (!adapter.isEnabled) return
+        runCatching { adapter.disableReaderMode(this) }
+        adapter.enableReaderMode(
+            this,
+            readerCallback,
+            buildNfcReaderModeFlags(),
+            buildNfcReaderModeExtras()
+        )
+    }
+
+    private fun setNfcCompatibilityMode(mode: NfcCompatibilityMode) {
+        nfcCompatibilityConfig = NfcCompatibilityPreferences.saveMode(this, mode)
+        val message = "NFC兼容模式已切换为：${nfcCompatibilityModeLabel(mode)}"
+        nfcCompatibilityStatusMessage = message
+        miscStatusMessage = message
+        refreshNfcReaderMode()
+    }
+
+    private fun nfcCompatibilityModeLabel(mode: NfcCompatibilityMode): String {
+        return when (mode) {
+            NfcCompatibilityMode.FAST -> "快速"
+            NfcCompatibilityMode.BALANCED -> "均衡"
+            NfcCompatibilityMode.STABLE -> "稳定"
+        }
+    }
+
+    private fun enqueueNfcCompatibilityTest(includeWrite: Boolean): String {
+        if (hasPendingNfcWriteOrMaintenanceTask()) {
+            return "已有NFC任务在等待，请先完成或取消当前任务"
+        }
+        pendingNfcCompatibilityTest = if (includeWrite) {
+            PendingNfcCompatibilityTest.WRITE_VERIFY
+        } else {
+            PendingNfcCompatibilityTest.READ_ONLY
+        }
+        val message = if (includeWrite) {
+            "NFC写入兼容性测试已准备，请贴近一张可写测试卡；会读取一个数据块并原样写回"
+        } else {
+            "NFC只读兼容性测试已准备，请贴近一张Mifare Classic标签"
+        }
+        nfcCompatibilityStatusMessage = message
+        miscStatusMessage = message
+        return message
+    }
+
+    private fun cancelNfcCompatibilityTest(): String {
+        pendingNfcCompatibilityTest = null
+        val message = "NFC兼容性测试已取消"
+        nfcCompatibilityStatusMessage = message
+        miscStatusMessage = message
+        return message
+    }
+
+    private fun hasPendingNfcWriteOrMaintenanceTask(): Boolean {
+        return pendingWriteItem != null ||
+            pendingVerifyItem != null ||
+            pendingCModifyItem != null ||
+            pendingClearFuid ||
+            pendingCuidTest ||
+            pendingNdefWriteRequest != null ||
+            pendingSnapmakerWriteItem != null ||
+            pendingCrealityWrite != null ||
+            pendingNfcCompatibilityTest != null
+    }
+
+    private fun rememberLastWrittenSourceUid(uidHex: String) {
+        val normalized = uidHex.filter { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
+            .uppercase(Locale.US)
+        if (normalized.isBlank()) return
+        lastWrittenSourceUidHex = normalized
+        getSharedPreferences(UI_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_WRITTEN_SOURCE_UID, normalized)
+            .apply()
+    }
+
     override fun onResume() {
         super.onResume()
         logEvent("应用进入前台")
@@ -1739,16 +1630,13 @@ class MainActivity : ComponentActivity() {
         if (!supportsA) {
             logEvent("设备未声明 NFC-A，可能影响 MIFARE Classic 读取")
         }
-        val flags = NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK or
-                NfcAdapter.FLAG_READER_NFC_A or
-                NfcAdapter.FLAG_READER_NFC_B or
-                NfcAdapter.FLAG_READER_NFC_F or
-                NfcAdapter.FLAG_READER_NFC_V
+        val flags = buildNfcReaderModeFlags()
+        val extras = buildNfcReaderModeExtras()
         adapter.enableReaderMode(
             this,
             readerCallback,
             flags,
-            null
+            extras
         )
         uiState = uiState.copy(status = uiString(R.string.status_waiting_tag))
         logEvent("已启用 NFC 读卡模式")
@@ -3590,125 +3478,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun writeTagFromDump(tag: Tag, item: ShareTagItem, onStatusUpdate: ((String) -> Unit)? = null): String {
-        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.write_failed_no_mifare)
-        val sourceBlocks = item.rawBlocks
-        if (sourceBlocks.isEmpty()) {
-            return uiString(R.string.write_failed_empty_data)
-        }
-
-        val ffKey = ByteArray(6) { 0xFF.toByte() }
-        val targetSectorCount = minOf(WRITE_SECTOR_COUNT, mifare.sectorCount)
-
-        return try {
-            var resumePoint = WriteResumePoint(sector = 0, blockOffset = 0)
-            var recoverAttempts = 0
-
-            while (resumePoint.sector < targetSectorCount) {
-                try {
-                    if (!mifare.isConnected) {
-                        mifare.connect()
-                        // 首次/重连后给用户与链路一点稳定时间。
-                        Thread.sleep(if (recoverAttempts == 0) 700 else 300)
-                    }
-
-                    // 仅在首次写入前执行一次硬性预检查，避免 FUID 卡写坏。
-                    if (recoverAttempts == 0 && resumePoint.sector == 0 && resumePoint.blockOffset == 0) {
-                        val precheck = precheckBeforeWrite(mifare, sourceBlocks)
-                        when (precheck.action) {
-                            WritePrecheckAction.ALREADY_MATCHED -> {
-                                return uiString(R.string.write_precheck_already_matched)
-                            }
-                            WritePrecheckAction.BLOCKED_CONFLICT,
-                            WritePrecheckAction.BLOCKED_UNREADABLE -> {
-                                return uiString(R.string.write_precheck_blocked_format, precheck.message.orEmpty())
-                            }
-                            WritePrecheckAction.RESUME_FROM_POINT -> {
-                                resumePoint = precheck.resumePoint
-                            }
-                            WritePrecheckAction.START_FROM_BEGINNING -> {
-                                resumePoint = WriteResumePoint(0, 0)
-                            }
-                        }
-                    }
-
-                    for (sector in resumePoint.sector until targetSectorCount) {
-                        val trailerIndex = sector * 4 + 3
-                        val trailerData = sourceBlocks.getOrNull(trailerIndex)
-                        val sourceKeyA = if (trailerData != null && trailerData.size == 16) {
-                            trailerData.copyOfRange(0, 6)
-                        } else null
-                        val sourceKeyB = if (trailerData != null && trailerData.size == 16) {
-                            trailerData.copyOfRange(10, 16)
-                        } else null
-
-                        val authenticated = authenticateSectorWithRetry(
-                            mifare = mifare,
-                            sectorIndex = sector,
-                            keysA = listOf(ffKey, sourceKeyA),
-                            keysB = listOf(ffKey, sourceKeyB)
-                        )
-                        if (!authenticated) {
-                            return uiString(R.string.write_failed_sector_auth_format, sector)
-                        }
-
-                        onStatusUpdate?.invoke(uiString(R.string.write_sector_format, sector + 1, targetSectorCount))
-
-                        val startBlock = mifare.sectorToBlock(sector)
-                        val startOffset = if (sector == resumePoint.sector) {
-                            resumePoint.blockOffset
-                        } else {
-                            0
-                        }
-
-                        for (offset in startOffset until 4) {
-                            val blockIndex = startBlock + offset
-                            // 严格 1:1 按文件写入（包括 trailer 密钥与权限位）。
-                            val targetData = sourceBlocks.getOrNull(blockIndex)
-                                ?: return uiString(R.string.write_failed_block_missing_format, blockIndex)
-                            if (targetData.size != 16) {
-                                return uiString(R.string.write_failed_block_size_format, blockIndex)
-                            }
-
-                            val writeOk = writeBlockWithRetry(mifare, blockIndex, targetData)
-                            if (!writeOk) {
-                                throw IOException(uiString(R.string.write_block_error_format, blockIndex))
-                            }
-                            // 每块间隔一点点，降低连续写导致的链路抖动。
-                            Thread.sleep(20)
-                        }
-                    }
-
-                    // 全部写完，跳出 while。
-                    resumePoint = WriteResumePoint(targetSectorCount, 0)
-                } catch (e: Exception) {
-                    recoverAttempts++
-                    try {
-                        mifare.close()
-                    } catch (_: Exception) {
-                    }
-                    if (recoverAttempts > WRITE_RESUME_MAX_ATTEMPTS) {
-                        return uiString(R.string.write_failed_retry_format, e.message.orEmpty())
-                    }
-                    val detected = detectWriteResumePoint(tag, sourceBlocks)
-                    if (detected == null) {
-                        return uiString(R.string.write_failed_resume_lost)
-                    }
-                    if (detected.sector >= targetSectorCount) {
-                        // 探测到全卡已是目标内容，视为成功。
-                        return uiString(R.string.write_success_resume)
-                    }
-                    resumePoint = detected
-                }
-            }
-
-            uiString(R.string.write_success_done)
-        } catch (e: Exception) {
-            uiString(R.string.write_failed_format, e.message.orEmpty())
-        } finally {
-            try {
-                mifare.close()
-            } catch (_: Exception) {
-            }
+        return when (val result = BambuMifareOperator.run(
+            tag = tag,
+            config = nfcCompatibilityConfig,
+            operation = BambuNfcOperation.WriteDumpWithFf(item.rawBlocks),
+            logger = ::logDebug,
+            appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
+            onStatus = { status -> onStatusUpdate?.invoke(status) }
+        )) {
+            is BambuNfcResult.Message -> result.message
+            is BambuNfcResult.Failure -> result.message
+            is BambuNfcResult.RawRead -> uiString(R.string.write_failed_format, "unexpected read result")
         }
     }
 
@@ -3724,178 +3504,17 @@ class MainActivity : ComponentActivity() {
         item: ShareTagItem,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
-        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.cmodify_failed_no_mifare)
-        val sourceBlocks = item.rawBlocks
-        if (sourceBlocks.isEmpty()) return uiString(R.string.cmodify_failed_empty_data)
-
-        val uid = tag.id ?: return uiString(R.string.cmodify_failed_no_uid)
-        val currentKeysA = deriveWriteKeys(uid, WRITE_INFO_A)
-        val currentKeysB = deriveWriteKeys(uid, WRITE_INFO_B)
-
-        val targetUidBytes = runCatching { hexToBytes(item.sourceUid) }.getOrNull()?.takeIf { it.size >= 4 }
-        val targetKeysA = if (targetUidBytes != null) deriveWriteKeys(targetUidBytes, WRITE_INFO_A) else emptyList()
-        val targetKeysB = if (targetUidBytes != null) deriveWriteKeys(targetUidBytes, WRITE_INFO_B) else emptyList()
-
-        val ffKey = ByteArray(6) { 0xFF.toByte() }
-        // 目标 Trailer：KeyA=FF*6, Access=FF078069, KeyB=FF*6
-        val fullFfTrailer = ByteArray(16).apply {
-            for (i in 0..5) this[i] = 0xFF.toByte()
-            this[6] = 0xFF.toByte(); this[7] = 0x07.toByte()
-            this[8] = 0x80.toByte(); this[9] = 0x69.toByte()
-            for (i in 10..15) this[i] = 0xFF.toByte()
-        }
-        val targetSectorCount = minOf(WRITE_SECTOR_COUNT, mifare.sectorCount)
-        val maxRetry = 5
-
-        // 分步 Trailer 还原：Bambu 卡权限位 87878769 只允许 KeyB 写 Trailer，分三步避免卡死。
-        // 步骤间不整体重连，直接重认证，节省每扇区 ~200ms。
-        // 校验：优先读回 KeyB 字节（FF078069 下可读）；读回 00 或失败则以 FF 认证成功为准。
-        fun resetTrailerStepByStep(sector: Int, trailerBlock: Int): Boolean {
-            val curKeyA = currentKeysA.getOrNull(sector) ?: return false
-            val curKeyB = currentKeysB.getOrNull(sector) ?: return false
-
-            val step1Trailer = ByteArray(16).apply {    // 仅改权限位 → FF078069，密钥保持派生值
-                System.arraycopy(curKeyA, 0, this, 0, 6)
-                this[6] = 0xFF.toByte(); this[7] = 0x07.toByte()
-                this[8] = 0x80.toByte(); this[9] = 0x69.toByte()
-                System.arraycopy(curKeyB, 0, this, 10, 6)
-            }
-            val step2Trailer = ByteArray(16).apply {    // KeyA → FF，保留 curKeyB
-                for (i in 0..5) this[i] = 0xFF.toByte()
-                this[6] = 0xFF.toByte(); this[7] = 0x07.toByte()
-                this[8] = 0x80.toByte(); this[9] = 0x69.toByte()
-                System.arraycopy(curKeyB, 0, this, 10, 6)
-            }
-            // step3 = fullFfTrailer
-
-            // Step 1：必须用派生 KeyB（87878769 权限只允许 KeyB 写 Trailer）
-            reconnectMifareClassic(mifare)
-            if (!authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(curKeyB))) return false
-            if (!writeBlockWithRetry(mifare, trailerBlock, step1Trailer)) return false
-            Thread.sleep(15)
-
-            // Step 2：权限位已是 FF078069，KeyA/B 均可写；直接重认证，不重连
-            if (!authenticateSectorWithRetry(mifare, sector, listOf(curKeyA, ffKey), listOf(curKeyB, ffKey))) return false
-            if (!writeBlockWithRetry(mifare, trailerBlock, step2Trailer)) return false
-            Thread.sleep(15)
-
-            // Step 3：KeyA 已是 FF；直接重认证，不重连
-            if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(curKeyB, ffKey))) return false
-            if (!writeBlockWithRetry(mifare, trailerBlock, fullFfTrailer)) return false
-            Thread.sleep(15)
-
-            // 校验：直接重认证，不重连
-            if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) return false
-            val readBack = readBlockWithRetry(mifare, trailerBlock)
-            if (readBack != null && readBack.size >= 16) {
-                val accessOk = readBack[6] == 0xFF.toByte() && readBack[7] == 0x07.toByte() &&
-                               readBack[8] == 0x80.toByte() && readBack[9] == 0x69.toByte()
-                val keyBOk = (10..15).all { readBack[it] == 0xFF.toByte() }
-                if (accessOk && keyBOk) return true     // 读回完全确认 ✓
-                if (accessOk) return true               // KeyB 读回 00（部分卡屏蔽），以权限位+FF认证为准
-            }
-            return true // 读取失败但 FF 认证已通过，视为成功
-        }
-
-        val retryHint = uiString(R.string.cmodify_retry_hint)
-
-        return try {
-            mifare.connect()
-            Thread.sleep(300)
-
-            // ===== Phase 1: 将所有扇区 Trailer 重置为全FF =====
-            onStatusUpdate?.invoke(uiString(R.string.cmodify_restoring_trailer))
-            for (sector in 0 until targetSectorCount) {
-                onStatusUpdate?.invoke(uiString(R.string.cmodify_restoring_trailer_format, sector + 1, targetSectorCount))
-                val trailerBlock = mifare.sectorToBlock(sector) + 3
-                var done = false
-                for (attempt in 1..maxRetry) {
-                    // 优先：分步还原（适合 Bambu 派生密钥卡）
-                    if (resetTrailerStepByStep(sector, trailerBlock)) { done = true; break }
-                    // 回退：卡已处于 FF 或目标卡密钥状态，直接一步写入
-                    reconnectMifareClassic(mifare)
-                    val allA = buildList { add(ffKey); targetKeysA.getOrNull(sector)?.let { add(it) } }
-                    val allB = buildList { add(ffKey); targetKeysB.getOrNull(sector)?.let { add(it) } }
-                    if (authenticateSectorWithRetry(mifare, sector, allA, allB) &&
-                        writeBlockWithRetry(mifare, trailerBlock, fullFfTrailer)) {
-                        Thread.sleep(15)
-                        if (authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
-                            done = true; break
-                        }
-                    }
-                    Thread.sleep(60L * attempt)
-                }
-                if (!done) return uiString(R.string.cmodify_sector_trailer_failed_format, sector, retryHint)
-            }
-            onStatusUpdate?.invoke(uiString(R.string.cmodify_trailer_done_writing))
-            Thread.sleep(100)
-
-            // ===== Phase 2: 使用FF密钥逐扇区写入源数据 =====
-            for (sector in 0 until targetSectorCount) {
-                onStatusUpdate?.invoke(uiString(R.string.cmodify_writing_format, sector + 1, targetSectorCount))
-                var done = false
-                for (attempt in 1..maxRetry) {
-                    reconnectMifareClassic(mifare)
-                    if (!authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))) {
-                        Thread.sleep(60L * attempt); continue
-                    }
-                    val startBlock = mifare.sectorToBlock(sector)
-                    var blockFailed = false
-                    for (offset in 0 until 4) {
-                        val blockIndex = startBlock + offset
-                        val srcIdx = sector * 4 + offset
-                        val blockData = sourceBlocks.getOrNull(srcIdx)
-                            ?: return uiString(R.string.cmodify_failed_block_missing_format, srcIdx)
-                        if (blockData.size != 16) return uiString(R.string.cmodify_failed_block_size_format, srcIdx)
-                        if (!writeBlockWithRetry(mifare, blockIndex, blockData)) { blockFailed = true; break }
-                        Thread.sleep(15)
-                    }
-                    if (!blockFailed) { done = true; break }
-                    Thread.sleep(60L * attempt)
-                }
-                if (!done) return uiString(R.string.cmodify_sector_write_failed_format, sector, retryHint)
-            }
-
-            // ===== Phase 3: 重连，使用源数据密钥全量校验 =====
-            onStatusUpdate?.invoke(uiString(R.string.cmodify_verifying))
-            try { mifare.close() } catch (_: Exception) {}
-            Thread.sleep(150)
-            mifare.connect()
-            Thread.sleep(200)
-
-            for (sector in 0 until targetSectorCount) {
-                val trailerData = sourceBlocks.getOrNull(sector * 4 + 3)
-                    ?: return uiString(R.string.cmodify_verify_trailer_missing_format, sector)
-                if (trailerData.size != 16) return uiString(R.string.cmodify_verify_trailer_size_format, sector)
-                val srcKeyA = trailerData.copyOfRange(0, 6)
-                val srcKeyB = trailerData.copyOfRange(10, 16)
-                if (!authenticateSectorWithRetry(mifare, sector, listOf(srcKeyA), listOf(srcKeyB))) {
-                    return uiString(R.string.cmodify_success_auth_failed_format, sector, retryHint)
-                }
-                val startBlock = mifare.sectorToBlock(sector)
-                for (offset in 0 until 4) {
-                    val blockIndex = startBlock + offset
-                    val srcIdx = sector * 4 + offset
-                    val expected = sourceBlocks.getOrNull(srcIdx) ?: continue
-                    val actual = readBlockWithRetry(mifare, blockIndex)
-                        ?: return uiString(R.string.cmodify_success_read_failed_format, blockIndex, retryHint)
-                    val cmpExpected = if (blockIndex % 4 == 3) expected.copyOf().also {
-                        for (i in 0..5) it[i] = 0; for (i in 10..15) it[i] = 0
-                    } else expected
-                    val cmpActual = if (blockIndex % 4 == 3) actual.copyOf().also {
-                        for (i in 0..5) it[i] = 0; for (i in 10..15) it[i] = 0
-                    } else actual
-                    if (!cmpActual.contentEquals(cmpExpected)) {
-                        return uiString(R.string.cmodify_success_mismatch_format, blockIndex, retryHint)
-                    }
-                }
-            }
-            onStatusUpdate?.invoke(uiString(R.string.cmodify_done))
-            uiString(R.string.cmodify_success)
-        } catch (e: Exception) {
-            uiString(R.string.cmodify_failed_format, e.message.orEmpty(), retryHint)
-        } finally {
-            try { mifare.close() } catch (_: Exception) {}
+        return when (val result = BambuMifareOperator.run(
+            tag = tag,
+            config = nfcCompatibilityConfig,
+            operation = BambuNfcOperation.FormatThenWriteDump(item.rawBlocks),
+            logger = ::logDebug,
+            appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
+            onStatus = { status -> onStatusUpdate?.invoke(status) }
+        )) {
+            is BambuNfcResult.Message -> result.message
+            is BambuNfcResult.Failure -> result.message
+            is BambuNfcResult.RawRead -> uiString(R.string.cmodify_failed_format, "unexpected read result", uiString(R.string.cmodify_retry_hint))
         }
     }
 
@@ -3903,372 +3522,17 @@ class MainActivity : ComponentActivity() {
         tag: Tag,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
-        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.format_failed_no_mifare)
-        val uid = tag.id ?: return uiString(R.string.format_failed_no_uid)
-        if (uid.isEmpty()) return uiString(R.string.format_failed_uid_empty)
-
-        val derivedKeysA = try {
-            deriveWriteKeys(uid, WRITE_INFO_A)
-        } catch (e: Exception) {
-            return uiString(R.string.format_failed_key_a_format, e.message.orEmpty())
-        }
-        val derivedKeysB = try {
-            deriveWriteKeys(uid, WRITE_INFO_B)
-        } catch (e: Exception) {
-            return uiString(R.string.format_failed_key_b_format, e.message.orEmpty())
-        }
-        if (derivedKeysA.size < WRITE_SECTOR_COUNT || derivedKeysB.size < WRITE_SECTOR_COUNT) {
-            return uiString(R.string.format_failed_key_count)
-        }
-
-        val (snapKeysA, snapKeysB) = deriveSnapmakerKeys(uid)
-        val crealityKeyA = deriveCrealityKeyA(uid)
-
-        val ffKey = ByteArray(6) { 0xFF.toByte() }
-        val zeroBlock = ByteArray(16) { 0x00.toByte() }
-        val accessDefault = hexToBytes("FF078069")
-        val targetSectorCount = minOf(WRITE_SECTOR_COUNT, mifare.sectorCount)
-
-        fun logStep(message: String) {
-            logDebug("Format tag: $message")
-            LogCollector.append(this, "I", "Format tag: $message")
-            appendDebugInfoDialog(message)
-        }
-
-        fun fail(message: String): String {
-            logStep(message)
-            return message
-        }
-
-        fun buildTrailer(keyA: ByteArray, access: ByteArray, keyB: ByteArray): ByteArray {
-            return ByteArray(16).apply {
-                System.arraycopy(keyA, 0, this, 0, 6)
-                System.arraycopy(access, 0, this, 6, 4)
-                System.arraycopy(keyB, 0, this, 10, 6)
-            }
-        }
-
-        fun resetTrailerByDerivedKeyBStages(sector: Int): Boolean {
-            val trailerBlock = mifare.sectorToBlock(sector) + 3
-            val derivedA = derivedKeysA[sector]
-            val derivedB = derivedKeysB[sector]
-            logStep("Sector $sector trailer: auth with derived KeyB")
-            val authByDerivedB = authenticateSectorWithRetry(
-                mifare = mifare,
-                sectorIndex = sector,
-                keysA = emptyList(),
-                keysB = listOf(derivedB)
-            )
-            if (!authByDerivedB) {
-                logStep("Sector $sector trailer: derived KeyB auth failed")
-                return false
-            }
-            logStep("Sector $sector trailer: derived KeyB auth OK")
-
-            if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("Sector $sector trailer: write default trailer failed")
-                return false
-            }
-            logStep("Sector $sector trailer: write default trailer OK")
-
-            val ffAuthOk = authenticateSectorWithRetry(
-                mifare = mifare,
-                sectorIndex = sector,
-                keysA = listOf(ffKey),
-                keysB = listOf(ffKey)
-            )
-            logStep("Sector $sector trailer: FF auth ${if (ffAuthOk) "OK" else "failed"}")
-            if (ffAuthOk) return true
-
-            val derivedAuthStillOk = authenticateSectorWithRetry(
-                mifare = mifare,
-                sectorIndex = sector,
-                keysA = listOf(derivedA),
-                keysB = listOf(derivedB)
-            )
-            logStep(
-                "Sector $sector trailer: derived key re-verify after FF fail — ${if (derivedAuthStillOk) "OK (continue zero)" else "failed"}"
-            )
-            return derivedAuthStillOk
-        }
-
-        fun resetTrailerByCrealityDerivedKey(sector: Int): Boolean {
-            val trailerBlock = mifare.sectorToBlock(sector) + 3
-            // 创想：KeyA=派生，KeyB=FF，访问位=FF078069，可直接用 KeyA 写 Trailer
-            reconnectMifareClassic(mifare)
-            if (!authenticateSectorWithRetry(mifare, sector, listOf(crealityKeyA), listOf(ffKey))) {
-                logStep("Sector $sector: Creality derived KeyA auth failed")
-                return false
-            }
-            if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("Sector $sector: Creality reset key to FF failed")
-                return false
-            }
-            Thread.sleep(15)
-            val ffAuthOk = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
-            logStep("Sector $sector: Creality post-reset FF verify ${if (ffAuthOk) "OK" else "failed"}")
-            return ffAuthOk
-        }
-
-        fun resetTrailerBySnapmakerDerivedKeys(sector: Int): Boolean {
-            val trailerBlock = mifare.sectorToBlock(sector) + 3
-            val curKeyA = snapKeysA[sector]
-            val curKeyB = snapKeysB[sector]
-
-            // 步骤1：仅用派生 KeyB 认证，将权限位改为 FF078069（保留派生秘钥）
-            reconnectMifareClassic(mifare)
-            if (!authenticateSectorWithRetry(mifare, sector, emptyList(), listOf(curKeyB))) {
-                logStep("Sector $sector: Snapmaker derived KeyB auth failed")
-                return false
-            }
-            val step1Trailer = ByteArray(16).apply {
-                System.arraycopy(curKeyA, 0, this, 0, 6)
-                this[6] = 0xFF.toByte(); this[7] = 0x07.toByte()
-                this[8] = 0x80.toByte(); this[9] = 0x69.toByte()
-                System.arraycopy(curKeyB, 0, this, 10, 6)
-            }
-            if (!writeBlockWithRetry(mifare, trailerBlock, step1Trailer)) {
-                logStep("Sector $sector: Snapmaker access bit update failed")
-                return false
-            }
-            Thread.sleep(15)
-
-            // Step 2: access bits are now FF078069, change KeyA/B to FF
-            if (!authenticateSectorWithRetry(mifare, sector, listOf(curKeyA, ffKey), listOf(curKeyB, ffKey))) {
-                logStep("Sector $sector: Snapmaker step-2 auth failed")
-                return false
-            }
-            if (!writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                logStep("Sector $sector: Snapmaker reset key to FF failed")
-                return false
-            }
-            Thread.sleep(15)
-
-            val ffAuthOk = authenticateSectorWithRetry(mifare, sector, listOf(ffKey), listOf(ffKey))
-            logStep("Sector $sector: Snapmaker post-reset FF verify ${if (ffAuthOk) "OK" else "failed"}")
-            return ffAuthOk
-        }
-
-        return try {
-            mifare.connect()
-            onStatusUpdate?.invoke(uiString(R.string.format_starting))
-            logStep("Start UID=${uid.toHex().uppercase(Locale.US)}")
-
-            if (mifare.sectorCount < WRITE_SECTOR_COUNT) {
-                return fail(uiString(R.string.format_failed_sector_count_format, mifare.sectorCount))
-            }
-
-            // 记录第0扇区成功的品牌，后续扇区优先使用
-            var detectedBrand = "bambu"
-            val originalBlock0 = run {
-                when {
-                    authenticateSectorWithRetry(
-                        mifare, 0,
-                        keysA = listOf(derivedKeysA[0]),
-                        keysB = listOf(derivedKeysB[0])
-                    ) -> { logStep("Sector 0: Bambu derived key auth OK"); detectedBrand = "bambu" }
-                    authenticateSectorWithRetry(
-                        mifare, 0,
-                        keysA = listOf(ffKey),
-                        keysB = listOf(ffKey)
-                    ) -> { logStep("Sector 0: FF key auth OK"); detectedBrand = "ff" }
-                    authenticateSectorWithRetry(
-                        mifare, 0,
-                        keysA = listOf(crealityKeyA),
-                        keysB = listOf(ffKey)
-                    ) -> { logStep("Sector 0: Creality derived key auth OK"); detectedBrand = "creality" }
-                    authenticateSectorWithRetry(
-                        mifare, 0,
-                        keysA = listOf(snapKeysA[0]),
-                        keysB = listOf(snapKeysB[0])
-                    ) -> { logStep("Sector 0: Snapmaker derived key auth OK"); detectedBrand = "snapmaker" }
-                    else -> return fail(uiString(R.string.format_failed_sector0_all_failed))
-                }
-                readBlockWithRetry(mifare, 0) ?: return fail(uiString(R.string.format_failed_read_block0))
-            }
-            logStep("Detected brand: $detectedBrand — subsequent sectors prefer this key")
-            logStep("Block 0 read OK (used for final verify)")
-
-            fun runStep3VerifyByFf(): String? {
-                for (sector in 0 until targetSectorCount) {
-                    logStep("Step 3/3 sector $sector: verify with FF key")
-                    val authOk = authenticateSectorWithRetry(
-                        mifare = mifare,
-                        sectorIndex = sector,
-                        keysA = listOf(ffKey),
-                        keysB = listOf(ffKey)
-                    )
-                    if (!authOk) {
-                        return uiString(R.string.format_verify_failed_ff_auth_format, sector)
-                    }
-                    val startBlock = mifare.sectorToBlock(sector)
-                    for (offset in 0 until 4) {
-                        val blockIndex = startBlock + offset
-                        val actual = readBlockWithRetry(mifare, blockIndex)
-                            ?: return uiString(R.string.format_verify_failed_read_format, blockIndex)
-                        if (blockIndex == 0) {
-                            if (!actual.contentEquals(originalBlock0)) {
-                                return uiString(R.string.format_verify_failed_block0)
-                            }
-                        } else if (blockIndex % 4 == 3) {
-                            // trailer 不参与"清零校验"，本步骤只要求 FF 可认证即可。
-                            continue
-                        } else if (!actual.all { it == 0.toByte() }) {
-                            return uiString(R.string.format_verify_failed_not_zero_format, blockIndex)
-                        }
-                    }
-                    logStep("Sector $sector: verify passed")
-                }
-                return null
-            }
-
-            val maxStep3RetryCount = 2
-            for (attempt in 0..maxStep3RetryCount) {
-                if (attempt > 0) {
-                    logStep("Step-3 FF verify failed — retry $attempt/$maxStep3RetryCount")
-                }
-
-                // 第一步：重置所有扇区 trailer 为 FF，优先使用第0扇区检测到的品牌秘钥
-                // brandOrder: 检测品牌排第一，其余依次
-                val allBrands = listOf("bambu", "ff", "creality", "snapmaker")
-                val brandOrder = listOf(detectedBrand) + (allBrands - detectedBrand)
-
-                for (sector in 0 until targetSectorCount) {
-                    logStep("Step 1/3 sector $sector: reset trailer (priority brand: $detectedBrand)")
-                    var sectorDone = false
-                    for (brand in brandOrder) {
-                        if (sectorDone) break
-                        when (brand) {
-                            "bambu" -> {
-                                val auth = authenticateSectorWithRetry(
-                                    mifare, sector,
-                                    keysA = listOf(derivedKeysA[sector]),
-                                    keysB = listOf(derivedKeysB[sector])
-                                )
-                                if (auth) {
-                                    logStep("Sector $sector: Bambu derived key auth OK, reset trailer")
-                                    if (!resetTrailerByDerivedKeyBStages(sector))
-                                        return fail(uiString(R.string.format_failed_bambu_trailer_reset_format, sector))
-                                    logStep("Sector $sector: Bambu trailer reset OK")
-                                    sectorDone = true
-                                }
-                            }
-                            "ff" -> {
-                                val auth = authenticateSectorWithRetry(
-                                    mifare, sector,
-                                    keysA = listOf(ffKey),
-                                    keysB = listOf(ffKey)
-                                )
-                                if (auth) {
-                                    logStep("Sector $sector: FF auth OK, check access bits")
-                                    val trailerBlock = mifare.sectorToBlock(sector) + 3
-                                    val trailerData = readBlockWithRetry(mifare, trailerBlock)
-                                    if (trailerData != null) {
-                                        val currentAccess = trailerData.copyOfRange(6, 10)
-                                        if (!currentAccess.contentEquals(accessDefault)) {
-                                            logStep("Sector $sector: access bits non-standard, fix to FF078069")
-                                            val reAuthKeyB = authenticateSectorWithRetry(
-                                                mifare, sector,
-                                                keysA = emptyList(),
-                                                keysB = listOf(ffKey)
-                                            )
-                                            if (reAuthKeyB && writeBlockWithRetry(mifare, trailerBlock, buildTrailer(ffKey, accessDefault, ffKey))) {
-                                                logStep("Sector $sector: access bits fixed OK")
-                                            } else {
-                                                logStep("Sector $sector: access bits fix failed, continue")
-                                            }
-                                        } else {
-                                            logStep("Sector $sector: access bits already FF078069")
-                                        }
-                                    }
-                                    sectorDone = true
-                                }
-                            }
-                            "creality" -> {
-                                val auth = authenticateSectorWithRetry(
-                                    mifare, sector,
-                                    keysA = listOf(crealityKeyA),
-                                    keysB = listOf(ffKey)
-                                )
-                                if (auth) {
-                                    logStep("Sector $sector: Creality derived key auth OK, reset trailer")
-                                    if (!resetTrailerByCrealityDerivedKey(sector))
-                                        return fail(uiString(R.string.format_failed_creality_trailer_reset_format, sector))
-                                    logStep("Sector $sector: Creality trailer reset OK")
-                                    sectorDone = true
-                                }
-                            }
-                            "snapmaker" -> {
-                                val auth = authenticateSectorWithRetry(
-                                    mifare, sector,
-                                    keysA = listOf(snapKeysA[sector]),
-                                    keysB = listOf(snapKeysB[sector])
-                                )
-                                if (auth) {
-                                    logStep("Sector $sector: Snapmaker derived key auth OK, reset trailer")
-                                    if (!resetTrailerBySnapmakerDerivedKeys(sector))
-                                        return fail(uiString(R.string.format_failed_snapmaker_trailer_reset_format, sector))
-                                    logStep("Sector $sector: Snapmaker trailer reset OK")
-                                    sectorDone = true
-                                }
-                            }
-                        }
-                    }
-                    if (!sectorDone) return fail(uiString(R.string.format_failed_all_keys_failed_format, sector))
-                }
-                logStep("All trailers reset")
-
-                // 第二步：使用 FF/派生秘钥，将数据区块清零（不清 block0，不清 trailer）
-                for (sector in 0 until targetSectorCount) {
-                    logStep("Step 2/3 sector $sector: FF auth and zero blocks")
-                    val authOk = authenticateSectorWithRetry(
-                        mifare = mifare,
-                        sectorIndex = sector,
-                        keysA = listOf(ffKey, derivedKeysA[sector], crealityKeyA, snapKeysA[sector]),
-                        keysB = listOf(ffKey, derivedKeysB[sector], snapKeysB[sector])
-                    )
-                    if (!authOk) {
-                        return fail(uiString(R.string.format_failed_ff_auth_format, sector))
-                    }
-                    val startBlock = mifare.sectorToBlock(sector)
-                    for (offset in 0 until 4) {
-                        val blockIndex = startBlock + offset
-                        if (blockIndex == 0 || blockIndex % 4 == 3) {
-                            continue
-                        }
-                        if (!writeBlockWithRetry(mifare, blockIndex, zeroBlock)) {
-                            return fail(uiString(R.string.format_failed_block_write_format, blockIndex))
-                        }
-                    }
-                    logStep("Sector $sector: blocks zeroed")
-                }
-                logStep("Data blocks zeroed (block 0 and trailers skipped)")
-                onStatusUpdate?.invoke(uiString(R.string.format_checking))
-
-                val verifyError = runStep3VerifyByFf()
-                if (verifyError == null) {
-                    logStep("All verify passed")
-                    return uiString(R.string.format_success)
-                }
-
-                if (attempt < maxStep3RetryCount) {
-                    logStep("$verifyError — retrying from start (${attempt + 1}/$maxStep3RetryCount)")
-                    continue
-                }
-                return fail(verifyError)
-            }
-
-            fail(uiString(R.string.format_failed_max_retry))
-        } catch (e: Exception) {
-            logDebug("Format tag failed: ${e.message}\n${Log.getStackTraceString(e)}")
-            LogCollector.append(this, "E", "Format tag failed: ${e.message}")
-            appendDebugInfoDialog("Exception: ${e.message.orEmpty()}")
-            uiString(R.string.format_failed_format, e.message.orEmpty())
-        } finally {
-            try {
-                mifare.close()
-            } catch (_: Exception) {
-            }
+        return when (val result = BambuMifareOperator.run(
+            tag = tag,
+            config = nfcCompatibilityConfig,
+            operation = BambuNfcOperation.FormatToDefaultFf,
+            logger = ::logDebug,
+            appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
+            onStatus = { status -> onStatusUpdate?.invoke(status) }
+        )) {
+            is BambuNfcResult.Message -> result.message
+            is BambuNfcResult.Failure -> result.message
+            is BambuNfcResult.RawRead -> uiString(R.string.format_failed_format, "unexpected read result")
         }
     }
 
@@ -4447,77 +3711,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun verifyTagAgainstDump(tag: Tag, item: ShareTagItem): String {
-        val mifare = MifareClassic.get(tag) ?: return uiString(R.string.verify_failed_no_mifare)
-        val sourceBlocks = item.rawBlocks
-        if (sourceBlocks.size < 64) {
-            return uiString(R.string.verify_failed_insufficient_blocks)
-        }
-
-        return try {
-            mifare.connect()
-            val readBackBlocks = MutableList<ByteArray?>(64) { null }
-            val targetSectorCount = minOf(WRITE_SECTOR_COUNT, mifare.sectorCount)
-            for (sector in 0 until targetSectorCount) {
-                val trailerIndex = sector * 4 + 3
-                val trailerData = sourceBlocks.getOrNull(trailerIndex)
-                    ?: return uiString(R.string.verify_sector_trailer_missing_format, sector)
-                if (trailerData.size != 16) {
-                    return uiString(R.string.verify_sector_trailer_size_format, sector)
-                }
-                val sourceKeyA = trailerData.copyOfRange(0, 6)
-                val sourceKeyB = trailerData.copyOfRange(10, 16)
-                val authenticated = authenticateSectorWithRetry(
-                    mifare = mifare,
-                    sectorIndex = sector,
-                    keysA = listOf(sourceKeyA),
-                    keysB = listOf(sourceKeyB)
-                )
-                if (!authenticated) {
-                    return uiString(R.string.verify_sector_auth_failed_format, sector)
-                }
-
-                val startBlock = mifare.sectorToBlock(sector)
-                for (offset in 0 until 4) {
-                    val blockIndex = startBlock + offset
-                    val actual = readBlockWithRetry(mifare, blockIndex)
-                        ?: return uiString(R.string.verify_block_read_failed_format, blockIndex)
-                    readBackBlocks[blockIndex] = actual
-                }
-            }
-
-            // 按"每行16进制文本"逐行比对，和源文件格式一致。
-            // trailer 块不校检秘钥位（0..5 和 10..15），仅校检访问位 6..9。
-            fun maskForCompare(blockIndex: Int, block: ByteArray?): ByteArray {
-                val data = (block ?: ByteArray(16)).copyOf()
-                if (blockIndex % 4 == 3 && data.size == 16) {
-                    for (i in 0..5) data[i] = 0x00
-                    for (i in 10..15) data[i] = 0x00
-                }
-                return data
-            }
-
-            val expectedLines = sourceBlocks.mapIndexed { index, block ->
-                maskForCompare(index, block).toHex().uppercase(Locale.US)
-            }
-            val actualLines = readBackBlocks.mapIndexed { index, block ->
-                maskForCompare(index, block).toHex().uppercase(Locale.US)
-            }
-            for (index in 0 until 64) {
-                val expected = expectedLines.getOrNull(index).orEmpty()
-                val actual = actualLines.getOrNull(index).orEmpty()
-                if (expected != actual) {
-                    return uiString(R.string.verify_line_mismatch_format, index + 1, expected, actual)
-                }
-            }
-
-            uiString(R.string.verify_success)
-        } catch (e: Exception) {
-            uiString(R.string.verify_failed_format, e.message.orEmpty())
-        } finally {
-            try {
-                mifare.close()
-            } catch (_: Exception) {
-            }
+        return when (val result = BambuMifareOperator.run(
+            tag = tag,
+            config = nfcCompatibilityConfig,
+            operation = BambuNfcOperation.VerifyDump(item.rawBlocks),
+            logger = ::logDebug,
+            appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }
+        )) {
+            is BambuNfcResult.Message -> result.message
+            is BambuNfcResult.Failure -> result.message
+            is BambuNfcResult.RawRead -> uiString(R.string.verify_failed_format, "unexpected read result")
         }
     }
 
@@ -5090,32 +4293,200 @@ class MainActivity : ComponentActivity() {
 
     // ── End Snapmaker ─────────────────────────────────────────────────────────
 
+    private fun runNfcCompatibilityTest(
+        tag: Tag,
+        includeWrite: Boolean,
+        onStatusUpdate: (String) -> Unit
+    ): String {
+        val uid = tag.id ?: return "NFC兼容性测试失败：无法读取UID"
+        if (MifareClassic.get(tag) == null) {
+            return "NFC兼容性测试失败：当前标签不是Mifare Classic，或手机系统未开放Mifare Classic"
+        }
+
+        val results = NfcCompatibilityMode.values().map { mode ->
+            val config = NfcCompatibilityConfig.forMode(mode)
+            onStatusUpdate("正在测试 ${nfcCompatibilityModeLabel(mode)} 模式...")
+            testNfcCompatibilityMode(tag, uid, config, includeWrite)
+        }
+
+        val successful = results
+            .filter { if (includeWrite) it.readOk && it.writeOk else it.readOk }
+            .maxByOrNull { it.score }
+
+        if (successful != null) {
+            runOnUiThread {
+                nfcCompatibilityConfig = NfcCompatibilityPreferences.saveMode(this, successful.mode)
+                refreshNfcReaderMode()
+            }
+        }
+
+        val summary = results.joinToString(separator = "；") { result ->
+            val readText = if (result.readOk) "读OK" else "读失败"
+            val writeText = if (includeWrite) {
+                if (result.writeOk) "/写OK" else "/写失败"
+            } else {
+                ""
+            }
+            "${nfcCompatibilityModeLabel(result.mode)}:$readText$writeText ${result.durationMs}ms"
+        }
+
+        return if (successful != null) {
+            "NFC兼容性测试成功，推荐并已应用：${nfcCompatibilityModeLabel(successful.mode)}。$summary"
+        } else if (includeWrite && results.any { it.readOk }) {
+            "NFC写入兼容性测试未找到可靠写入模式；只读可用。$summary"
+        } else {
+            "NFC兼容性测试未找到可用模式。$summary"
+        }
+    }
+
+    private fun testNfcCompatibilityMode(
+        tag: Tag,
+        uid: ByteArray,
+        config: NfcCompatibilityConfig,
+        includeWrite: Boolean
+    ): NfcCompatibilityTestResult {
+        val startedAt = System.currentTimeMillis()
+        val mifare = MifareClassic.get(tag) ?: return NfcCompatibilityTestResult(
+            mode = config.mode,
+            readOk = false,
+            writeOk = false,
+            durationMs = 0L,
+            message = "No MifareClassic"
+        )
+        return try {
+            mifare.connect()
+            MifareClassicSession.applyTimeout(mifare, config.mifareTimeoutMs)
+            if (config.postConnectDelayMs > 0) Thread.sleep(config.postConnectDelayMs)
+
+            val ffKey = ByteArray(6) { 0xFF.toByte() }
+            val bambuKeys = deriveBambuKeys(uid)
+            val sector = if (mifare.sectorCount > 1) 1 else 0
+            val keys = bambuKeys.getOrNull(sector)
+            val authenticated = MifareClassicSession.authenticateSectorWithRetry(
+                mifare = mifare,
+                sectorIndex = sector,
+                keysA = listOf(keys?.first, ffKey),
+                keysB = listOf(keys?.second, ffKey),
+                retryCount = config.authRetryCount,
+                reconnectDelayMs = config.reconnectDelayMs,
+                keyOrder = MifareClassicSession.KeyOrder.INTERLEAVED_BY_INDEX,
+                ensureConnectedBeforeAttempt = true,
+                reconnectAfterFailedAttempt = true,
+                mifareTimeoutMs = config.mifareTimeoutMs,
+                postConnectDelayMs = config.postConnectDelayMs
+            )
+            if (!authenticated) {
+                return NfcCompatibilityTestResult(
+                    mode = config.mode,
+                    readOk = false,
+                    writeOk = false,
+                    durationMs = System.currentTimeMillis() - startedAt,
+                    message = "Auth failed"
+                )
+            }
+
+            val dataBlock = mifare.sectorToBlock(sector) + if (sector == 0) 1 else 0
+            val original = readCompatibilityBlock(mifare, dataBlock, config)
+                ?: return NfcCompatibilityTestResult(
+                    mode = config.mode,
+                    readOk = false,
+                    writeOk = false,
+                    durationMs = System.currentTimeMillis() - startedAt,
+                    message = "Read failed"
+                )
+
+            val writeOk = if (includeWrite) {
+                writeCompatibilityBlock(mifare, dataBlock, original, config)
+            } else {
+                false
+            }
+
+            NfcCompatibilityTestResult(
+                mode = config.mode,
+                readOk = true,
+                writeOk = writeOk,
+                durationMs = System.currentTimeMillis() - startedAt
+            )
+        } catch (e: Exception) {
+            NfcCompatibilityTestResult(
+                mode = config.mode,
+                readOk = false,
+                writeOk = false,
+                durationMs = System.currentTimeMillis() - startedAt,
+                message = "${e.javaClass.simpleName}: ${e.message}"
+            )
+        } finally {
+            try {
+                mifare.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun readCompatibilityBlock(
+        mifare: MifareClassic,
+        blockIndex: Int,
+        config: NfcCompatibilityConfig
+    ): ByteArray? {
+        for (attempt in 0..config.blockRetryCount) {
+            try {
+                val raw = mifare.readBlock(blockIndex)
+                return when {
+                    raw.size == 16 -> raw
+                    raw.size > 16 -> raw.copyOf(16)
+                    else -> null
+                }
+            } catch (_: Exception) {
+                if (attempt < config.blockRetryCount && config.readInterBlockDelayMs > 0) {
+                    Thread.sleep(config.readInterBlockDelayMs)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun writeCompatibilityBlock(
+        mifare: MifareClassic,
+        blockIndex: Int,
+        data: ByteArray,
+        config: NfcCompatibilityConfig
+    ): Boolean {
+        for (attempt in 0..config.blockRetryCount) {
+            try {
+                if (config.writeInterBlockDelayMs > 0) Thread.sleep(config.writeInterBlockDelayMs)
+                mifare.writeBlock(blockIndex, data)
+                if (config.writeVerificationDelayMs > 0) Thread.sleep(config.writeVerificationDelayMs)
+                val readBack = readCompatibilityBlock(mifare, blockIndex, config)
+                if (readBack != null && readBack.contentEquals(data)) {
+                    return true
+                }
+            } catch (_: Exception) {
+                if (attempt < config.blockRetryCount && config.writeInterBlockDelayMs > 0) {
+                    Thread.sleep(config.writeInterBlockDelayMs)
+                }
+            }
+        }
+        return false
+    }
+
     private fun authenticateSectorWithRetry(
         mifare: MifareClassic,
         sectorIndex: Int,
         keysA: List<ByteArray?>,
         keysB: List<ByteArray?>
     ): Boolean {
-        for (attempt in 0..RW_AUTH_RETRY_COUNT) {
-            try {
-                if (!ensureMifareClassicConnected(mifare)) {
-                    continue
-                }
-                keysA.forEach { key ->
-                    if (key != null && mifare.authenticateSectorWithKeyA(sectorIndex, key)) {
-                        return true
-                    }
-                }
-                keysB.forEach { key ->
-                    if (key != null && mifare.authenticateSectorWithKeyB(sectorIndex, key)) {
-                        return true
-                    }
-                }
-            } catch (_: Exception) {
-                reconnectMifareClassic(mifare)
-            }
-        }
-        return false
+        return MifareClassicSession.authenticateSectorWithRetry(
+            mifare = mifare,
+            sectorIndex = sectorIndex,
+            keysA = keysA,
+            keysB = keysB,
+            retryCount = nfcCompatibilityConfig.authRetryCount,
+            reconnectDelayMs = nfcCompatibilityConfig.reconnectDelayMs,
+            keyOrder = MifareClassicSession.KeyOrder.ALL_A_THEN_ALL_B,
+            ensureConnectedBeforeAttempt = true,
+            mifareTimeoutMs = nfcCompatibilityConfig.mifareTimeoutMs,
+            postConnectDelayMs = nfcCompatibilityConfig.postConnectDelayMs
+        )
     }
 
     private fun writeBlockWithRetry(
@@ -5123,25 +4494,60 @@ class MainActivity : ComponentActivity() {
         blockIndex: Int,
         data: ByteArray
     ): Boolean {
-        for (attempt in 0..RW_BLOCK_RETRY_COUNT) {
+        for (attempt in 0..nfcCompatibilityConfig.blockRetryCount) {
             try {
                 if (!ensureMifareClassicConnected(mifare)) {
                     continue
                 }
+                if (nfcCompatibilityConfig.interBlockDelayMs > 0) {
+                    Thread.sleep(nfcCompatibilityConfig.interBlockDelayMs)
+                }
                 mifare.writeBlock(blockIndex, data)
-                return true
+                if (nfcCompatibilityConfig.writeVerificationDelayMs > 0) {
+                    Thread.sleep(nfcCompatibilityConfig.writeVerificationDelayMs)
+                }
+                if (!nfcCompatibilityConfig.verifyEachWriteBlock || isMifareTrailerBlock(mifare, blockIndex)) {
+                    return true
+                }
+                val readBack = try {
+                    mifare.readBlock(blockIndex)
+                } catch (_: Exception) {
+                    null
+                }?.let { raw ->
+                    when {
+                        raw.size == 16 -> raw
+                        raw.size > 16 -> raw.copyOf(16)
+                        else -> null
+                    }
+                }
+                if (readBack != null && readBack.contentEquals(data)) {
+                    return true
+                }
             } catch (_: Exception) {
-                reconnectMifareClassic(mifare)
+                if (!mifare.isConnected) {
+                    reconnectMifareClassic(mifare)
+                    return false
+                }
             }
         }
         return false
+    }
+
+    private fun isMifareTrailerBlock(mifare: MifareClassic, blockIndex: Int): Boolean {
+        return try {
+            val sector = mifare.blockToSector(blockIndex)
+            val firstBlock = mifare.sectorToBlock(sector)
+            blockIndex == firstBlock + mifare.getBlockCountInSector(sector) - 1
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun readBlockWithRetry(
         mifare: MifareClassic,
         blockIndex: Int
     ): ByteArray? {
-        for (attempt in 0..RW_BLOCK_RETRY_COUNT) {
+        for (attempt in 0..nfcCompatibilityConfig.blockRetryCount) {
             try {
                 if (!ensureMifareClassicConnected(mifare)) {
                     continue
@@ -5160,26 +4566,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun ensureMifareClassicConnected(mifare: MifareClassic): Boolean {
-        return if (mifare.isConnected) {
-            true
-        } else {
-            reconnectMifareClassic(mifare)
-        }
+        return MifareClassicSession.ensureConnected(
+            mifare = mifare,
+            reconnectDelayMs = nfcCompatibilityConfig.reconnectDelayMs,
+            mifareTimeoutMs = nfcCompatibilityConfig.mifareTimeoutMs,
+            postConnectDelayMs = nfcCompatibilityConfig.postConnectDelayMs
+        )
     }
 
     private fun reconnectMifareClassic(mifare: MifareClassic): Boolean {
-        return try {
-            try {
-                mifare.close()
-            } catch (_: Exception) {
-            }
-            Thread.sleep(RW_RECONNECT_DELAY_MS)
-            mifare.connect()
-            Thread.sleep(RW_RECONNECT_DELAY_MS)
-            true
-        } catch (_: Exception) {
-            false
-        }
+        return MifareClassicSession.reconnect(
+            mifare = mifare,
+            reconnectDelayMs = nfcCompatibilityConfig.reconnectDelayMs,
+            mifareTimeoutMs = nfcCompatibilityConfig.mifareTimeoutMs,
+            postConnectDelayMs = nfcCompatibilityConfig.postConnectDelayMs
+        )
     }
 
     private fun deriveWriteKeys(uid: ByteArray, info: ByteArray): List<ByteArray> {
@@ -5341,6 +4742,7 @@ class MainActivity : ComponentActivity() {
         val rawResult = NfcTagReader.readRaw(
             tag = tag,
             readAllSectors = readAllSectors || autoShareTag,
+            compatibilityConfig = nfcCompatibilityConfig,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }
         )
@@ -5455,1400 +4857,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-private data class FilamentJsonSource(
-    val jsonText: String,
-    val lastModified: Long
-)
-
-private data class FilamentTypeMappingEntry(
-    val baseType: String,
-    val specificType: String
-)
-
-internal fun syncFilamentDatabase(context: Context, dbHelper: FilamentDbHelper) {
-    // 同步filaments_color_codes.json
-    val colorSource = readFilamentJsonFromExternal(context) ?: return
-    logDebug("配置文件更新时间: ${colorSource.lastModified}")
-    val colorCacheFile = File(context.cacheDir, FILAMENT_JSON_NAME)
-    try {
-        colorCacheFile.writeText(colorSource.jsonText, Charsets.UTF_8)
-    } catch (_: IOException) {
-        // Ignore cache write failures.
-    }
-
-    // 同步filaments_type_mapping.json
-    val typeSource = readFilamentTypeMappingFromExternal(context) ?: return
-    logDebug("耗材类型映射文件更新时间: ${typeSource.lastModified}")
-    val typeCacheFile = File(context.cacheDir, FILAMENTS_TYPE_MAPPING_FILE)
-    try {
-        typeCacheFile.writeText(typeSource.jsonText, Charsets.UTF_8)
-    } catch (_: IOException) {
-        // Ignore cache write failures.
-    }
-
-    val db = dbHelper.writableDatabase
-    val colorHash = com.m0h31h31.bamburfidreader.utils.NetworkUtils.calculateHash(colorSource.jsonText.toByteArray(Charsets.UTF_8))
-    val typeHash = com.m0h31h31.bamburfidreader.utils.NetworkUtils.calculateHash(typeSource.jsonText.toByteArray(Charsets.UTF_8))
-    val storedColorHash = dbHelper.getMetaValue(db, "filament_color_content_hash")
-    val storedTypeHash = dbHelper.getMetaValue(db, "filament_type_content_hash")
-    val currentLocale = Locale.getDefault().language.lowercase(Locale.US)
-    val storedLocale = dbHelper.getMetaValue(db, FILAMENT_META_KEY_LOCALE)
-
-    // 检查是否需要更新（用内容 hash，避免 lastModified 不可靠的问题）
-    if (storedColorHash == colorHash && storedTypeHash == typeHash && storedLocale == currentLocale) {
-        logDebug("配置文件未变化，跳过更新")
-        return
-    }
-
-    val entries = parseFilamentEntries(colorSource.jsonText)
-    val typeEntries = parseFilamentTypeMappingEntries(typeSource.jsonText)
-    db.beginTransaction()
-    try {
-        // 清空并重新写入filaments表
-        db.delete(FILAMENT_TABLE, null, null)
-        val values = ContentValues()
-        entries.forEach { entry ->
-                values.clear()
-                values.put("fila_id", entry.filaId)
-                values.put("fila_color_code", entry.colorCode)
-                values.put("fila_color_type", entry.colorType)
-                values.put("fila_type", entry.filaType)
-                val detailedType = entry.filaDetailedType
-                if (detailedType.isNotBlank()) {
-                    values.put("fila_detailed_type", detailedType)
-                }
-                values.put("color_name_zh", entry.colorNameZh)
-                values.put("color_name_en", entry.colorNameEn)
-                values.put("color_values", entry.colorValues.joinToString(separator = ","))
-                values.put("color_count", entry.colorCount)
-                db.insertWithOnConflict(
-                    FILAMENT_TABLE,
-                    null,
-                    values,
-                    SQLiteDatabase.CONFLICT_REPLACE
-                )
-            }
-        
-        // 清空并重新写入filament_type_mapping表
-        db.delete(FILAMENT_TYPE_MAPPING_TABLE, null, null)
-        typeEntries.forEach { entry ->
-            values.clear()
-            values.put("base_type", entry.baseType)
-            values.put("specific_type", entry.specificType)
-            db.insertWithOnConflict(
-                FILAMENT_TYPE_MAPPING_TABLE,
-                null,
-                values,
-                SQLiteDatabase.CONFLICT_REPLACE
-            )
-        }
-        
-        dbHelper.setMetaValue(db, "filament_color_content_hash", colorHash)
-        dbHelper.setMetaValue(db, "filament_type_content_hash", typeHash)
-        dbHelper.setMetaValue(db, FILAMENT_META_KEY_LOCALE, currentLocale)
-        db.setTransactionSuccessful()
-        logDebug("配置数据写入完成: ${entries.size} 个颜色配置, ${typeEntries.size} 个类型映射")
-    } finally {
-        db.endTransaction()
-    }
-    rematchUnnamedInventoryColors(db)
-}
-
-private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
-    var updated = 0
-
-    val invCursor = db.query(
-        TRAY_UID_TABLE,
-        arrayOf("tray_uid", "material_id", "color_values"),
-        "material_id IS NOT NULL AND material_id != ''",
-        null, null, null, null
-    )
-    invCursor.use {
-        while (it.moveToNext()) {
-            val trayUid = it.getString(0) ?: continue
-            val materialId = it.getString(1) ?: continue
-            val rawColors = it.getString(2).orEmpty()
-                .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
-            val matched = findFilamentEntryInDb(db, materialId, rawColors) ?: continue
-            val values = ContentValues()
-            values.put("color_name", matched.resolvedColorName())
-            values.put("color_name_en", matched.colorNameEn)
-            values.put("color_code", matched.colorCode)
-            values.put("color_type", matched.colorType)
-            db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
-            updated++
-        }
-    }
-
-    val tagCursor = db.query(
-        SHARE_TAGS_TABLE,
-        arrayOf("file_uid", "color_uid", "color_values"),
-        "color_uid IS NOT NULL AND color_uid != ''",
-        null, null, null, null
-    )
-    tagCursor.use {
-        while (it.moveToNext()) {
-            val fileUid = it.getString(0) ?: continue
-            val colorUid = it.getString(1) ?: continue
-            val rawColors = it.getString(2).orEmpty()
-                .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
-            val matched = findFilamentEntryInDb(db, colorUid, rawColors) ?: continue
-            val values = ContentValues()
-            values.put("color_name", matched.resolvedColorName())
-            values.put("color_name_en", matched.colorNameEn)
-            values.put("color_type", matched.colorType)
-            db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
-            updated++
-        }
-    }
-
-    if (updated > 0) logDebug("颜色重新匹配完成: $updated 条记录已更新")
-}
-
-private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, colorValues: List<String>): FilamentColorEntry? {
-    fun query(selection: String, args: Array<String>): List<FilamentColorEntry> {
-        val list = mutableListOf<FilamentColorEntry>()
-        db.query(
-            FILAMENT_TABLE,
-            arrayOf("fila_color_code", "fila_id", "fila_color_type", "fila_type", "fila_detailed_type", "color_name_zh", "color_name_en", "color_values", "color_count"),
-            selection, args, null, null, "fila_color_code ASC"
-        ).use { c ->
-            while (c.moveToNext()) {
-                val cv = c.getString(7)?.split(',')
-                    ?.map { normalizeColorValue(it.trim()) }?.filter { it.isNotEmpty() }
-                    ?: emptyList()
-                list.add(FilamentColorEntry(
-                    colorCode = c.getString(0).orEmpty(),
-                    filaId = c.getString(1).orEmpty(),
-                    colorType = c.getString(2).orEmpty(),
-                    filaType = c.getString(3).orEmpty(),
-                    filaDetailedType = c.getString(4).orEmpty(),
-                    colorNameZh = c.getString(5).orEmpty(),
-                    colorNameEn = c.getString(6).orEmpty(),
-                    colorValues = cv,
-                    colorCount = c.getInt(8)
-                ))
-            }
-        }
-        return list
-    }
-
-    val candidates = if (colorValues.isNotEmpty()) {
-        val byCount = query("fila_id = ? AND color_count = ?", arrayOf(filaId, colorValues.size.toString()))
-        byCount.ifEmpty { query("fila_id = ?", arrayOf(filaId)) }
-    } else {
-        query("fila_id = ?", arrayOf(filaId))
-    }
-
-    if (colorValues.isEmpty()) return candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
-    val normalized = colorValues.sorted()
-    return candidates.firstOrNull { it.colorValues.sorted() == normalized && it.resolvedColorName().isNotBlank() }
-        ?: candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
-}
-
-internal fun syncCrealityMaterialDatabase(context: Context, dbHelper: FilamentDbHelper) {
-    val externalDir = context.getExternalFilesDir(null) ?: return
-    val externalFile = File(externalDir, CREALITY_MATERIAL_FILE)
-    if (!externalFile.exists()) {
-        try {
-            context.assets.open(CREALITY_MATERIAL_FILE).use { i ->
-                externalFile.outputStream().use { o -> i.copyTo(o) }
-            }
-        } catch (_: IOException) { return }
-    }
-    if (!externalFile.exists()) return
-    val jsonText = try { externalFile.readText(Charsets.UTF_8) } catch (_: IOException) { return }
-    val db = dbHelper.writableDatabase
-    val fileHash = jsonText.hashCode().toString()
-    val storedHash = dbHelper.getMetaValue(db, "creality_material_hash")
-    if (storedHash == fileHash) return
-    try {
-        val materials = JSONObject(jsonText).optJSONArray("materials") ?: return
-        db.beginTransaction()
-        try {
-            db.delete(CREALITY_MATERIAL_TABLE, null, null)
-            val values = ContentValues()
-            for (i in 0 until materials.length()) {
-                val m = materials.getJSONObject(i)
-                values.clear()
-                values.put("material_id", m.optString("id"))
-                values.put("brand", m.optString("brand"))
-                values.put("material_type", m.optString("meterialType"))
-                values.put("name", m.optString("name"))
-                values.put("min_temp", m.optInt("minTemp"))
-                values.put("max_temp", m.optInt("maxTemp"))
-                values.put("diameter", m.optString("diameter"))
-                db.insertWithOnConflict(CREALITY_MATERIAL_TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE)
-            }
-            dbHelper.setMetaValue(db, "creality_material_hash", fileHash)
-            db.setTransactionSuccessful()
-            logDebug("创想三维耗材数据写入完成: ${materials.length()} 条")
-        } finally {
-            db.endTransaction()
-        }
-    } catch (e: Exception) {
-        logDebug("同步创想三维耗材数据失败: ${e.message}")
-    }
-}
-
-private fun readFilamentJsonFromExternal(context: Context): FilamentJsonSource? {
-    val externalDir = context.getExternalFilesDir(null) ?: return null
-    val externalFile = File(externalDir, FILAMENT_JSON_NAME)
-    try {
-        val assetBytes = context.assets.open(FILAMENT_JSON_NAME).use { it.readBytes() }
-        val prefs = context.getSharedPreferences("config_asset_hashes", Context.MODE_PRIVATE)
-        val storedAssetHash = prefs.getString("color_codes_asset_hash", null)
-        val assetHash = com.m0h31h31.bamburfidreader.utils.NetworkUtils.calculateHash(assetBytes)
-        if (!externalFile.exists() || storedAssetHash != assetHash) {
-            externalFile.outputStream().use { it.write(assetBytes) }
-            prefs.edit().putString("color_codes_asset_hash", assetHash).apply()
-        }
-    } catch (_: IOException) {
-        if (!externalFile.exists()) return null
-    }
-    if (!externalFile.exists()) return null
-    val jsonText = try {
-        externalFile.readText(Charsets.UTF_8)
-    } catch (_: IOException) {
-        return null
-    }
-    return FilamentJsonSource(jsonText, externalFile.lastModified())
-}
-
-private fun readFilamentTypeMappingFromExternal(context: Context): FilamentJsonSource? {
-    val externalDir = context.getExternalFilesDir(null) ?: return null
-    val externalFile = File(externalDir, FILAMENTS_TYPE_MAPPING_FILE)
-    try {
-        val assetBytes = context.assets.open(FILAMENTS_TYPE_MAPPING_FILE).use { it.readBytes() }
-        val prefs = context.getSharedPreferences("config_asset_hashes", Context.MODE_PRIVATE)
-        val storedAssetHash = prefs.getString("type_mapping_asset_hash", null)
-        val assetHash = com.m0h31h31.bamburfidreader.utils.NetworkUtils.calculateHash(assetBytes)
-        if (!externalFile.exists() || storedAssetHash != assetHash) {
-            externalFile.outputStream().use { it.write(assetBytes) }
-            prefs.edit().putString("type_mapping_asset_hash", assetHash).apply()
-        }
-    } catch (_: IOException) {
-        if (!externalFile.exists()) return null
-    }
-    if (!externalFile.exists()) return null
-    val jsonText = try {
-        externalFile.readText(Charsets.UTF_8)
-    } catch (_: IOException) {
-        return null
-    }
-    return FilamentJsonSource(jsonText, externalFile.lastModified())
-}
-
-private fun parseFilamentEntries(jsonText: String): List<FilamentColorEntry> {
-    val root = try {
-        JSONObject(jsonText)
-    } catch (_: Exception) {
-        return emptyList()
-    }
-    val data = root.optJSONArray("data") ?: JSONArray()
-    val entries = ArrayList<FilamentColorEntry>(data.length())
-    for (i in 0 until data.length()) {
-        val item = data.optJSONObject(i) ?: continue
-        val filaId = item.optString("fila_id")
-        if (filaId.isBlank()) {
-            continue
-        }
-        val colorNames = item.optJSONObject("fila_color_name")
-        val colorNameZh = resolveColorName(colorNames, "zh")
-        val colorNameEn = resolveColorName(colorNames, "en")
-        val colorsArray = item.optJSONArray("fila_color")
-        val colorValues = ArrayList<String>()
-        if (colorsArray != null) {
-            for (j in 0 until colorsArray.length()) {
-                val value = normalizeColorValue(colorsArray.optString(j))
-                if (value.isNotBlank()) {
-                    colorValues.add(value)
-                }
-            }
-        }
-        entries.add(
-            FilamentColorEntry(
-                colorCode = item.optString("fila_color_code"),
-                filaId = filaId,
-                colorType = item.optString("fila_color_type"),
-                filaType = item.optString("fila_type"),
-                colorNameZh = colorNameZh,
-                colorNameEn = colorNameEn,
-                colorValues = colorValues.toList(),
-                colorCount = colorValues.size
-            )
-        )
-    }
-    return entries
-}
-
-private fun parseFilamentTypeMappingEntries(jsonText: String): List<FilamentTypeMappingEntry> {
-    val root = try {
-        JSONObject(jsonText)
-    } catch (_: Exception) {
-        return emptyList()
-    }
-    val entries = ArrayList<FilamentTypeMappingEntry>()
-    val keys = root.keys()
-    while (keys.hasNext()) {
-        val baseType = keys.next()
-        val specificTypes = root.optJSONArray(baseType)
-        if (specificTypes != null) {
-            for (i in 0 until specificTypes.length()) {
-                val specificType = specificTypes.optString(i)
-                if (specificType.isNotBlank()) {
-                    entries.add(
-                        FilamentTypeMappingEntry(
-                            baseType = baseType,
-                            specificType = specificType
-                        )
-                    )
-                }
-            }
-        }
-    }
-    return entries
-}
-
-private fun resolveColorName(colorNames: JSONObject?, language: String): String {
-    if (colorNames == null) {
-        return ""
-    }
-    val normalized = language.lowercase(Locale.US)
-    val direct = colorNames.optString(normalized).orEmpty()
-    if (direct.isNotBlank()) {
-        return direct
-    }
-    val fallback = colorNames.optString("en").orEmpty()
-    if (fallback.isNotBlank()) {
-        return fallback
-    }
-    val zh = colorNames.optString("zh").orEmpty()
-    if (zh.isNotBlank()) {
-        return zh
-    }
-    val keys = colorNames.keys()
-    if (keys.hasNext()) {
-        val firstKey = keys.next()
-        return colorNames.optString(firstKey).orEmpty()
-    }
-    return ""
-}
-
-class FilamentDbHelper(val context: Context) :
-    SQLiteOpenHelper(context, FILAMENT_DB_NAME, null, FILAMENT_DB_VERSION) {
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE IF NOT EXISTS $CREALITY_MATERIAL_TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                material_id TEXT NOT NULL UNIQUE,
-                brand TEXT,
-                material_type TEXT,
-                name TEXT,
-                min_temp INTEGER,
-                max_temp INTEGER,
-                diameter TEXT
-            )
-        """.trimIndent())
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $FILAMENT_TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fila_id TEXT NOT NULL,
-                fila_color_code TEXT NOT NULL,
-                fila_color_type TEXT,
-                fila_type TEXT,
-                fila_detailed_type TEXT,
-                color_name_zh TEXT,
-                color_name_en TEXT,
-                color_values TEXT,
-                color_count INTEGER,
-                UNIQUE (fila_id, fila_color_code)
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color ON $FILAMENT_TABLE (fila_id, color_count)"
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $FILAMENT_META_TABLE (
-                meta_key TEXT PRIMARY KEY,
-                value TEXT
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS "$TRAY_UID_TABLE" (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tray_uid TEXT UNIQUE NOT NULL,
-                remaining_percent REAL NOT NULL,
-                remaining_grams INTEGER,
-                total_weight_grams INTEGER,
-                filament_id INTEGER,
-                material_id TEXT,
-                material_type TEXT,
-                material_detailed_type TEXT,
-                color_name TEXT,
-                color_name_en TEXT,
-                color_code TEXT,
-                color_type TEXT,
-                color_values TEXT,
-                original_material TEXT,
-                notes TEXT,
-                FOREIGN KEY (filament_id) REFERENCES $FILAMENT_TABLE(id)
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $FILAMENT_TYPE_MAPPING_TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                base_type TEXT NOT NULL,
-                specific_type TEXT NOT NULL,
-                UNIQUE (base_type, specific_type)
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            "CREATE INDEX IF NOT EXISTS idx_filament_type_mapping_base_type ON $FILAMENT_TYPE_MAPPING_TABLE (base_type)"
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $SHARE_TAGS_TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_uid TEXT UNIQUE NOT NULL,
-                tray_uid TEXT,
-                material_type TEXT,
-                color_uid TEXT,
-                color_name TEXT,
-                color_name_en TEXT,
-                color_type TEXT,
-                color_values TEXT,
-                raw_data TEXT,
-                copy_count INTEGER NOT NULL DEFAULT 0,
-                verified INTEGER NOT NULL DEFAULT 0,
-                production_date TEXT
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $SNAPMAKER_SHARE_TAGS_TABLE (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                uid TEXT UNIQUE NOT NULL,
-                vendor TEXT,
-                manufacturer TEXT,
-                main_type INTEGER NOT NULL DEFAULT 0,
-                diameter INTEGER NOT NULL DEFAULT 0,
-                weight INTEGER NOT NULL DEFAULT 0,
-                rgb1 INTEGER NOT NULL DEFAULT 0,
-                mf_date TEXT,
-                raw_data TEXT,
-                copy_count INTEGER NOT NULL DEFAULT 0
-            )
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
-            CREATE TABLE IF NOT EXISTS $ANOMALY_UIDS_TABLE (
-                uid TEXT PRIMARY KEY NOT NULL,
-                report_count INTEGER NOT NULL DEFAULT 1,
-                synced_at INTEGER NOT NULL
-            )
-            """.trimIndent()
-        )
-    }
-
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion < 4) {
-            db.execSQL("DROP TABLE IF EXISTS $FILAMENT_TABLE")
-            db.execSQL("DROP TABLE IF EXISTS $FILAMENT_META_TABLE")
-            db.execSQL("DROP TABLE IF EXISTS \"$TRAY_UID_TABLE\"")
-            onCreate(db)
-            return
-        }
-        if (oldVersion < 5) {
-            addTrayColumn(db, "material_id", "TEXT")
-            addTrayColumn(db, "material_type", "TEXT")
-            addTrayColumn(db, "color_name", "TEXT")
-            addTrayColumn(db, "color_code", "TEXT")
-            addTrayColumn(db, "color_type", "TEXT")
-            addTrayColumn(db, "color_values", "TEXT")
-        }
-        if (oldVersion < 8) {
-            addTrayColumn(db, "remaining_grams", "INTEGER")
-        }
-        if (oldVersion < 7) {
-            db.execSQL("DROP TABLE IF EXISTS meta")
-            db.execSQL("DROP TABLE IF EXISTS $FILAMENT_META_TABLE")
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $FILAMENT_META_TABLE (
-                    meta_key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-                """.trimIndent()
-            )
-        }
-        if (oldVersion < 9) {
-            // 为filament表添加id字段
-            val tempFilamentTable = "${FILAMENT_TABLE}_temp"
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $tempFilamentTable (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    fila_id TEXT NOT NULL,
-                    fila_color_code TEXT NOT NULL,
-                    fila_color_type TEXT,
-                    fila_type TEXT,
-                    color_name_zh TEXT,
-                    color_values TEXT,
-                    color_count INTEGER,
-                    UNIQUE (fila_id, fila_color_code)
-                )
-                """.trimIndent()
-            )
-            db.execSQL(
-                "INSERT INTO $tempFilamentTable (fila_id, fila_color_code, fila_color_type, fila_type, color_name_zh, color_values, color_count) " +
-                "SELECT fila_id, fila_color_code, fila_color_type, fila_type, color_name_zh, color_values, color_count FROM $FILAMENT_TABLE"
-            )
-            db.execSQL("DROP TABLE IF EXISTS $FILAMENT_TABLE")
-            db.execSQL("ALTER TABLE $tempFilamentTable RENAME TO $FILAMENT_TABLE")
-            db.execSQL(
-                "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color ON $FILAMENT_TABLE (fila_id, color_count)"
-            )
-            
-            // 为filament_inventory表添加id和filament_id字段
-            val tempInventoryTable = "${TRAY_UID_TABLE}_temp"
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS "$tempInventoryTable" (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tray_uid TEXT UNIQUE NOT NULL,
-                    remaining_percent REAL NOT NULL,
-                    remaining_grams INTEGER,
-                    total_weight_grams INTEGER,
-                    filament_id INTEGER,
-                    FOREIGN KEY (filament_id) REFERENCES $FILAMENT_TABLE(id)
-                )
-                """.trimIndent()
-            )
-            // 这里需要处理数据迁移，将旧表中的数据迁移到新表
-            // 由于我们需要通过fila_id和color_code关联到filament表的id，这里需要使用临时方案
-            // 实际应用中，可能需要更复杂的数据迁移逻辑
-            db.execSQL(
-                "INSERT INTO \"$tempInventoryTable\" (tray_uid, remaining_percent, remaining_grams, total_weight_grams) " +
-                "SELECT tray_uid, remaining_percent, remaining_grams, total_weight_grams FROM \"$TRAY_UID_TABLE\""
-            )
-            db.execSQL("DROP TABLE IF EXISTS \"$TRAY_UID_TABLE\"")
-            db.execSQL("ALTER TABLE \"$tempInventoryTable\" RENAME TO \"$TRAY_UID_TABLE\"")
-        }
-        if (oldVersion < 10) {
-            // 创建filament_type_mapping表
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $FILAMENT_TYPE_MAPPING_TABLE (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    base_type TEXT NOT NULL,
-                    specific_type TEXT NOT NULL,
-                    UNIQUE (base_type, specific_type)
-                )
-                """.trimIndent()
-            )
-            db.execSQL(
-                "CREATE INDEX IF NOT EXISTS idx_filament_type_mapping_base_type ON $FILAMENT_TYPE_MAPPING_TABLE (base_type)"
-            )
-        }
-        if (oldVersion < 11) {
-            // 添加总克重字段
-            addTrayColumn(db, "total_weight_grams", "INTEGER")
-        }
-        if (oldVersion < 12) {
-            // 为filament表添加详细耗材类型字段
-            try {
-                db.execSQL("ALTER TABLE $FILAMENT_TABLE ADD COLUMN fila_detailed_type TEXT")
-            } catch (_: Exception) {
-                // Ignore duplicate column errors.
-            }
-        }
-        if (oldVersion < 13) {
-            // 为filament_inventory表添加详细材料类型字段
-            addTrayColumn(db, "material_detailed_type", "TEXT")
-        }
-        if (oldVersion < 14) {
-            // 为filament_inventory表添加原始耗材和备注字段
-            addTrayColumn(db, "original_material", "TEXT")
-            addTrayColumn(db, "notes", "TEXT")
-        }
-        if (oldVersion < 15) {
-            db.execSQL(
-                """
-                CREATE TABLE IF NOT EXISTS $SHARE_TAGS_TABLE (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    file_uid TEXT UNIQUE NOT NULL,
-                    tray_uid TEXT,
-                    material_type TEXT,
-                    color_uid TEXT,
-                    color_name TEXT,
-                    color_type TEXT,
-                    color_values TEXT,
-                    raw_data TEXT,
-                    copy_count INTEGER NOT NULL DEFAULT 0,
-                    verified INTEGER NOT NULL DEFAULT 0
-                )
-                """.trimIndent()
-            )
-        }
-        if (oldVersion < 16) {
-            try {
-                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN raw_data TEXT")
-            } catch (_: Exception) { }
-        }
-        if (oldVersion < 17) {
-            try {
-                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN production_date TEXT")
-            } catch (_: Exception) { }
-        }
-        if (oldVersion < 18) {
-            db.execSQL("""
-                CREATE TABLE IF NOT EXISTS $CREALITY_MATERIAL_TABLE (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    material_id TEXT NOT NULL UNIQUE,
-                    brand TEXT,
-                    material_type TEXT,
-                    name TEXT,
-                    min_temp INTEGER,
-                    max_temp INTEGER,
-                    diameter TEXT
-                )
-            """.trimIndent())
-        }
-        if (oldVersion < 19) {
-            db.execSQL("""
-                CREATE TABLE IF NOT EXISTS $SNAPMAKER_SHARE_TAGS_TABLE (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    uid TEXT UNIQUE NOT NULL,
-                    vendor TEXT,
-                    manufacturer TEXT,
-                    main_type INTEGER NOT NULL DEFAULT 0,
-                    diameter INTEGER NOT NULL DEFAULT 0,
-                    weight INTEGER NOT NULL DEFAULT 0,
-                    rgb1 INTEGER NOT NULL DEFAULT 0,
-                    mf_date TEXT,
-                    raw_data TEXT,
-                    copy_count INTEGER NOT NULL DEFAULT 0
-                )
-            """.trimIndent())
-        }
-        if (oldVersion < 20) {
-            db.execSQL("""
-                CREATE TABLE IF NOT EXISTS $ANOMALY_UIDS_TABLE (
-                    uid TEXT PRIMARY KEY NOT NULL,
-                    report_count INTEGER NOT NULL DEFAULT 1,
-                    synced_at INTEGER NOT NULL
-                )
-            """.trimIndent())
-        }
-        if (oldVersion < 21) {
-            try {
-                db.execSQL("ALTER TABLE $ANOMALY_UIDS_TABLE ADD COLUMN report_count INTEGER NOT NULL DEFAULT 1")
-            } catch (_: Exception) {}
-        }
-        if (oldVersion < 22) {
-            try {
-                db.execSQL("ALTER TABLE $FILAMENT_TABLE ADD COLUMN color_name_en TEXT")
-            } catch (_: Exception) {}
-        }
-        if (oldVersion < 23) {
-            try {
-                db.execSQL("ALTER TABLE \"$TRAY_UID_TABLE\" ADD COLUMN color_name_en TEXT")
-            } catch (_: Exception) {}
-            try {
-                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN color_name_en TEXT")
-            } catch (_: Exception) {}
-            // Force full re-sync on next launch to populate color_name_en in filaments
-            // and backfill inventory/share_tags via rematchUnnamedInventoryColors().
-            try {
-                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
-            } catch (_: Exception) {}
-        }
-    }
-
-    private fun addTrayColumn(db: SQLiteDatabase, column: String, type: String) {
-        try {
-            db.execSQL("ALTER TABLE \"$TRAY_UID_TABLE\" ADD COLUMN $column $type")
-        } catch (_: Exception) {
-            // Ignore duplicate column errors.
-        }
-    }
-
-    // --- share_tags 相关方法 ---
-
-    fun insertShareTag(
-        db: SQLiteDatabase,
-        fileUid: String,
-        trayUid: String?,
-        materialType: String?,
-        colorUid: String?,
-        colorName: String?,
-        colorNameEn: String? = null,
-        colorType: String?,
-        colorValues: String?,
-        rawData: String? = null,
-        productionDate: String? = null
-    ): Long {
-        val values = ContentValues()
-        values.put("file_uid", fileUid)
-        if (!trayUid.isNullOrBlank()) values.put("tray_uid", trayUid)
-        if (!materialType.isNullOrBlank()) values.put("material_type", materialType)
-        if (!colorUid.isNullOrBlank()) values.put("color_uid", colorUid)
-        if (!colorName.isNullOrBlank()) values.put("color_name", colorName)
-        if (!colorNameEn.isNullOrBlank()) values.put("color_name_en", colorNameEn)
-        if (!colorType.isNullOrBlank()) values.put("color_type", colorType)
-        if (!colorValues.isNullOrBlank()) values.put("color_values", colorValues)
-        if (!rawData.isNullOrBlank()) values.put("raw_data", rawData)
-        if (!productionDate.isNullOrBlank()) values.put("production_date", productionDate)
-        return db.insertWithOnConflict(SHARE_TAGS_TABLE, null, values, SQLiteDatabase.CONFLICT_IGNORE)
-    }
-
-    fun updateShareTagProductionDate(db: SQLiteDatabase, fileUid: String, productionDate: String) {
-        val values = ContentValues()
-        values.put("production_date", productionDate)
-        db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
-    }
-
-    fun getShareTagMetaMap(db: SQLiteDatabase): Map<String, ShareTagDbMeta> {
-        val result = mutableMapOf<String, ShareTagDbMeta>()
-        val cursor = db.query(
-            SHARE_TAGS_TABLE,
-            arrayOf("id", "file_uid", "copy_count", "verified"),
-            null, null, null, null, null
-        )
-        cursor.use {
-            while (it.moveToNext()) {
-                val id = it.getLong(0)
-                val fileUid = it.getString(1) ?: continue
-                val copyCount = it.getInt(2)
-                val verified = it.getInt(3) != 0
-                result[fileUid.uppercase()] = ShareTagDbMeta(id, copyCount, verified)
-            }
-        }
-        return result
-    }
-
-    fun getAllShareTagRows(db: SQLiteDatabase): List<ShareTagDbRow> {
-        val result = mutableListOf<ShareTagDbRow>()
-        val cursor = db.query(
-            SHARE_TAGS_TABLE,
-            arrayOf("id", "file_uid", "tray_uid", "material_type", "color_uid", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
-            null, null, null, null,
-            "material_type ASC, color_uid ASC, file_uid ASC"
-        )
-        cursor.use {
-            while (it.moveToNext()) {
-                result.add(ShareTagDbRow(
-                    id = it.getLong(0),
-                    fileUid = it.getString(1) ?: "",
-                    trayUid = it.getString(2),
-                    materialType = it.getString(3),
-                    colorUid = it.getString(4),
-                    colorName = it.getString(5),
-                    colorNameEn = it.getString(6),
-                    colorType = it.getString(7),
-                    colorValues = it.getString(8),
-                    rawData = it.getString(9),
-                    copyCount = it.getInt(10),
-                    verified = it.getInt(11) != 0,
-                    productionDate = it.getString(12)
-                ))
-            }
-        }
-        return result
-    }
-
-    fun updateShareTagRawData(db: SQLiteDatabase, fileUid: String, rawData: String) {
-        val values = ContentValues()
-        values.put("raw_data", rawData)
-        db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
-    }
-
-    fun getExistingShareTrayUids(db: SQLiteDatabase): Set<String> {
-        val result = mutableSetOf<String>()
-        val cursor = db.query(
-            SHARE_TAGS_TABLE,
-            arrayOf("tray_uid"),
-            "tray_uid IS NOT NULL AND tray_uid != ''",
-            null, null, null, null
-        )
-        cursor.use {
-            while (it.moveToNext()) {
-                val uid = it.getString(0)
-                if (!uid.isNullOrBlank()) result.add(uid.uppercase())
-            }
-        }
-        return result
-    }
-
-    fun incrementShareTagCopyCount(db: SQLiteDatabase, id: Long) {
-        db.execSQL("UPDATE $SHARE_TAGS_TABLE SET copy_count = copy_count + 1 WHERE id = ?", arrayOf(id))
-    }
-
-    fun setShareTagVerified(db: SQLiteDatabase, id: Long, verified: Boolean) {
-        val values = ContentValues()
-        values.put("verified", if (verified) 1 else 0)
-        db.update(SHARE_TAGS_TABLE, values, "id = ?", arrayOf(id.toString()))
-    }
-
-    fun resetShareTagByTrayUid(db: SQLiteDatabase, trayUid: String) {
-        if (trayUid.isBlank()) return
-        val values = ContentValues()
-        values.put("copy_count", 0)
-        values.put("verified", 0)
-        db.update(SHARE_TAGS_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
-    }
-
-    fun deleteShareTagByFileUid(db: SQLiteDatabase, fileUid: String) {
-        db.delete(SHARE_TAGS_TABLE, "file_uid = ?", arrayOf(fileUid))
-    }
-
-    fun clearShareTagsTable(db: SQLiteDatabase): Int {
-        return db.delete(SHARE_TAGS_TABLE, "1", null)
-    }
-
-    fun clearSnapmakerShareTagsTable(db: SQLiteDatabase): Int {
-        return db.delete(SNAPMAKER_SHARE_TAGS_TABLE, "1", null)
-    }
-
-    // --- snapmaker_share_tags 相关方法 ---
-
-    data class SnapmakerShareTagRow(
-        val id: Long,
-        val uid: String,
-        val vendor: String?,
-        val manufacturer: String?,
-        val mainType: Int,
-        val diameter: Int,
-        val weight: Int,
-        val rgb1: Int,
-        val mfDate: String?,
-        val rawData: String?,
-        val copyCount: Int
-    )
-
-    fun insertSnapmakerShareTag(
-        db: SQLiteDatabase,
-        uid: String,
-        vendor: String?,
-        manufacturer: String?,
-        mainType: Int,
-        diameter: Int,
-        weight: Int,
-        rgb1: Int,
-        mfDate: String?,
-        rawData: String?
-    ): Long {
-        val values = ContentValues().apply {
-            put("uid", uid)
-            if (!vendor.isNullOrBlank()) put("vendor", vendor)
-            if (!manufacturer.isNullOrBlank()) put("manufacturer", manufacturer)
-            put("main_type", mainType)
-            put("diameter", diameter)
-            put("weight", weight)
-            put("rgb1", rgb1)
-            if (!mfDate.isNullOrBlank()) put("mf_date", mfDate)
-            if (!rawData.isNullOrBlank()) put("raw_data", rawData)
-        }
-        return db.insertWithOnConflict(SNAPMAKER_SHARE_TAGS_TABLE, null, values, SQLiteDatabase.CONFLICT_IGNORE)
-    }
-
-    fun getAllSnapmakerShareTagRows(db: SQLiteDatabase): List<SnapmakerShareTagRow> {
-        val result = mutableListOf<SnapmakerShareTagRow>()
-        val cursor = db.query(
-            SNAPMAKER_SHARE_TAGS_TABLE,
-            arrayOf("id", "uid", "vendor", "manufacturer", "main_type", "diameter", "weight", "rgb1", "mf_date", "raw_data", "copy_count"),
-            null, null, null, null,
-            "vendor ASC, uid ASC"
-        )
-        cursor.use {
-            while (it.moveToNext()) {
-                result.add(SnapmakerShareTagRow(
-                    id = it.getLong(0),
-                    uid = it.getString(1) ?: "",
-                    vendor = it.getString(2),
-                    manufacturer = it.getString(3),
-                    mainType = it.getInt(4),
-                    diameter = it.getInt(5),
-                    weight = it.getInt(6),
-                    rgb1 = it.getInt(7),
-                    mfDate = it.getString(8),
-                    rawData = it.getString(9),
-                    copyCount = it.getInt(10)
-                ))
-            }
-        }
-        return result
-    }
-
-    fun getAllSnapmakerShareTagUids(db: SQLiteDatabase): List<String> {
-        val result = mutableListOf<String>()
-        val cursor = db.query(SNAPMAKER_SHARE_TAGS_TABLE, arrayOf("uid"), null, null, null, null, null)
-        cursor.use { while (it.moveToNext()) { result.add(it.getString(0) ?: "") } }
-        return result
-    }
-
-    fun incrementSnapmakerShareTagCopyCount(db: SQLiteDatabase, id: Long) {
-        db.execSQL("UPDATE $SNAPMAKER_SHARE_TAGS_TABLE SET copy_count = copy_count + 1 WHERE id = ?", arrayOf(id))
-    }
-
-    fun deleteSnapmakerShareTagByUid(db: SQLiteDatabase, uid: String) {
-        db.delete(SNAPMAKER_SHARE_TAGS_TABLE, "uid = ?", arrayOf(uid))
-    }
-
-    // --- anomaly_uids 相关方法 ---
-
-    fun saveAnomalyUids(db: SQLiteDatabase, uids: Map<String, Int>) {
-        db.beginTransaction()
-        try {
-            db.delete(ANOMALY_UIDS_TABLE, null, null)
-            val now = System.currentTimeMillis()
-            for ((uid, count) in uids) {
-                val cv = ContentValues()
-                cv.put("uid", uid.uppercase().trim())
-                cv.put("report_count", count)
-                cv.put("synced_at", now)
-                db.insertWithOnConflict(ANOMALY_UIDS_TABLE, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-            }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    fun getAnomalyUids(db: SQLiteDatabase): Map<String, Int> {
-        val result = mutableMapOf<String, Int>()
-        val cursor = db.query(ANOMALY_UIDS_TABLE, arrayOf("uid", "report_count"), null, null, null, null, null)
-        cursor.use {
-            while (it.moveToNext()) {
-                val uid = it.getString(0)
-                val count = it.getInt(1)
-                if (!uid.isNullOrBlank()) result[uid] = count
-            }
-        }
-        return result
-    }
-
-    fun getMetaValue(db: SQLiteDatabase, key: String): String? {
-        val cursor = db.query(
-            FILAMENT_META_TABLE,
-            arrayOf("value"),
-            "meta_key = ?",
-            arrayOf(key),
-            null,
-            null,
-            null
-        )
-        cursor.use {
-            return if (it.moveToFirst()) it.getString(0) else null
-        }
-    }
-
-    fun setMetaValue(db: SQLiteDatabase, key: String, value: String) {
-        val values = ContentValues()
-        values.put("meta_key", key)
-        values.put("value", value)
-        db.insertWithOnConflict(
-            FILAMENT_META_TABLE,
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
-    }
-
-    fun deleteMetaValue(db: SQLiteDatabase, key: String) {
-        db.delete(FILAMENT_META_TABLE, "meta_key = ?", arrayOf(key))
-    }
-
-    // ── Creality material queries ──────────────────────────────────────────────
-
-    fun getCrealityBrands(db: SQLiteDatabase): List<String> {
-        val result = mutableListOf<String>()
-        val cursor = db.query(true, CREALITY_MATERIAL_TABLE, arrayOf("brand"),
-            null, null, "brand", null, "brand ASC", null)
-        cursor.use { c -> while (c.moveToNext()) { c.getString(0)?.let { result.add(it) } } }
-        return result
-    }
-
-    fun getCrealityTypes(db: SQLiteDatabase, brand: String): List<String> {
-        val result = mutableListOf<String>()
-        val cursor = db.query(true, CREALITY_MATERIAL_TABLE, arrayOf("material_type"),
-            "brand = ?", arrayOf(brand), "material_type", null, "material_type ASC", null)
-        cursor.use { c -> while (c.moveToNext()) { c.getString(0)?.let { result.add(it) } } }
-        return result
-    }
-
-    fun getCrealityMaterials(db: SQLiteDatabase, brand: String, type: String): List<CrealityMaterial> {
-        val result = mutableListOf<CrealityMaterial>()
-        val cursor = db.query(CREALITY_MATERIAL_TABLE,
-            arrayOf("material_id", "brand", "material_type", "name", "min_temp", "max_temp", "diameter"),
-            "brand = ? AND material_type = ?", arrayOf(brand, type), null, null, "name ASC")
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                val mid = c.getString(0) ?: return@use
-                result.add(CrealityMaterial(
-                    materialId = mid,
-                    brand = c.getString(1).orEmpty(),
-                    materialType = c.getString(2).orEmpty(),
-                    name = c.getString(3).orEmpty(),
-                    minTemp = c.getInt(4),
-                    maxTemp = c.getInt(5),
-                    diameter = c.getString(6).orEmpty()
-                ))
-            }
-        }
-        return result
-    }
-
-    fun getCrealityMaterialById(db: SQLiteDatabase, materialId: String): CrealityMaterial? {
-        val cursor = db.query(CREALITY_MATERIAL_TABLE,
-            arrayOf("material_id", "brand", "material_type", "name", "min_temp", "max_temp", "diameter"),
-            "material_id = ?", arrayOf(materialId), null, null, null)
-        return cursor.use { c ->
-            if (c.moveToFirst()) CrealityMaterial(
-                materialId = c.getString(0).orEmpty(),
-                brand = c.getString(1).orEmpty(),
-                materialType = c.getString(2).orEmpty(),
-                name = c.getString(3).orEmpty(),
-                minTemp = c.getInt(4),
-                maxTemp = c.getInt(5),
-                diameter = c.getString(6).orEmpty()
-            ) else null
-        }
-    }
-
-    fun getTrayRemainingPercent(db: SQLiteDatabase, trayUid: String): Float? {
-        val cursor = db.query(
-            TRAY_UID_TABLE,
-            arrayOf("remaining_percent"),
-            "tray_uid = ?",
-            arrayOf(trayUid),
-            null,
-            null,
-            null
-        )
-        cursor.use {
-            return if (it.moveToFirst()) it.getFloat(0) else null
-        }
-    }
-
-    fun getTrayRemainingGrams(db: SQLiteDatabase, trayUid: String): Int? {
-        val cursor = db.query(
-            TRAY_UID_TABLE,
-            arrayOf("remaining_grams"),
-            "tray_uid = ?",
-            arrayOf(trayUid),
-            null,
-            null,
-            null
-        )
-        cursor.use {
-            return if (it.moveToFirst()) it.getInt(0) else null
-        }
-    }
-
-    fun upsertTrayRemaining(
-        db: SQLiteDatabase,
-        trayUid: String,
-        percent: Float,
-        grams: Int?,
-        totalGrams: Int? = null
-    ) {
-        val values = ContentValues()
-        // 只保留1位小数
-        val roundedPercent = Math.round(percent * 10) / 10f
-        values.put("remaining_percent", roundedPercent)
-        if (grams != null) {
-            values.put("remaining_grams", grams)
-        }
-        if (totalGrams != null) {
-            values.put("total_weight_grams", totalGrams)
-        }
-        val updated = db.update(
-            TRAY_UID_TABLE,
-            values,
-            "tray_uid = ?",
-            arrayOf(trayUid)
-        )
-        if (updated == 0) {
-            values.put("tray_uid", trayUid)
-            db.insertWithOnConflict(
-                TRAY_UID_TABLE,
-                null,
-                values,
-                SQLiteDatabase.CONFLICT_IGNORE
-            )
-        }
-    }
-
-    fun upsertTrayInventory(
-        db: SQLiteDatabase,
-        trayUid: String,
-        remainingPercent: Float,
-        remainingGrams: Int?,
-        totalWeightGrams: Int? = null,
-        filamentId: Long?,
-        materialId: String? = null,
-        materialType: String? = null,
-        detailedMaterialType: String? = null,
-        colorName: String? = null,
-        colorNameEn: String? = null,
-        colorCode: String? = null,
-        colorType: String? = null,
-        colorValues: String? = null
-    ) {
-        val values = ContentValues()
-        values.put("remaining_percent", remainingPercent)
-        if (remainingGrams != null) {
-            values.put("remaining_grams", remainingGrams)
-        }
-        if (totalWeightGrams != null) {
-            values.put("total_weight_grams", totalWeightGrams)
-        }
-        if (filamentId != null) {
-            values.put("filament_id", filamentId)
-        }
-        if (materialId != null) {
-            values.put("material_id", materialId)
-        }
-        if (materialType != null) {
-            values.put("material_type", materialType)
-        }
-        if (detailedMaterialType != null) {
-            values.put("material_detailed_type", detailedMaterialType)
-        }
-        if (colorName != null) {
-            values.put("color_name", colorName)
-        }
-        if (colorNameEn != null) {
-            values.put("color_name_en", colorNameEn)
-        }
-        if (colorCode != null) {
-            values.put("color_code", colorCode)
-        }
-        if (colorType != null) {
-            values.put("color_type", colorType)
-        }
-        if (colorValues != null) {
-            values.put("color_values", colorValues)
-        }
-        // UPDATE first to preserve original_material/notes; INSERT only for new rows.
-        val updated = db.update(
-            TRAY_UID_TABLE,
-            values,
-            "tray_uid = ?",
-            arrayOf(trayUid)
-        )
-        if (updated == 0) {
-            values.put("tray_uid", trayUid)
-            db.insertWithOnConflict(
-                TRAY_UID_TABLE,
-                null,
-                values,
-                SQLiteDatabase.CONFLICT_IGNORE
-            )
-        }
-    }
-
-    fun getFilamentId(db: SQLiteDatabase, filaId: String, filaColorCode: String): Long? {
-        val cursor = db.query(
-            FILAMENT_TABLE,
-            arrayOf("id"),
-            "fila_id = ? AND fila_color_code = ?",
-            arrayOf(filaId, filaColorCode),
-            null,
-            null,
-            null
-        )
-        cursor.use {
-            if (it.moveToFirst()) {
-                return it.getLong(0)
-            }
-        }
-        return null
-    }
-
-    fun queryInventory(db: SQLiteDatabase, keyword: String): List<InventoryItem> {
-        val trimmed = keyword.trim()
-        val selection: String?
-        val selectionArgs: Array<String>?
-        if (trimmed.isBlank()) {
-            selection = null
-            selectionArgs = null
-        } else {
-            selection = """
-                tray_uid LIKE ? OR
-                material_type LIKE ? OR
-                material_detailed_type LIKE ? OR
-                color_name LIKE ? OR
-                color_code LIKE ? OR
-                color_type LIKE ? OR
-                color_values LIKE ? OR
-                CAST(remaining_percent AS TEXT) LIKE ?
-            """.trimIndent()
-            val pattern = "%$trimmed%"
-            selectionArgs = Array(8) { pattern }
-        }
-        val sql = """
-            SELECT
-                tray_uid,
-                material_type,
-                material_detailed_type,
-                color_name,
-                color_name_en,
-                color_code,
-                color_type,
-                color_values,
-                remaining_percent,
-                remaining_grams,
-                original_material,
-                notes
-            FROM
-                "$TRAY_UID_TABLE"
-            ${if (selection != null) "WHERE $selection" else ""}
-            ORDER BY
-                tray_uid ASC
-        """.trimIndent()
-        val cursor = db.rawQuery(sql, selectionArgs)
-        cursor.use {
-            val results = ArrayList<InventoryItem>()
-            while (it.moveToNext()) {
-                val colorValues = it.getString(7).orEmpty()
-                    .split(",")
-                    .map { value -> value.trim() }
-                    .filter { value -> value.isNotBlank() }
-                results.add(
-                    InventoryItem(
-                        trayUid = it.getString(0).orEmpty(),
-                        materialType = it.getString(1).orEmpty(),
-                        materialDetailedType = it.getString(2).orEmpty(),
-                        colorName = it.getString(3).orEmpty(),
-                        colorNameEn = it.getString(4).orEmpty(),
-                        colorCode = it.getString(5).orEmpty(),
-                        colorType = it.getString(6).orEmpty(),
-                        colorValues = colorValues,
-                        remainingPercent = it.getFloat(8),
-                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
-                        originalMaterial = it.getString(10).orEmpty(),
-                        notes = it.getString(11).orEmpty()
-                    )
-                )
-            }
-            return results
-        }
-    }
-
-    /**
-     * 获取filament_inventory库的全部数据，用于数据页面显示
-     */
-    fun getAllInventory(db: SQLiteDatabase): List<InventoryItem> {
-        val sql = """
-            SELECT
-                tray_uid,
-                material_type,
-                material_detailed_type,
-                color_name,
-                color_name_en,
-                color_code,
-                color_type,
-                color_values,
-                remaining_percent,
-                remaining_grams,
-                original_material,
-                notes
-            FROM
-                "$TRAY_UID_TABLE"
-            ORDER BY
-                tray_uid ASC
-        """.trimIndent()
-        val cursor = db.rawQuery(sql, null)
-        cursor.use {
-            val results = ArrayList<InventoryItem>()
-            while (it.moveToNext()) {
-                val colorValues = it.getString(7).orEmpty()
-                    .split(",")
-                    .map { value -> value.trim() }
-                    .filter { value -> value.isNotBlank() }
-                results.add(
-                    InventoryItem(
-                        trayUid = it.getString(0).orEmpty(),
-                        materialType = it.getString(1).orEmpty(),
-                        materialDetailedType = it.getString(2).orEmpty(),
-                        colorName = it.getString(3).orEmpty(),
-                        colorNameEn = it.getString(4).orEmpty(),
-                        colorCode = it.getString(5).orEmpty(),
-                        colorType = it.getString(6).orEmpty(),
-                        colorValues = colorValues,
-                        remainingPercent = it.getFloat(8),
-                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
-                        originalMaterial = it.getString(10).orEmpty(),
-                        notes = it.getString(11).orEmpty()
-                    )
-                )
-            }
-            return results
-        }
-    }
-
-    fun deleteTrayInventory(db: SQLiteDatabase, trayUid: String) {
-        db.delete(
-            TRAY_UID_TABLE,
-            "tray_uid = ?",
-            arrayOf(trayUid)
-        )
-    }
-
-    fun upsertTrayNotes(
-        db: SQLiteDatabase,
-        trayUid: String,
-        originalMaterial: String,
-        notes: String
-    ) {
-        val values = ContentValues()
-        values.put("original_material", originalMaterial)
-        values.put("notes", notes)
-        val updated = db.update(
-            TRAY_UID_TABLE,
-            values,
-            "tray_uid = ?",
-            arrayOf(trayUid)
-        )
-        if (updated == 0) {
-            values.put("tray_uid", trayUid)
-            values.put("remaining_percent", 100f)
-            db.insertWithOnConflict(TRAY_UID_TABLE, null, values, SQLiteDatabase.CONFLICT_IGNORE)
-        }
-    }
-
-    fun getTrayExtraFields(db: SQLiteDatabase, trayUid: String): Pair<String, String> {
-        val cursor = db.query(
-            TRAY_UID_TABLE,
-            arrayOf("original_material", "notes"),
-            "tray_uid = ?",
-            arrayOf(trayUid),
-            null, null, null
-        )
-        cursor.use {
-            return if (it.moveToFirst()) {
-                Pair(it.getString(0).orEmpty(), it.getString(1).orEmpty())
-            } else {
-                Pair("", "")
-            }
-        }
-    }
-
-}
 
 private fun ByteArray.toHex(): String =
     joinToString(separator = "") { "%02X".format(Locale.US, it) }

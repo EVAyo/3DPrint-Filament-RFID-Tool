@@ -40,9 +40,9 @@ object AnalyticsReporter {
     suspend fun reportAnomaly(context: Context, cardUid: String): Boolean {
         val cfg = ConfigManager.getAnomalyReportEndpoint(context)
         val endpoint = cfg.value
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.reportAnomaly endpoint=$endpoint (from config: ${cfg.isUsable})")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.reportAnomaly endpoint=$endpoint (from config: ${cfg.isUsable})")
         if (endpoint.isBlank()) {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.reportAnomaly: endpoint blank, skipped")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.reportAnomaly: endpoint blank, skipped")
             return false
         }
         val installId = getInstallId(context)
@@ -52,7 +52,7 @@ object AnalyticsReporter {
             put("timestamp_ms", System.currentTimeMillis())
         }
         val ok = NetworkUtils.postJson(endpoint, payload, apiKeyHeaders())
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.reportAnomaly result=$ok uid=$cardUid")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.reportAnomaly result=$ok uid=$cardUid")
         return ok
     }
 
@@ -64,19 +64,19 @@ object AnalyticsReporter {
     suspend fun fetchAnomalyUids(context: Context): Map<String, Int>? {
         val cfg = ConfigManager.getAnomalyUidsEndpoint(context)
         val endpoint = cfg.value
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchAnomalyUids endpoint=$endpoint (from config: ${cfg.isUsable})")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchAnomalyUids endpoint=$endpoint (from config: ${cfg.isUsable})")
         if (endpoint.isBlank()) {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchAnomalyUids: endpoint blank, skipped")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchAnomalyUids: endpoint blank, skipped")
             return null
         }
         val json = NetworkUtils.getJson(endpoint, apiKeyHeaders())
         if (json == null) {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchAnomalyUids: response null")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchAnomalyUids: response null")
             return null
         }
         val arr = json.optJSONArray("uids")
         if (arr == null) {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchAnomalyUids: no 'uids' array in response: $json")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchAnomalyUids: no 'uids' array in response: $json")
             return null
         }
         val result = mutableMapOf<String, Int>()
@@ -88,7 +88,7 @@ object AnalyticsReporter {
                 if (uid.isNotBlank()) result[uid] = count
             }
         }
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchAnomalyUids: got ${result.size} uids")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchAnomalyUids: got ${result.size} uids")
         return result
     }
 
@@ -107,7 +107,7 @@ object AnalyticsReporter {
             put("timestamp_ms", System.currentTimeMillis())
         }
         val json = NetworkUtils.postJsonGetResponse(endpoint, payload, apiKeyHeaders())
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.reportUidCopy uid=$uid result=$json")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.reportUidCopy uid=$uid result=$json")
         return json?.optInt("copy_count", -1)?.takeIf { it >= 0 }
     }
 
@@ -121,16 +121,16 @@ object AnalyticsReporter {
         if (baseEndpoint.isBlank()) return null
         val endpoint = "${baseEndpoint.trimEnd('/')}/${uid.uppercase().trim()}/count"
         val json = NetworkUtils.getJson(endpoint, apiKeyHeaders())
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.fetchUidCopyCount uid=$uid result=$json")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.fetchUidCopyCount uid=$uid result=$json")
         return json?.optInt("copy_count", -1)?.takeIf { it >= 0 }
     }
 
     suspend fun saveNickname(context: Context, nickname: String): Boolean {
         val cfg = ConfigManager.getNicknameEndpoint(context)
         val endpoint = cfg.value
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.saveNickname endpoint=$endpoint (from config: ${cfg.isUsable})")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.saveNickname endpoint=$endpoint (from config: ${cfg.isUsable})")
         if (endpoint.isBlank()) {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.saveNickname: endpoint blank, skipped")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.saveNickname: endpoint blank, skipped")
             return false
         }
         val installId = getInstallId(context)
@@ -139,7 +139,7 @@ object AnalyticsReporter {
             put("nickname", nickname.trim())
         }
         val ok = NetworkUtils.postJson(endpoint, payload, apiKeyHeaders())
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.saveNickname result=$ok")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.saveNickname result=$ok")
         return ok
     }
 
@@ -149,7 +149,7 @@ object AnalyticsReporter {
     suspend fun checkForUpdate(context: Context): UpdateInfo? {
         val cfg = ConfigManager.getUpdateEndpoint(context)
         val endpoint = cfg.value
-        com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.checkForUpdate endpoint=$endpoint")
+        com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.checkForUpdate endpoint=$endpoint")
         if (endpoint.isBlank()) return null
         val json = NetworkUtils.getJson(endpoint, apiKeyHeaders()) ?: return null
         val remoteVersionCode = json.optInt("versionCode", 0)
@@ -167,7 +167,7 @@ object AnalyticsReporter {
             changelog   = json.optString("changelog", ""),
             forceUpdate = json.optBoolean("forceUpdate", false)
         ).also {
-            com.m0h31h31.bamburfidreader.logDebug("AnalyticsReporter.checkForUpdate: new version ${it.versionName} (code=${it.versionCode})")
+            com.m0h31h31.bamburfidreader.logging.logDebug("AnalyticsReporter.checkForUpdate: new version ${it.versionName} (code=${it.versionCode})")
         }
     }
 

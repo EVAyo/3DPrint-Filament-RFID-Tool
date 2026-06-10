@@ -2,6 +2,9 @@ package com.m0h31h31.bamburfidreader.utils
 
 import android.content.Context
 import com.m0h31h31.bamburfidreader.R
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.data.syncCrealityMaterialDatabase
+import com.m0h31h31.bamburfidreader.data.syncFilamentDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -77,10 +80,10 @@ object ConfigManager {
             if (remoteContent != null) {
                 saveFile(context, APP_CONFIG_FILE, remoteContent)
             } else {
-                com.m0h31h31.bamburfidreader.logDebug("Failed to fetch AppConfig")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch AppConfig")
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error checking AppConfig: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error checking AppConfig: ${e.message}")
         }
     }
     
@@ -99,20 +102,20 @@ object ConfigManager {
                         onUpdateAvailable(context.getString(R.string.config_update_filaments_color)) {
                             saveFile(context, FILAMENTS_COLOR_CODES_FILE, remoteContent)
                             try {
-                                val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
-                                com.m0h31h31.bamburfidreader.syncFilamentDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logDebug("颜色配置文件更新成功，数据库已更新")
+                                val dbHelper = FilamentDbHelper(context)
+                                syncFilamentDatabase(context, dbHelper)
+                                com.m0h31h31.bamburfidreader.logging.logDebug("颜色配置文件更新成功，数据库已更新")
                             } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logDebug("更新数据库失败: ${e.message}")
+                                com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
                             }
                         }
                     }
                 }
             } else {
-                com.m0h31h31.bamburfidreader.logDebug("Failed to fetch filaments_color_codes.json")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_color_codes.json")
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error checking filaments_color_codes.json: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error checking filaments_color_codes.json: ${e.message}")
         }
     }
     
@@ -127,7 +130,7 @@ object ConfigManager {
                 val fileBytes = file.readBytes()
                 NetworkUtils.calculateHash(fileBytes)
             } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logDebug("Error calculating local file hash: ${e.message}")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Error calculating local file hash: ${e.message}")
                 null
             }
         }
@@ -144,9 +147,9 @@ object ConfigManager {
             FileOutputStream(file).use {
                 it.write(content)
             }
-            com.m0h31h31.bamburfidreader.logDebug("File saved: $fileName to ${file.absolutePath}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("File saved: $fileName to ${file.absolutePath}")
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error saving file: $fileName, error: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error saving file: $fileName, error: ${e.message}")
         }
     }
     
@@ -160,14 +163,14 @@ object ConfigManager {
             return try {
                 file.readText()
             } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logDebug("Error reading local config: $fileName, error: ${e.message}")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Error reading local config: $fileName, error: ${e.message}")
                 null
             }
         }
         return try {
             context.assets.open(fileName).bufferedReader().use { it.readText() }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error reading asset config: $fileName, error: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error reading asset config: $fileName, error: ${e.message}")
             null
         }
     }
@@ -187,20 +190,20 @@ object ConfigManager {
                         onUpdateAvailable(context.getString(R.string.config_update_type_mapping)) {
                             saveFile(context, FILAMENTS_TYPE_MAPPING_FILE, remoteContent)
                             try {
-                                val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
-                                com.m0h31h31.bamburfidreader.syncFilamentDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logDebug("耗材类型映射文件更新成功，数据库已更新")
+                                val dbHelper = FilamentDbHelper(context)
+                                syncFilamentDatabase(context, dbHelper)
+                                com.m0h31h31.bamburfidreader.logging.logDebug("耗材类型映射文件更新成功，数据库已更新")
                             } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logDebug("更新数据库失败: ${e.message}")
+                                com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
                             }
                         }
                     }
                 }
             } else {
-                com.m0h31h31.bamburfidreader.logDebug("Failed to fetch filaments_type_mapping.json")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_type_mapping.json")
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error checking filaments_type_mapping.json: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error checking filaments_type_mapping.json: ${e.message}")
         }
     }
 
@@ -218,7 +221,7 @@ object ConfigManager {
                 val key = if (isEnglishMode(context)) "messageEn" else "message"
                 return json.optString(key, "").ifBlank { json.optString("message", "") }
             } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig: ${e.message}")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig: ${e.message}")
             }
         }
         return ""
@@ -232,7 +235,7 @@ object ConfigManager {
                 val key = if (isEnglishMode(context)) "adMessageEn" else "adMessage"
                 return json.optString(key, "").ifBlank { json.optString("adMessage", "") }
             } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig adMessage: ${e.message}")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig adMessage: ${e.message}")
             }
         }
         return ""
@@ -249,7 +252,7 @@ object ConfigManager {
                     ?: parseLinkConfig(json, "boostLink", defaultValue))
                     ?: defaultValue
             } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig boostLink: ${e.message}")
+                com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig boostLink: ${e.message}")
             }
         }
         return defaultValue
@@ -278,7 +281,7 @@ object ConfigManager {
                 }
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig logoLinks: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig logoLinks: ${e.message}")
             emptyMap()
         }
     }
@@ -292,7 +295,7 @@ object ConfigManager {
                 it.type.equals("url", ignoreCase = true) && it.value.isNotBlank()
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig tagShareEndpoint: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig tagShareEndpoint: ${e.message}")
             null
         }) ?: defaultValue
     }
@@ -332,7 +335,7 @@ object ConfigManager {
                 it.type.equals("url", ignoreCase = true) && it.value.isNotBlank()
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error parsing AppConfig userCountEndpoint: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error parsing AppConfig userCountEndpoint: ${e.message}")
             null
         }) ?: defaultValue
     }
@@ -390,18 +393,18 @@ object ConfigManager {
                         onUpdateAvailable(context.getString(R.string.config_update_creality)) {
                             saveFile(context, CREALITY_MATERIAL_FILE, remoteContent)
                             try {
-                                val dbHelper = com.m0h31h31.bamburfidreader.FilamentDbHelper(context)
-                                com.m0h31h31.bamburfidreader.syncCrealityMaterialDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logDebug("创想三维耗材列表更新成功，数据库已更新")
+                                val dbHelper = FilamentDbHelper(context)
+                                syncCrealityMaterialDatabase(context, dbHelper)
+                                com.m0h31h31.bamburfidreader.logging.logDebug("创想三维耗材列表更新成功，数据库已更新")
                             } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logDebug("更新创想三维数据库失败: ${e.message}")
+                                com.m0h31h31.bamburfidreader.logging.logDebug("更新创想三维数据库失败: ${e.message}")
                             }
                         }
                     }
                 }
             }
         } catch (e: Exception) {
-            com.m0h31h31.bamburfidreader.logDebug("Error checking creality_material_list.json: ${e.message}")
+            com.m0h31h31.bamburfidreader.logging.logDebug("Error checking creality_material_list.json: ${e.message}")
         }
     }
 

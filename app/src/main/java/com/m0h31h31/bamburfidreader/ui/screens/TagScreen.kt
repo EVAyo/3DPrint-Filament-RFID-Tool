@@ -72,8 +72,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import com.m0h31h31.bamburfidreader.CModifyRecoveryInfo
-import com.m0h31h31.bamburfidreader.ShareTagItem
+import com.m0h31h31.bamburfidreader.model.CModifyRecoveryInfo
+import com.m0h31h31.bamburfidreader.model.ShareTagItem
 import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.AppSearchBar
@@ -786,7 +786,7 @@ fun TagScreen(
     onCancelWrite: () -> Unit = {},
     onStartCModify: (ShareTagItem) -> Unit = {},
     cModifyInProgress: Boolean = false,
-    cModifyRecoveryInfo: com.m0h31h31.bamburfidreader.CModifyRecoveryInfo? = null,
+    cModifyRecoveryInfo: com.m0h31h31.bamburfidreader.model.CModifyRecoveryInfo? = null,
     onDismissCModifyRecovery: () -> Unit = {},
     onRefresh: () -> Unit = {},
     anomalyUids: Map<String, Int> = emptyMap(),

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
+import com.m0h31h31.bamburfidreader.logging.logDebug
 
 fun openTtsSettings(context: Context): Boolean {
     val intents = listOf(

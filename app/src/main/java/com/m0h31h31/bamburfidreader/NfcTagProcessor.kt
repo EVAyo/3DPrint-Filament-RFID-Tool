@@ -2,6 +2,11 @@ package com.m0h31h31.bamburfidreader
 
 import android.content.Context
 import com.m0h31h31.bamburfidreader.R
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.model.DisplayData
+import com.m0h31h31.bamburfidreader.model.FilamentColorEntry
+import com.m0h31h31.bamburfidreader.model.ParsedBlockData
+import com.m0h31h31.bamburfidreader.model.ParsedField
 import com.m0h31h31.bamburfidreader.util.normalizeColorValue
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

@@ -32,9 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.m0h31h31.bamburfidreader.CrealityMaterial
-import com.m0h31h31.bamburfidreader.CrealityTagData
-import com.m0h31h31.bamburfidreader.FilamentDbHelper
+import com.m0h31h31.bamburfidreader.model.CrealityMaterial
+import com.m0h31h31.bamburfidreader.model.CrealityTagData
+import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
 import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import kotlinx.coroutines.Dispatchers

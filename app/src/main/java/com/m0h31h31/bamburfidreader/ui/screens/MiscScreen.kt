@@ -54,6 +54,7 @@ import com.m0h31h31.bamburfidreader.ui.components.NeuButton
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import com.m0h31h31.bamburfidreader.ui.components.AppSwitch
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
+import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
@@ -201,6 +202,13 @@ fun MiscScreen(
     onReadAllSectorsChange: (Boolean) -> Unit = {},
     saveKeysToFile: Boolean = false,
     onSaveKeysToFileChange: (Boolean) -> Unit = {},
+    nfcCompatibilityMode: NfcCompatibilityMode = NfcCompatibilityMode.BALANCED,
+    onNfcCompatibilityModeChange: (NfcCompatibilityMode) -> Unit = {},
+    nfcCompatibilityStatusMessage: String = "",
+    nfcCompatibilityTestInProgress: Boolean = false,
+    onStartNfcCompatibilityReadTest: () -> String = { "" },
+    onStartNfcCompatibilityWriteTest: () -> String = { "" },
+    onCancelNfcCompatibilityTest: () -> String = { "" },
     formatTagDebugEnabled: Boolean = false,
     onFormatTagDebugEnabledChange: (Boolean) -> Unit = {},
     forceOverwriteImport: Boolean = false,
@@ -258,8 +266,9 @@ fun MiscScreen(
     var message by remember { mutableStateOf("") }
     var showCuidDisclaimerDialog by remember { mutableStateOf(false) }
     val scrollState = androidx.compose.foundation.rememberScrollState()
+    val effectiveMiscStatusMessage = miscStatusMessage.ifBlank { nfcCompatibilityStatusMessage }
     var visibleStatusMessage by remember { mutableStateOf("") }
-    var lastMiscStatusMessage by remember { mutableStateOf(miscStatusMessage) }
+    var lastMiscStatusMessage by remember { mutableStateOf(effectiveMiscStatusMessage) }
     var lastPageMessage by remember { mutableStateOf(message) }
     var dismissedStatusMessage by rememberSaveable { mutableStateOf("") }
     var noticeExpanded by remember {
@@ -316,8 +325,8 @@ fun MiscScreen(
         else -> R.string.misc_easter_egg_1
     }
 
-    LaunchedEffect(miscStatusMessage, message) {
-        val trimmedMiscStatus = miscStatusMessage.trim()
+    LaunchedEffect(effectiveMiscStatusMessage, message) {
+        val trimmedMiscStatus = effectiveMiscStatusMessage.trim()
         val trimmedPageMessage = message.trim()
         if (
             dismissedStatusMessage.isNotBlank() &&
@@ -737,6 +746,82 @@ fun MiscScreen(
                                 checked = saveKeysToFile,
                                 onCheckedChange = onSaveKeysToFileChange
                             )
+                        }
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(text = "NFC兼容模式")
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf(
+                                    NfcCompatibilityMode.FAST to "快速",
+                                    NfcCompatibilityMode.BALANCED to "均衡",
+                                    NfcCompatibilityMode.STABLE to "稳定"
+                                ).forEach { (mode, label) ->
+                                    val selected = nfcCompatibilityMode == mode
+                                    Surface(
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surface
+                                        },
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (selected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.outline
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clickable { onNfcCompatibilityModeChange(mode) }
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = when (nfcCompatibilityMode) {
+                                    NfcCompatibilityMode.FAST -> "低延迟，适合兼容性好的手机。"
+                                    NfcCompatibilityMode.BALANCED -> "默认推荐：NFC-A轮询、延长超时、写后校验。"
+                                    NfcCompatibilityMode.STABLE -> "更长等待和更多重试，适合读写偶发失败的手机。"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                NeuButton(
+                                    text = if (nfcCompatibilityTestInProgress) "取消测试" else "只读测试",
+                                    onClick = {
+                                        message = if (nfcCompatibilityTestInProgress) {
+                                            onCancelNfcCompatibilityTest()
+                                        } else {
+                                            onStartNfcCompatibilityReadTest()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                NeuButton(
+                                    text = "写入测试",
+                                    onClick = { message = onStartNfcCompatibilityWriteTest() },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
 
                         Row(
