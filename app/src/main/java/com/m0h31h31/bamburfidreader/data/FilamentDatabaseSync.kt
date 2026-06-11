@@ -128,9 +128,24 @@ internal fun syncFilamentDatabase(context: Context, dbHelper: FilamentDbHelper) 
     rematchUnnamedInventoryColors(db)
 }
 
+private data class InventoryRematchRow(
+    val trayUid: String,
+    val materialId: String,
+    val colorCode: String,
+    val filaColorCode: String
+)
+
+private data class ShareTagRematchRow(
+    val fileUid: String,
+    val materialId: String,
+    val colorUid: String,
+    val rawData: String
+)
+
 private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
     var updated = 0
 
+    val invRows = mutableListOf<InventoryRematchRow>()
     val invCursor = db.query(
         TRAY_UID_TABLE,
         arrayOf("tray_uid", "material_id", "color_code", "fila_color_code"),
@@ -141,13 +156,47 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
         while (it.moveToNext()) {
             val trayUid = it.getString(0) ?: continue
             val materialId = it.getString(1) ?: continue
-            val colorCode = it.getString(2).orEmpty()
-            val filaColorCode = it.getString(3).orEmpty()
-            val matched = findFilamentEntryInDb(db, materialId, colorCode)
+            invRows.add(
+                InventoryRematchRow(
+                    trayUid = trayUid,
+                    materialId = materialId,
+                    colorCode = it.getString(2).orEmpty(),
+                    filaColorCode = it.getString(3).orEmpty()
+                )
+            )
+        }
+    }
+
+    val tagRows = mutableListOf<ShareTagRematchRow>()
+    val tagCursor = db.query(
+        SHARE_TAGS_TABLE,
+        arrayOf("file_uid", "material_id", "color_uid", "raw_data"),
+        null,
+        null, null, null, null
+    )
+    tagCursor.use {
+        while (it.moveToNext()) {
+            val fileUid = it.getString(0) ?: continue
+            tagRows.add(
+                ShareTagRematchRow(
+                    fileUid = fileUid,
+                    materialId = it.getString(1).orEmpty(),
+                    colorUid = it.getString(2).orEmpty(),
+                    rawData = it.getString(3).orEmpty()
+                )
+            )
+        }
+    }
+
+    // 批量更新放在单个事务里，避免逐行提交导致的多次磁盘同步。
+    db.beginTransaction()
+    try {
+        for (row in invRows) {
+            val matched = findFilamentEntryInDb(db, row.materialId, row.colorCode)
                 ?: findFilamentEntryByFilaColorCodeInDb(
                     db,
-                    materialId,
-                    filaColorCode.ifBlank { colorCode }
+                    row.materialId,
+                    row.filaColorCode.ifBlank { row.colorCode }
                 )
                 ?: continue
             val values = ContentValues()
@@ -159,23 +208,14 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
             values.put("color_code", matched.colorCode)
             values.put("color_type", matched.colorType)
             values.put("color_values", matched.colorValues.joinToString(separator = ","))
-            db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
+            db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(row.trayUid))
             updated++
         }
-    }
 
-    val tagCursor = db.query(
-        SHARE_TAGS_TABLE,
-        arrayOf("file_uid", "material_id", "color_uid", "raw_data"),
-        null,
-        null, null, null, null
-    )
-    tagCursor.use {
-        while (it.moveToNext()) {
-            val fileUid = it.getString(0) ?: continue
-            val parsed = parseBambuMaterialAndColorFromRawData(it.getString(3).orEmpty())
-            val materialId = parsed?.first.orEmpty().ifBlank { it.getString(1).orEmpty() }
-            val colorUid = parsed?.second.orEmpty().ifBlank { it.getString(2).orEmpty() }
+        for (row in tagRows) {
+            val parsed = parseBambuMaterialAndColorFromRawData(row.rawData)
+            val materialId = parsed?.first.orEmpty().ifBlank { row.materialId }
+            val colorUid = parsed?.second.orEmpty().ifBlank { row.colorUid }
             val matched = findFilamentEntryInDb(db, materialId, colorUid) ?: continue
             val values = ContentValues()
             values.put("material_id", materialId)
@@ -187,9 +227,12 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
             values.put("color_name_en", matched.colorNameEn)
             values.put("color_type", matched.colorType)
             values.put("color_values", matched.colorValues.joinToString(separator = ","))
-            db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
+            db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(row.fileUid))
             updated++
         }
+        db.setTransactionSuccessful()
+    } finally {
+        db.endTransaction()
     }
 
     if (updated > 0) logDebug("颜色重新匹配完成: $updated 条记录已更新")

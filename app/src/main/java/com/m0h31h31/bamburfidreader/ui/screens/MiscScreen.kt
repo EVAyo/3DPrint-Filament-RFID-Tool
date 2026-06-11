@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -68,8 +69,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ColorPalette
@@ -77,8 +76,10 @@ import com.m0h31h31.bamburfidreader.ui.theme.LocalAppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ThemeMode
 import com.m0h31h31.bamburfidreader.utils.AnalyticsReporter
 import com.m0h31h31.bamburfidreader.utils.ConfigManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.OutlinedTextField
 
@@ -393,26 +394,29 @@ fun MiscScreen(
         message = onImportDatabase()
     }
 
-    val footerLogos = remember(context) {
-        runCatching {
-            context.assets.list("logos")
-                .orEmpty()
-                .sortedWith(
-                    compareBy<String> {
-                        val baseName = it.substringBeforeLast('.').lowercase()
-                        logoOrder.indexOf(baseName).let { index ->
-                            if (index >= 0) index else Int.MAX_VALUE
-                        }
-                    }.thenBy { it.lowercase() }
-                )
-                .mapNotNull { fileName ->
-                    context.assets.open("logos/$fileName").use { input ->
-                        BitmapFactory.decodeStream(input)?.asImageBitmap()?.let { bitmap ->
-                            fileName to bitmap
+    // 图片解码放到 IO 线程，避免首次进入页面时阻塞合成
+    val footerLogos by produceState(initialValue = emptyList<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(), context) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.assets.list("logos")
+                    .orEmpty()
+                    .sortedWith(
+                        compareBy<String> {
+                            val baseName = it.substringBeforeLast('.').lowercase()
+                            logoOrder.indexOf(baseName).let { index ->
+                                if (index >= 0) index else Int.MAX_VALUE
+                            }
+                        }.thenBy { it.lowercase() }
+                    )
+                    .mapNotNull { fileName ->
+                        context.assets.open("logos/$fileName").use { input ->
+                            BitmapFactory.decodeStream(input)?.asImageBitmap()?.let { bitmap ->
+                                fileName to bitmap
+                            }
                         }
                     }
-                }
-        }.getOrDefault(emptyList())
+            }.getOrDefault(emptyList())
+        }
     }
 
     val logoShape = remember { androidx.compose.foundation.shape.RoundedCornerShape(14.dp) }
@@ -707,7 +711,7 @@ fun MiscScreen(
                                                 ) {
                                                     if (selected) {
                                                         Icon(
-                                                            imageVector = Icons.Filled.Check,
+                                                            imageVector = com.m0h31h31.bamburfidreader.ui.components.AppIcons.Check,
                                                             contentDescription = null,
                                                             tint = androidx.compose.ui.graphics.Color.White,
                                                             modifier = Modifier.size(22.dp)

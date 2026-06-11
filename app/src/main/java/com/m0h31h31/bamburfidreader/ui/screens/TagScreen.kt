@@ -30,10 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +72,7 @@ import com.m0h31h31.bamburfidreader.model.CModifyRecoveryInfo
 import com.m0h31h31.bamburfidreader.model.ShareTagItem
 import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.AppSearchBar
 import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton
@@ -578,7 +575,7 @@ private fun CategoryView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.DragHandle,
+                                imageVector = AppIcons.DragHandle,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp).draggableHandle(),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -940,7 +937,7 @@ fun TagScreen(
                 Box {
                     IconButton(onClick = { cameraLauncher.launch(null) }) {
                         Icon(
-                            imageVector = Icons.Filled.PhotoCamera,
+                            imageVector = AppIcons.PhotoCamera,
                             contentDescription = null,
                             tint = if (colorFilterHex != null)
                                 MaterialTheme.colorScheme.primary
@@ -965,7 +962,7 @@ fun TagScreen(
                 if (colorFilterHex != null) {
                     IconButton(onClick = { colorFilterHex = null }) {
                         Icon(
-                            imageVector = Icons.Filled.Close,
+                            imageVector = AppIcons.Close,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant

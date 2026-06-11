@@ -10,7 +10,7 @@ import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 29
+private const val FILAMENT_DB_VERSION = 30
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -56,6 +56,9 @@ class FilamentDbHelper(val context: Context) :
         )
         db.execSQL(
             "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color_code ON $FILAMENT_TABLE (fila_id, color_code)"
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_fila_color_code ON $FILAMENT_TABLE (fila_id, fila_color_code)"
         )
         db.execSQL(
             """
@@ -411,6 +414,11 @@ class FilamentDbHelper(val context: Context) :
         }
         if (oldVersion < 29) {
             addTrayColumn(db, "production_date", "TEXT")
+        }
+        if (oldVersion < 30) {
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_fila_color_code ON $FILAMENT_TABLE (fila_id, fila_color_code)"
+            )
         }
     }
 

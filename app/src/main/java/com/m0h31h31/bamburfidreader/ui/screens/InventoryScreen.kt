@@ -25,10 +25,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
 import com.m0h31h31.bamburfidreader.model.InventoryItem
 import com.m0h31h31.bamburfidreader.R
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.AppLinearProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch
 import com.m0h31h31.bamburfidreader.ui.components.AppSlider
@@ -98,8 +95,7 @@ private fun tokenizeInventorySearchQuery(input: String): List<String> {
     return tokens.map { it.lowercase() }.filter { it.isNotBlank() }
 }
 
-private fun matchesInventoryQuery(item: InventoryItem, query: String): Boolean {
-    val tokens = tokenizeInventorySearchQuery(query)
+private fun matchesInventoryQuery(item: InventoryItem, tokens: List<String>): Boolean {
     if (tokens.isEmpty()) return true
 
     val fields = buildList {
@@ -132,7 +128,7 @@ fun InventoryScreen(
 ) {
     val uiStyle = LocalAppUiStyle.current
     var query by remember { mutableStateOf("") }
-    var items by remember { mutableStateOf<List<InventoryItem>>(emptyList()) }
+    var allItems by remember { mutableStateOf<List<InventoryItem>>(emptyList()) }
     var refreshKey by remember { mutableStateOf(0) }
     var pendingDelete by remember { mutableStateOf<InventoryItem?>(null) }
     var pendingEdit by remember { mutableStateOf<InventoryItem?>(null) }
@@ -145,32 +141,39 @@ fun InventoryScreen(
     var sortDescending by remember { mutableStateOf(true) }
     val lazyListState = rememberLazyListState()
 
-    LaunchedEffect(dbHelper, query, refreshKey, sortByRemaining, sortDescending) {
-        val db = dbHelper?.readableDatabase
-        val result = if (db != null) {
-            val inventoryItems = dbHelper
-                .getAllInventory(db)
-                .filter { item -> matchesInventoryQuery(item, query) }
-            if (sortByRemaining) {
-                if (sortDescending) {
-                    // 降序排序：余量从多到少
-                    inventoryItems.sortedByDescending { it.remainingPercent }
-                } else {
-                    // 升序排序：余量从少到多
-                    inventoryItems.sortedBy { it.remainingPercent }
-                }
-            } else {
-                inventoryItems
+    LaunchedEffect(dbHelper, refreshKey) {
+        allItems = if (dbHelper != null) {
+            withContext(Dispatchers.IO) {
+                dbHelper.getAllInventory(dbHelper.readableDatabase)
             }
         } else {
             emptyList()
         }
-        // 确保在主线程中更新状态并滚动到顶部
-        withContext(Dispatchers.Main) {
-            items = result
-            // 数据更新后滚动到列表顶部
-            lazyListState.scrollToItem(0)
+    }
+
+    val items = remember(allItems, query, sortByRemaining, sortDescending) {
+        val tokens = tokenizeInventorySearchQuery(query)
+        val inventoryItems = if (tokens.isEmpty()) {
+            allItems
+        } else {
+            allItems.filter { item -> matchesInventoryQuery(item, tokens) }
         }
+        if (sortByRemaining) {
+            if (sortDescending) {
+                // 降序排序：余量从多到少
+                inventoryItems.sortedByDescending { it.remainingPercent }
+            } else {
+                // 升序排序：余量从少到多
+                inventoryItems.sortedBy { it.remainingPercent }
+            }
+        } else {
+            inventoryItems
+        }
+    }
+
+    LaunchedEffect(query, refreshKey, sortByRemaining, sortDescending) {
+        // 数据更新后滚动到列表顶部
+        lazyListState.scrollToItem(0)
     }
 
     fun toggleSort() {
@@ -201,7 +204,7 @@ fun InventoryScreen(
                             if (db != null) {
                                 dbHelper.deleteTrayInventory(db, target.trayUid)
                             }
-                            items = items.filter { it.trayUid != target.trayUid }
+                            allItems = allItems.filter { it.trayUid != target.trayUid }
                         }
                         pendingDelete = null
                     }
@@ -324,7 +327,7 @@ fun InventoryScreen(
                                 dbHelper.upsertTrayRemaining(db, target.trayUid, editPercent, editGrams)
                                 dbHelper.upsertTrayNotes(db, target.trayUid, editOriginalMaterial, editNotes)
                             }
-                            items = items.map {
+                            allItems = allItems.map {
                                 if (it.trayUid == target.trayUid) {
                                     it.copy(
                                         remainingPercent = editPercent,
@@ -384,12 +387,12 @@ fun InventoryScreen(
                         )
                 ) {
                     Icon(
-                        imageVector = if (sortByRemaining && sortDescending) 
-                            Icons.Filled.ArrowDownward 
-                        else if (sortByRemaining) 
-                            Icons.Filled.ArrowUpward 
+                        imageVector = if (sortByRemaining && sortDescending)
+                            AppIcons.ArrowDownward
+                        else if (sortByRemaining)
+                            AppIcons.ArrowUpward
                         else
-                            Icons.AutoMirrored.Filled.Sort,
+                            AppIcons.Sort,
                         contentDescription = stringResource(R.string.inventory_sort),
                         tint = if (sortByRemaining) MaterialTheme.colorScheme.primary 
                         else MaterialTheme.colorScheme.onSurfaceVariant

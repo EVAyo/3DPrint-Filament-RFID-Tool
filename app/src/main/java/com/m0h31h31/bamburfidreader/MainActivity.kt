@@ -1010,12 +1010,17 @@ class MainActivity : ComponentActivity() {
                         builder.setPositiveButton(getString(R.string.action_got_it), null)
                     } else {
                         builder.setPositiveButton(getString(R.string.action_got_it)) { _, _ ->
-                            updateAction()
-                            android.app.AlertDialog.Builder(this@MainActivity)
-                                .setTitle(getString(R.string.config_update_result_title))
-                                .setMessage(getString(R.string.config_update_success))
-                                .setPositiveButton(getString(R.string.action_got_it), null)
-                                .show()
+                            // 配置落盘和数据库重建较慢，放到后台线程执行
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                updateAction()
+                                withContext(Dispatchers.Main) {
+                                    android.app.AlertDialog.Builder(this@MainActivity)
+                                        .setTitle(getString(R.string.config_update_result_title))
+                                        .setMessage(getString(R.string.config_update_success))
+                                        .setPositiveButton(getString(R.string.action_got_it), null)
+                                        .show()
+                                }
+                            }
                         }
                     }
                     builder.show()
@@ -1062,14 +1067,15 @@ class MainActivity : ComponentActivity() {
         LogCollector.init(this)
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         filamentDbHelper = FilamentDbHelper(this)
-        filamentDbHelper?.let {
-            syncCrealityMaterialDatabase(this, it)
-            // 加载本地缓存的异常UID，然后后台同步最新列表
-            anomalyUids = it.getAnomalyUids(it.readableDatabase)
+        // 数据库同步和文件统计放到后台线程，避免阻塞首帧
+        lifecycleScope.launch(Dispatchers.IO) {
+            filamentDbHelper?.let {
+                syncCrealityMaterialDatabase(this@MainActivity, it)
+            }
+            refreshSelfTagCount()
         }
         syncAnomalyUidsAsync()
         ensureShareDirectory()
-        refreshSelfTagCount()
         preloadShareTagItemsInBackground()
         if (voiceEnabled) {
             initTts()
@@ -3283,17 +3289,18 @@ class MainActivity : ComponentActivity() {
         val dbHelper = filamentDbHelper ?: return
         lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // 先加载本地缓存，网络同步成功后再覆盖
+                val cached = dbHelper.getAnomalyUids(dbHelper.readableDatabase)
+                if (cached.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        anomalyUids = cached
+                    }
+                }
                 val uids = com.m0h31h31.bamburfidreader.utils.AnalyticsReporter.fetchAnomalyUids(applicationContext)
                 if (uids != null) {
                     dbHelper.saveAnomalyUids(dbHelper.writableDatabase, uids)
                     withContext(Dispatchers.Main) {
                         anomalyUids = uids
-                    }
-                } else {
-                    // 拉取失败时，用本地缓存
-                    val cached = dbHelper.getAnomalyUids(dbHelper.readableDatabase)
-                    withContext(Dispatchers.Main) {
-                        anomalyUids = cached
                     }
                 }
             } catch (_: Exception) {

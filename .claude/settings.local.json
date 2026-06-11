@@ -28,7 +28,19 @@
       "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\export_db.py)",
       "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\check_db.py)",
       "PowerShell(python E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\export_db2.py)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "PowerShell(.\\\\gradlew.bat assembleDebug --console=plain -q)",
+      "PowerShell($candidates = @\\('F:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe','F:\\\\Program Files \\(x86\\)\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe','F:\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe','F:\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe',\"$env:ProgramFiles\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\java.exe\"\\); $candidates | Where-Object { Test-Path $_ })",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat assembleDebug --console=plain -q)",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat compileDebugKotlin --console=plain -q)",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat :app:dependencies --configuration debugRuntimeClasspath --console=plain -q | Select-String 'material-icons' | Select-Object -First 20)",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat :app:dependencies --configuration debugRuntimeClasspath --console=plain -q | Select-String 'material-icons')",
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\('E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk'\\); foreach \\($name in @\\('classes.dex','classes10.dex'\\)\\) { $e = $zip.GetEntry\\($name\\); $s = $e.Open\\(\\); $ms = New-Object System.IO.MemoryStream; $s.CopyTo\\($ms\\); $bytes = $ms.ToArray\\(\\); $text = [System.Text.Encoding]::ASCII.GetString\\($bytes\\); $idx = $text.IndexOf\\('material/icons'\\); \"$name : material/icons index = $idx\"; $i2 = $text.IndexOf\\('miuix'\\); \"$name : miuix index = $i2\"; $s.Dispose\\(\\); $ms.Dispose\\(\\) }; $zip.Dispose\\(\\))",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat compileDebugKotlin --console=plain)",
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat lintDebug --console=plain -q; \"exit=$LASTEXITCODE\")",
+      "PowerShell($memDir = 'C:\\\\Users\\\\jack8\\\\.claude\\\\projects\\\\E--AndroidStudioProjects-BambuRfidReader\\\\memory'; if \\(Test-Path \"$memDir\\\\MEMORY.md\"\\) { Get-Content \"$memDir\\\\MEMORY.md\" } else { 'NO INDEX' })",
+      "PowerShell(Select-String -Path 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\app\\\\build\\\\intermediates\\\\lint_intermediate_text_report\\\\debug\\\\lintReportDebug\\\\lint-results-debug.txt' -Pattern ': Error:' | ForEach-Object { $_.Line })",
+      "PowerShell(Select-String -Path 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\app\\\\build\\\\intermediates\\\\lint_intermediate_text_report\\\\debug\\\\lintReportDebug\\\\lint-results-debug.txt' -Pattern 'AppIcons\\\\.kt|NetworkUtils\\\\.kt|ConfigManager\\\\.kt|InventoryScreen\\\\.kt|FilamentDatabaseSync\\\\.kt|FilamentDbHelper\\\\.kt' | ForEach-Object { $_.Line } | Select-Object -First 30)"
     ]
   }
 }

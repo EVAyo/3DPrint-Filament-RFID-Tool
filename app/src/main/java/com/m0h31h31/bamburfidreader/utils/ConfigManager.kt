@@ -51,7 +51,60 @@ object ConfigManager {
     private const val CREALITY_MATERIAL_FILE = "creality_material_list.json"
     private const val CREALITY_MATERIAL_PRIMARY = "https://gitee.com/JackMoHeiHei/BambuRfidReader/raw/master/app/src/main/assets/creality_material_list.json"
     private const val CREALITY_MATERIAL_BACKUP = "https://raw.githubusercontent.com/m0h31h31/BambuRfidReader/refs/heads/master/app/src/main/assets/creality_material_list.json"
-    
+
+    // 远端配置的 ETag / Last-Modified 缓存，用于条件请求避免重复下载未变化的文件
+    private const val HTTP_CACHE_PREFS = "config_http_cache"
+
+    private class RemoteConfigContent(
+        val url: String,
+        val data: ByteArray,
+        val etag: String?,
+        val lastModified: String?
+    )
+
+    private sealed class RemoteConfigFetch {
+        object NotModified : RemoteConfigFetch()
+        class Changed(val content: RemoteConfigContent) : RemoteConfigFetch()
+    }
+
+    /**
+     * 依次尝试主/备地址，带条件请求头。远端未变化时返回 NotModified，
+     * 全部地址失败时返回 null。
+     */
+    private suspend fun fetchConfigIfChanged(
+        context: Context,
+        primaryUrl: String,
+        backupUrl: String
+    ): RemoteConfigFetch? {
+        val prefs = context.getSharedPreferences(HTTP_CACHE_PREFS, Context.MODE_PRIVATE)
+        for (url in listOf(primaryUrl, backupUrl)) {
+            val result = NetworkUtils.fetchFileConditional(
+                url,
+                etag = prefs.getString("etag:$url", null),
+                lastModified = prefs.getString("lastmod:$url", null)
+            ) ?: continue
+            return when (result) {
+                is NetworkUtils.ConditionalFetchResult.NotModified -> RemoteConfigFetch.NotModified
+                is NetworkUtils.ConditionalFetchResult.Success -> RemoteConfigFetch.Changed(
+                    RemoteConfigContent(url, result.data, result.etag, result.lastModified)
+                )
+            }
+        }
+        return null
+    }
+
+    /**
+     * 记录已应用内容对应的校验头。只有在内容真正落盘后才调用，
+     * 保证未应用的更新在下次启动时仍会重新提示。
+     */
+    private fun persistConfigValidators(context: Context, content: RemoteConfigContent) {
+        if (content.etag.isNullOrBlank() && content.lastModified.isNullOrBlank()) return
+        context.getSharedPreferences(HTTP_CACHE_PREFS, Context.MODE_PRIVATE).edit()
+            .putString("etag:${content.url}", content.etag)
+            .putString("lastmod:${content.url}", content.lastModified)
+            .apply()
+    }
+
     /**
      * 检查并更新配置文件
      */
@@ -76,11 +129,14 @@ object ConfigManager {
      */
     private suspend fun checkAppConfig(context: Context, onUpdateAvailable: (String, () -> Unit) -> Unit) {
         try {
-            val remoteContent = NetworkUtils.fetchFile(APP_CONFIG_PRIMARY, APP_CONFIG_BACKUP)
-            if (remoteContent != null) {
-                saveFile(context, APP_CONFIG_FILE, remoteContent)
-            } else {
-                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch AppConfig")
+            when (val fetch = fetchConfigIfChanged(context, APP_CONFIG_PRIMARY, APP_CONFIG_BACKUP)) {
+                null -> com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch AppConfig")
+                is RemoteConfigFetch.NotModified -> Unit
+                is RemoteConfigFetch.Changed -> {
+                    if (saveFile(context, APP_CONFIG_FILE, fetch.content.data)) {
+                        persistConfigValidators(context, fetch.content)
+                    }
+                }
             }
         } catch (e: Exception) {
             com.m0h31h31.bamburfidreader.logging.logDebug("Error checking AppConfig: ${e.message}")
@@ -92,27 +148,34 @@ object ConfigManager {
      */
     private suspend fun checkFilamentsColorCodes(context: Context, onUpdateAvailable: (String, () -> Unit) -> Unit) {
         try {
-            val remoteContent = NetworkUtils.fetchFile(FILAMENTS_COLOR_CODES_PRIMARY, FILAMENTS_COLOR_CODES_BACKUP)
-            if (remoteContent != null) {
-                val remoteHash = NetworkUtils.calculateHash(remoteContent)
-                val localHash = getLocalFileHash(context, FILAMENTS_COLOR_CODES_FILE)
-                
-                if (remoteHash != localHash) {
-                    withContext(Dispatchers.Main) {
-                        onUpdateAvailable(context.getString(R.string.config_update_filaments_color)) {
-                            saveFile(context, FILAMENTS_COLOR_CODES_FILE, remoteContent)
-                            try {
-                                val dbHelper = FilamentDbHelper(context)
-                                syncFilamentDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logging.logDebug("颜色配置文件更新成功，数据库已更新")
-                            } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
-                            }
+            val fetch = fetchConfigIfChanged(context, FILAMENTS_COLOR_CODES_PRIMARY, FILAMENTS_COLOR_CODES_BACKUP)
+            if (fetch == null) {
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_color_codes.json")
+                return
+            }
+            if (fetch !is RemoteConfigFetch.Changed) return
+            val content = fetch.content
+            val remoteHash = NetworkUtils.calculateHash(content.data)
+            val localHash = getLocalFileHash(context, FILAMENTS_COLOR_CODES_FILE)
+
+            if (remoteHash != localHash) {
+                withContext(Dispatchers.Main) {
+                    onUpdateAvailable(context.getString(R.string.config_update_filaments_color)) {
+                        if (saveFile(context, FILAMENTS_COLOR_CODES_FILE, content.data)) {
+                            persistConfigValidators(context, content)
+                        }
+                        try {
+                            val dbHelper = FilamentDbHelper(context)
+                            syncFilamentDatabase(context, dbHelper)
+                            com.m0h31h31.bamburfidreader.logging.logDebug("颜色配置文件更新成功，数据库已更新")
+                        } catch (e: Exception) {
+                            com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
                         }
                     }
                 }
             } else {
-                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_color_codes.json")
+                // 本地已是最新内容，记录校验头，后续启动可走 304
+                persistConfigValidators(context, content)
             }
         } catch (e: Exception) {
             com.m0h31h31.bamburfidreader.logging.logDebug("Error checking filaments_color_codes.json: ${e.message}")
@@ -140,16 +203,18 @@ object ConfigManager {
     /**
      * 保存文件到本地
      */
-    private fun saveFile(context: Context, fileName: String, content: ByteArray) {
-        try {
+    private fun saveFile(context: Context, fileName: String, content: ByteArray): Boolean {
+        return try {
             val externalDir = context.getExternalFilesDir(null) ?: context.filesDir
             val file = File(externalDir, fileName)
             FileOutputStream(file).use {
                 it.write(content)
             }
             com.m0h31h31.bamburfidreader.logging.logDebug("File saved: $fileName to ${file.absolutePath}")
+            true
         } catch (e: Exception) {
             com.m0h31h31.bamburfidreader.logging.logDebug("Error saving file: $fileName, error: ${e.message}")
+            false
         }
     }
     
@@ -180,27 +245,33 @@ object ConfigManager {
      */
     private suspend fun checkFilamentsTypeMapping(context: Context, onUpdateAvailable: (String, () -> Unit) -> Unit) {
         try {
-            val remoteContent = NetworkUtils.fetchFile(FILAMENTS_TYPE_MAPPING_PRIMARY, FILAMENTS_TYPE_MAPPING_BACKUP)
-            if (remoteContent != null) {
-                val remoteHash = NetworkUtils.calculateHash(remoteContent)
-                val localHash = getLocalFileHash(context, FILAMENTS_TYPE_MAPPING_FILE)
-                
-                if (remoteHash != localHash) {
-                    withContext(Dispatchers.Main) {
-                        onUpdateAvailable(context.getString(R.string.config_update_type_mapping)) {
-                            saveFile(context, FILAMENTS_TYPE_MAPPING_FILE, remoteContent)
-                            try {
-                                val dbHelper = FilamentDbHelper(context)
-                                syncFilamentDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logging.logDebug("耗材类型映射文件更新成功，数据库已更新")
-                            } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
-                            }
+            val fetch = fetchConfigIfChanged(context, FILAMENTS_TYPE_MAPPING_PRIMARY, FILAMENTS_TYPE_MAPPING_BACKUP)
+            if (fetch == null) {
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_type_mapping.json")
+                return
+            }
+            if (fetch !is RemoteConfigFetch.Changed) return
+            val content = fetch.content
+            val remoteHash = NetworkUtils.calculateHash(content.data)
+            val localHash = getLocalFileHash(context, FILAMENTS_TYPE_MAPPING_FILE)
+
+            if (remoteHash != localHash) {
+                withContext(Dispatchers.Main) {
+                    onUpdateAvailable(context.getString(R.string.config_update_type_mapping)) {
+                        if (saveFile(context, FILAMENTS_TYPE_MAPPING_FILE, content.data)) {
+                            persistConfigValidators(context, content)
+                        }
+                        try {
+                            val dbHelper = FilamentDbHelper(context)
+                            syncFilamentDatabase(context, dbHelper)
+                            com.m0h31h31.bamburfidreader.logging.logDebug("耗材类型映射文件更新成功，数据库已更新")
+                        } catch (e: Exception) {
+                            com.m0h31h31.bamburfidreader.logging.logDebug("更新数据库失败: ${e.message}")
                         }
                     }
                 }
             } else {
-                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch filaments_type_mapping.json")
+                persistConfigValidators(context, content)
             }
         } catch (e: Exception) {
             com.m0h31h31.bamburfidreader.logging.logDebug("Error checking filaments_type_mapping.json: ${e.message}")
@@ -384,24 +455,28 @@ object ConfigManager {
      */
     private suspend fun checkCrealityMaterialList(context: Context, onUpdateAvailable: (String, () -> Unit) -> Unit) {
         try {
-            val remoteContent = NetworkUtils.fetchFile(CREALITY_MATERIAL_PRIMARY, CREALITY_MATERIAL_BACKUP)
-            if (remoteContent != null) {
-                val remoteHash = NetworkUtils.calculateHash(remoteContent)
-                val localHash = getLocalFileHash(context, CREALITY_MATERIAL_FILE)
-                if (remoteHash != localHash) {
-                    withContext(Dispatchers.Main) {
-                        onUpdateAvailable(context.getString(R.string.config_update_creality)) {
-                            saveFile(context, CREALITY_MATERIAL_FILE, remoteContent)
-                            try {
-                                val dbHelper = FilamentDbHelper(context)
-                                syncCrealityMaterialDatabase(context, dbHelper)
-                                com.m0h31h31.bamburfidreader.logging.logDebug("创想三维耗材列表更新成功，数据库已更新")
-                            } catch (e: Exception) {
-                                com.m0h31h31.bamburfidreader.logging.logDebug("更新创想三维数据库失败: ${e.message}")
-                            }
+            val fetch = fetchConfigIfChanged(context, CREALITY_MATERIAL_PRIMARY, CREALITY_MATERIAL_BACKUP)
+            if (fetch !is RemoteConfigFetch.Changed) return
+            val content = fetch.content
+            val remoteHash = NetworkUtils.calculateHash(content.data)
+            val localHash = getLocalFileHash(context, CREALITY_MATERIAL_FILE)
+            if (remoteHash != localHash) {
+                withContext(Dispatchers.Main) {
+                    onUpdateAvailable(context.getString(R.string.config_update_creality)) {
+                        if (saveFile(context, CREALITY_MATERIAL_FILE, content.data)) {
+                            persistConfigValidators(context, content)
+                        }
+                        try {
+                            val dbHelper = FilamentDbHelper(context)
+                            syncCrealityMaterialDatabase(context, dbHelper)
+                            com.m0h31h31.bamburfidreader.logging.logDebug("创想三维耗材列表更新成功，数据库已更新")
+                        } catch (e: Exception) {
+                            com.m0h31h31.bamburfidreader.logging.logDebug("更新创想三维数据库失败: ${e.message}")
                         }
                     }
                 }
+            } else {
+                persistConfigValidators(context, content)
             }
         } catch (e: Exception) {
             com.m0h31h31.bamburfidreader.logging.logDebug("Error checking creality_material_list.json: ${e.message}")

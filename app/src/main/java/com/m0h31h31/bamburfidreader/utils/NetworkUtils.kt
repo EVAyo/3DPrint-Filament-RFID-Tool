@@ -14,44 +14,58 @@ object NetworkUtils {
     private const val TIMEOUT_MS = 10000 // 10秒超时
 
     /**
-     * 从网络获取文件内容
-     * @param primaryUrl 主要地址
-     * @param backupUrl 备用地址
-     * @return 文件内容字节数组，失败返回null
+     * 条件下载的结果：NotModified 表示远端内容自上次下载后未变化。
      */
-    suspend fun fetchFile(primaryUrl: String, backupUrl: String): ByteArray? {
-        return withContext(Dispatchers.IO) {
-            try {
-                fetchFileWithTimeout(primaryUrl)
-            } catch (e: Exception) {
-                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch from primary URL: $primaryUrl, error: ${e.message}")
-                try {
-                    fetchFileWithTimeout(backupUrl)
-                } catch (e: Exception) {
-                    com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch from backup URL: $backupUrl, error: ${e.message}")
-                    null
-                }
-            }
-        }
+    sealed class ConditionalFetchResult {
+        class Success(
+            val data: ByteArray,
+            val etag: String?,
+            val lastModified: String?
+        ) : ConditionalFetchResult()
+
+        object NotModified : ConditionalFetchResult()
     }
 
     /**
-     * 带超时的文件获取
+     * 带 ETag / Last-Modified 条件请求的文件下载。
+     * 服务端返回 304 时不重复传输内容，节省流量。
+     * 网络或 HTTP 错误返回 null。
      */
-    private fun fetchFileWithTimeout(urlString: String): ByteArray {
-        val url = URL(urlString)
-        val connection = url.openConnection() as HttpURLConnection
-        connection.apply {
-            connectTimeout = TIMEOUT_MS
-            readTimeout = TIMEOUT_MS
-            requestMethod = "GET"
-        }
-
-        return try {
-            val inputStream = connection.inputStream
-            readInputStream(inputStream)
-        } finally {
-            connection.disconnect()
+    suspend fun fetchFileConditional(
+        urlString: String,
+        etag: String? = null,
+        lastModified: String? = null
+    ): ConditionalFetchResult? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val connection = (URL(urlString).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = TIMEOUT_MS
+                    readTimeout = TIMEOUT_MS
+                    requestMethod = "GET"
+                    if (!etag.isNullOrBlank()) setRequestProperty("If-None-Match", etag)
+                    if (!lastModified.isNullOrBlank()) setRequestProperty("If-Modified-Since", lastModified)
+                }
+                try {
+                    val code = connection.responseCode
+                    when {
+                        code == HttpURLConnection.HTTP_NOT_MODIFIED -> ConditionalFetchResult.NotModified
+                        code in 200..299 -> ConditionalFetchResult.Success(
+                            data = connection.inputStream.use { readInputStream(it) },
+                            etag = connection.getHeaderField("ETag"),
+                            lastModified = connection.getHeaderField("Last-Modified")
+                        )
+                        else -> {
+                            com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch $urlString → $code")
+                            null
+                        }
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+            } catch (e: Exception) {
+                com.m0h31h31.bamburfidreader.logging.logDebug("Failed to fetch $urlString, error: ${e.message}")
+                null
+            }
         }
     }
 
