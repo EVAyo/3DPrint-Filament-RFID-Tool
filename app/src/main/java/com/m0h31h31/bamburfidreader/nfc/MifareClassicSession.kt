@@ -24,11 +24,40 @@ object MifareClassicSession {
         data class StaleTag(val message: String) : AuthResult()
     }
 
-    fun isStaleTagException(error: Throwable): Boolean {
-        val message = error.message.orEmpty()
-        return message.contains("out of date", ignoreCase = true) ||
-            message.contains("Tag was lost", ignoreCase = true)
+    /** NFC 失败原因细分，用于给用户更精确的提示而非笼统的“连接已失效”。 */
+    enum class NfcErrorKind {
+        TAG_LOST,          // 标签移出感应区 / 丢失
+        TAG_OUT_OF_DATE,   // 标签句柄过期（通常是标签换了或离开过感应区）
+        TRANSCEIVE_FAILED, // 通信传输失败（信号不稳定）
+        IO_ERROR,          // 其它读写 IO 错误
+        OTHER              // 无法归类
     }
+
+    fun classifyError(error: Throwable): NfcErrorKind {
+        if (error is android.nfc.TagLostException) return NfcErrorKind.TAG_LOST
+        val message = error.message.orEmpty()
+        return when {
+            message.contains("out of date", ignoreCase = true) -> NfcErrorKind.TAG_OUT_OF_DATE
+            message.contains("Tag was lost", ignoreCase = true) -> NfcErrorKind.TAG_LOST
+            message.contains("Transceive failed", ignoreCase = true) -> NfcErrorKind.TRANSCEIVE_FAILED
+            error is java.io.IOException -> NfcErrorKind.IO_ERROR
+            else -> NfcErrorKind.OTHER
+        }
+    }
+
+    /** Stale 结果里只保留了 message 字符串，据此判断是“移开”还是“句柄过期”。 */
+    fun classifyStaleMessage(message: String): NfcErrorKind =
+        if (message.contains("out of date", ignoreCase = true)) {
+            NfcErrorKind.TAG_OUT_OF_DATE
+        } else {
+            NfcErrorKind.TAG_LOST
+        }
+
+    /** 是否属于需要“移开标签后重新贴卡”的失效类型。 */
+    fun isStaleErrorKind(kind: NfcErrorKind): Boolean =
+        kind == NfcErrorKind.TAG_LOST || kind == NfcErrorKind.TAG_OUT_OF_DATE
+
+    fun isStaleTagException(error: Throwable): Boolean = isStaleErrorKind(classifyError(error))
 
     fun authenticateSectorWithRetry(
         mifare: MifareClassic,

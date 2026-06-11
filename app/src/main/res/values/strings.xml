@@ -695,6 +695,17 @@
     <string name="bambu_nfc_mifare_unsupported">MIFARE Classic not supported</string>
     <string name="bambu_nfc_tag_expired">Tag handle expired. Remove the tag and tap again.</string>
     <string name="bambu_nfc_tag_expired_detail_format">Tag handle expired. Remove the tag and tap again. (%1$s)</string>
+    <string name="bambu_nfc_cause_tag_lost">Tag moved out of range</string>
+    <string name="bambu_nfc_cause_tag_out_of_date">Tag handle expired (tag removed or swapped)</string>
+    <string name="bambu_nfc_cause_transceive">Communication failed (unstable NFC link)</string>
+    <string name="bambu_nfc_cause_io">Read/write I/O error</string>
+    <string name="bambu_nfc_cause_unknown">Unknown error</string>
+    <string name="bambu_nfc_retap_format">%1$s. Remove the tag and tap again.</string>
+    <string name="bambu_nfc_io_retry_exhausted_format">Retries exhausted (%1$s)</string>
+    <string name="bambu_nfc_write_verify_mismatch">Write verification mismatch (data not applied)</string>
+    <string name="bambu_nfc_write_block_error_detail_format">Write failed: block %1$d — %2$s</string>
+    <string name="bambu_nfc_write_block0_not_writable">Write failed: UID block (block 0) is not writable. For an FUID tag, choose source data whose UID matches the tag.</string>
+    <string name="bambu_nfc_format_zero_write_failed_detail_format">Format failed: block %1$d zero-write — %2$s</string>
     <string name="bambu_nfc_read_missing_keya_format">Sector %1$d missing derived KeyA</string>
     <string name="bambu_nfc_read_auth_failed_format">Sector %1$d derived KeyA auth failed</string>
     <string name="bambu_nfc_read_block_failed_format">Read block %1$d failed: %2$s</string>
@@ -715,7 +726,7 @@
     <string name="bambu_nfc_trailer_keyb_auth_failed">Derived KeyB and FF KeyB auth failed</string>
     <string name="bambu_nfc_write_source_empty">Write failed: source data is empty</string>
     <string name="bambu_nfc_write_sector_status_format">Writing sector %1$d/%2$d</string>
-    <string name="bambu_nfc_write_sector_ff_auth_failed_format">Write failed: sector %1$d FF auth failed</string>
+    <string name="bambu_nfc_write_sector_ff_auth_failed_format">Write failed: sector %1$d auth failed (default and derived keys)</string>
     <string name="bambu_nfc_write_block_missing_format">Write failed: block %1$d source data missing</string>
     <string name="bambu_nfc_write_block_size_format">Write failed: block %1$d data length invalid</string>
     <string name="bambu_nfc_write_block_error_format">Write failed: block %1$d write error</string>

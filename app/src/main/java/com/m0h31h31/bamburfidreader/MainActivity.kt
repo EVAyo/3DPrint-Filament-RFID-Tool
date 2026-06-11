@@ -932,6 +932,10 @@ class MainActivity : ComponentActivity() {
                             uiState = result
                             shouldNavigateToReader = true
                             maybeSpeakResult(result)
+                            // 识别页读卡提示音：读到数据（成功/部分）播成功音，否则播失败音。
+                            val readOk = result.status == uiString(R.string.status_read_success) ||
+                                result.status == uiString(R.string.status_read_partial)
+                            playFeedbackTone(if (readOk) FeedbackTone.SUCCESS else FeedbackTone.FAILURE)
                         }
                         val rawSnapshot = latestRawTagData
                         if (autoShareTag && rawSnapshot != null &&
@@ -5156,11 +5160,12 @@ class MainActivity : ComponentActivity() {
     private fun readTag(tag: Tag): NfcUiState {
         // 第一阶段：仅做读卡，返回原始块数据，不做业务解析。
         // 开启自动共享时强制读取全部扇区，确保上传数据完整。
+        // 识别页读取使用高速无重试配置，最大化读卡速度；写入/校验仍用用户档位。
         val rawResult = NfcTagReader.readRaw(
             tag = tag,
             readAllSectors = readAllSectors || autoShareTag,
             context = this,
-            compatibilityConfig = nfcCompatibilityConfig,
+            compatibilityConfig = NfcCompatibilityConfig.fastRead(),
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }
         )
@@ -5261,6 +5266,7 @@ class MainActivity : ComponentActivity() {
             displayType = processed.displayData.type,
             displayColorName = processed.displayData.colorName,
             displayColorCode = processed.displayData.colorCode,
+            displayFilaColorCode = processed.displayData.filaColorCode,
             displayColorType = processed.displayData.colorType,
             displayColors = processed.displayData.colorValues,
             secondaryFields = processed.displayData.secondaryFields,

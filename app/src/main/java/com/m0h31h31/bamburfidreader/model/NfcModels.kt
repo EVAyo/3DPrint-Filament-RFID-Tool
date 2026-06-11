@@ -14,6 +14,7 @@ data class NfcUiState(
     val displayType: String = "",
     val displayColorName: String = "",
     val displayColorCode: String = "",
+    val displayFilaColorCode: String = "",
     val displayColorType: String = "",
     val displayColors: List<String> = emptyList(),
     val secondaryFields: List<ParsedField> = emptyList(),

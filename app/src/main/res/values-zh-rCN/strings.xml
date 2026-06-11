@@ -631,6 +631,17 @@
     <string name="bambu_nfc_mifare_unsupported">不支持 MIFARE Classic</string>
     <string name="bambu_nfc_tag_expired">标签连接已失效，请移开标签后重新贴卡。</string>
     <string name="bambu_nfc_tag_expired_detail_format">标签连接已失效，请移开标签后重新贴卡。（%1$s）</string>
+    <string name="bambu_nfc_cause_tag_lost">标签已移出感应区</string>
+    <string name="bambu_nfc_cause_tag_out_of_date">标签句柄已过期（标签移开或被更换）</string>
+    <string name="bambu_nfc_cause_transceive">通信传输失败（NFC 信号不稳定）</string>
+    <string name="bambu_nfc_cause_io">读写 IO 错误</string>
+    <string name="bambu_nfc_cause_unknown">未知错误</string>
+    <string name="bambu_nfc_retap_format">%1$s，请移开标签后重新贴卡。</string>
+    <string name="bambu_nfc_io_retry_exhausted_format">重试已用尽（%1$s）</string>
+    <string name="bambu_nfc_write_verify_mismatch">写入校验不一致（数据未写入）</string>
+    <string name="bambu_nfc_write_block_error_detail_format">写入失败：块 %1$d —— %2$s</string>
+    <string name="bambu_nfc_write_block0_not_writable">写入失败：UID 块（块 0）不可写。若为 FUID 卡，请选择 UID 与卡片一致的数据。</string>
+    <string name="bambu_nfc_format_zero_write_failed_detail_format">格式化失败：块 %1$d 清零失败 —— %2$s</string>
     <string name="bambu_nfc_read_missing_keya_format">扇区 %1$d 缺少派生 KeyA</string>
     <string name="bambu_nfc_read_auth_failed_format">扇区 %1$d 派生 KeyA 认证失败</string>
     <string name="bambu_nfc_read_block_failed_format">读取块 %1$d 失败：%2$s</string>
@@ -651,7 +662,7 @@
     <string name="bambu_nfc_trailer_keyb_auth_failed">派生 KeyB 和 FF KeyB 认证均失败</string>
     <string name="bambu_nfc_write_source_empty">写入失败：源数据为空</string>
     <string name="bambu_nfc_write_sector_status_format">正在写入扇区 %1$d/%2$d</string>
-    <string name="bambu_nfc_write_sector_ff_auth_failed_format">写入失败：扇区 %1$d FF 认证失败</string>
+    <string name="bambu_nfc_write_sector_ff_auth_failed_format">写入失败：扇区 %1$d 认证失败（默认与派生密钥均失败）</string>
     <string name="bambu_nfc_write_block_missing_format">写入失败：块 %1$d 源数据缺失</string>
     <string name="bambu_nfc_write_block_size_format">写入失败：块 %1$d 数据长度无效</string>
     <string name="bambu_nfc_write_block_error_format">写入失败：块 %1$d 写入错误</string>

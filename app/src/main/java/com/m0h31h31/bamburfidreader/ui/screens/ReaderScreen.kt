@@ -460,7 +460,10 @@ fun ReaderScreen(
                                             )
                                             Text(text = "-", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, modifier = modifier.padding(3.dp))
                                             Text(
-                                                text = state.displayColorCode.ifBlank { stringResource(R.string.label_unknown) },
+                                                // 显示数字耗材色号（fila_color_code，如 10300），匹配不到时退回短色号。
+                                                text = state.displayFilaColorCode
+                                                    .ifBlank { state.displayColorCode }
+                                                    .ifBlank { stringResource(R.string.label_unknown) },
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontWeight = FontWeight.SemiBold,
                                                 modifier = modifier.padding(3.dp)

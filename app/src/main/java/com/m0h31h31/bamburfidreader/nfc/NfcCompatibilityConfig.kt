@@ -28,6 +28,29 @@ data class NfcCompatibilityConfig(
     companion object {
         fun default(): NfcCompatibilityConfig = forMode(NfcCompatibilityMode.BALANCED)
 
+        /**
+         * 识别页专用的高速读取配置：去掉认证/块读重试与失败重连，
+         * 并把各阶段延时压到最低（仅保留极小的稳定缓冲），最大化读卡速度。
+         * 读卡一旦失败立即返回（不再循环重连重试），让用户尽快重新贴卡。
+         * 仅用于读取，不影响写入/校验/格式化所用的用户档位配置。
+         */
+        fun fastRead(): NfcCompatibilityConfig = NfcCompatibilityConfig(
+            mode = NfcCompatibilityMode.FAST,
+            presenceCheckDelayMs = 125,
+            mifareTimeoutMs = 600,
+            postConnectDelayMs = 0L,
+            postKeyDerivationDelayMs = 10L,
+            reconnectDelayMs = 0L,
+            authRetryCount = 0,
+            reconnectAfterFailedAuth = false,
+            blockRetryCount = 0,
+            readInterBlockDelayMs = 0L,
+            writeInterBlockDelayMs = 0L,
+            writeVerificationDelayMs = 0L,
+            forceNfcAOnly = true,
+            verifyEachWriteBlock = false
+        )
+
         fun forMode(mode: NfcCompatibilityMode): NfcCompatibilityConfig {
             return when (mode) {
                 NfcCompatibilityMode.FAST -> NfcCompatibilityConfig(

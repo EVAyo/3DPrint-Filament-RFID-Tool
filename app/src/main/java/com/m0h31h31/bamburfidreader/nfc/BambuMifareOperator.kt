@@ -204,18 +204,20 @@ object BambuMifareOperator {
             }
         } catch (e: Exception) {
             appendLog("E", "Bambu operator failed: ${e.javaClass.simpleName}: ${e.message}")
+            val kind = MifareClassicSession.classifyError(e)
+            val cause = causeText(context, kind, e.message.orEmpty())
             BambuNfcResult.Failure(
-                message = if (MifareClassicSession.isStaleTagException(e)) {
-                    context.nfcText(R.string.bambu_nfc_tag_expired)
+                message = if (MifareClassicSession.isStaleErrorKind(kind)) {
+                    context.nfcText(R.string.bambu_nfc_retap_format, cause)
                 } else {
-                    e.message.orEmpty()
+                    cause
                 },
                 uidHex = uidHex,
                 keyA0Hex = keyA0Hex,
                 keyB0Hex = keyB0Hex,
                 keyA1Hex = keyA1Hex,
                 keyB1Hex = keyB1Hex,
-                staleTag = MifareClassicSession.isStaleTagException(e)
+                staleTag = MifareClassicSession.isStaleErrorKind(kind)
             )
         } finally {
             try {
@@ -404,7 +406,7 @@ object BambuMifareOperator {
                 }) {
                     is StepResult.Ok -> Unit
                     is StepResult.Stale -> return staleMessage(context, write.message)
-                    is StepResult.Failed -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_zero_write_failed_format, blockIndex))
+                    is StepResult.Failed -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_format_zero_write_failed_detail_format, blockIndex, write.message))
                 }
             }
         }
@@ -510,27 +512,75 @@ object BambuMifareOperator {
         val targetSectorCount = minOf(BAMBU_SECTOR_COUNT, mifare.sectorCount)
         for (sector in 0 until targetSectorCount) {
             onStatus(context.nfcText(R.string.bambu_nfc_write_sector_status_format, sector + 1, targetSectorCount))
-            val auth = authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
+
+            // 目标密钥取自源 dump 的扇区 trailer（即写入完成后该扇区应使用的密钥）。
+            // 半写入卡上已写完的扇区会从 FF 切换为这些派生密钥，必须用它们认证才能续写。
+            val sourceTrailer = sourceBlocks.getOrNull(sector * 4 + 3)?.takeIf { it.size == 16 }
+            val targetKeyA = sourceTrailer?.copyOfRange(0, 6)
+            val targetKeyB = sourceTrailer?.copyOfRange(10, 16)
+            // FF 密钥在前（空白/已格式化扇区），目标密钥在后（已写入扇区）。
+            // 交替认证会先试 index 0 再试 index 1，认证成功的 keyIndex 即可区分两种情况。
+            val keysA: List<ByteArray?> = if (targetKeyA != null) listOf(ffKey, targetKeyA) else listOf(ffKey)
+            val keysB: List<ByteArray?> = if (targetKeyB != null) listOf(ffKey, targetKeyB) else listOf(ffKey)
+            val reauth = { authenticate(mifare, sector, keysA, keysB, config, appendLog) }
+
+            val auth = reauth()
             if (auth is MifareClassicSession.AuthResult.StaleTag) return staleMessage(context, auth.message)
             if (auth !is MifareClassicSession.AuthResult.Success) {
                 return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_sector_ff_auth_failed_format, sector))
             }
+            // keyIndex==1 表示 FF 认证失败、改用目标密钥成功，即该扇区已写入完成。
+            val sectorAlreadyWritten = auth.keyIndex >= 1
+
             val startBlock = mifare.sectorToBlock(sector)
             val blockCount = mifare.getBlockCountInSector(sector)
             for (offset in 0 until blockCount) {
                 val blockIndex = startBlock + offset
+                val isTrailer = offset == blockCount - 1
                 val sourceIndex = sector * 4 + offset
                 val data = sourceBlocks.getOrNull(sourceIndex)
                     ?: return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_missing_format, sourceIndex))
                 if (data.size != 16) {
                     return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_size_format, sourceIndex))
                 }
-                when (val write = writeBlockWithRetry(mifare, blockIndex, data, config, context, appendLog) {
-                    authenticate(mifare, sector, listOf(ffKey), listOf(ffKey), config, appendLog)
-                }) {
+                if (isTrailer) {
+                    // 该扇区已用目标密钥认证，trailer 密钥已就位，跳过重复写入，
+                    // 避免在访问位不允许用当前密钥改写 trailer 时误判为失败。
+                    if (sectorAlreadyWritten) {
+                        appendLog("I", "Skip trailer block=$blockIndex write (sector already keyed)")
+                        continue
+                    }
+                } else {
+                    // 数据块已是目标内容则跳过写入，减少 NFC 往返与卡片磨损。
+                    // 用 reauth（FF + 派生密钥）读取，半写入卡的已写扇区也能读回比对。
+                    when (val current = readBlockWithRetry(mifare, blockIndex, config, context, appendLog, reauth)) {
+                        is BlockReadResult.Success -> {
+                            if (current.data.contentEquals(data)) {
+                                appendLog("I", "Skip block=$blockIndex write (already target data)")
+                                continue
+                            }
+                        }
+                        is BlockReadResult.Stale -> return staleMessage(context, current.message)
+                        is BlockReadResult.Failure -> Unit // 读取失败则照常写入
+                    }
+                }
+                when (val write = writeBlockWithRetry(mifare, blockIndex, data, config, context, appendLog, reauth)) {
                     is StepResult.Ok -> Unit
-                    is StepResult.Stale -> return staleMessage(context, write.message)
-                    is StepResult.Failed -> return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_error_format, blockIndex))
+                    // block 0 是 UID/厂商块：FUID 卡 UID 已锁、或所选 UID 与卡片不一致时都会写失败，
+                    // 不同设备上表现为传输失败或断连。这两种都归为“写入失败”，避免误导成断连/重试用尽。
+                    // （同 UID 数据已被前面的“相同则跳过”逻辑跳过，不会走到这里。）
+                    is StepResult.Stale -> if (blockIndex == 0) {
+                        appendLog("W", "block 0 write stale, treat as not-writable: ${write.message}")
+                        return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block0_not_writable))
+                    } else {
+                        return staleMessage(context, write.message)
+                    }
+                    is StepResult.Failed -> if (blockIndex == 0) {
+                        appendLog("W", "block 0 write failed, treat as not-writable: ${write.message}")
+                        return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block0_not_writable))
+                    } else {
+                        return BambuNfcResult.Message(false, context.nfcText(R.string.bambu_nfc_write_block_error_detail_format, blockIndex, write.message))
+                    }
                 }
             }
         }
@@ -616,6 +666,7 @@ object BambuMifareOperator {
         appendLog: (String, String) -> Unit,
         reauthenticate: () -> MifareClassicSession.AuthResult
     ): BlockReadResult {
+        var lastErrorKind: MifareClassicSession.NfcErrorKind? = null
         for (attempt in 0..config.blockRetryCount) {
             try {
                 val raw = mifare.readBlock(blockIndex)
@@ -629,7 +680,8 @@ object BambuMifareOperator {
                 return BlockReadResult.Success(data)
             } catch (e: Exception) {
                 if (MifareClassicSession.isStaleTagException(e)) return BlockReadResult.Stale(e.message.orEmpty())
-                appendLog("D", "read block=$blockIndex failed attempt=$attempt: ${e.message}")
+                lastErrorKind = MifareClassicSession.classifyError(e)
+                appendLog("D", "read block=$blockIndex failed attempt=$attempt kind=$lastErrorKind: ${e.message}")
                 MifareClassicSession.reconnect(
                     mifare = mifare,
                     reconnectDelayMs = config.reconnectDelayMs,
@@ -644,7 +696,10 @@ object BambuMifareOperator {
                 }
             }
         }
-        return BlockReadResult.Failure(context.nfcText(R.string.bambu_nfc_io_retry_exhausted))
+        return BlockReadResult.Failure(
+            if (lastErrorKind != null) retryExhaustedText(context, lastErrorKind)
+            else context.nfcText(R.string.bambu_nfc_io_retry_exhausted)
+        )
     }
 
     private fun writeBlockWithRetry(
@@ -656,6 +711,8 @@ object BambuMifareOperator {
         appendLog: (String, String) -> Unit,
         reauthenticate: () -> MifareClassicSession.AuthResult
     ): StepResult {
+        var lastErrorKind: MifareClassicSession.NfcErrorKind? = null
+        var verifyMismatch = false
         for (attempt in 0..config.blockRetryCount) {
             try {
                 if (config.writeInterBlockDelayMs > 0) Thread.sleep(config.writeInterBlockDelayMs)
@@ -664,13 +721,14 @@ object BambuMifareOperator {
                 if (!config.verifyEachWriteBlock || isTrailerBlock(mifare, blockIndex)) return StepResult.Ok
                 val verify = readBlockWithRetry(mifare, blockIndex, config, context, appendLog, reauthenticate)
                 when (verify) {
-                    is BlockReadResult.Success -> if (verify.data.contentEquals(data)) return StepResult.Ok
+                    is BlockReadResult.Success -> if (verify.data.contentEquals(data)) return StepResult.Ok else verifyMismatch = true
                     is BlockReadResult.Stale -> return StepResult.Stale(verify.message)
                     is BlockReadResult.Failure -> Unit
                 }
             } catch (e: Exception) {
                 if (MifareClassicSession.isStaleTagException(e)) return StepResult.Stale(e.message.orEmpty())
-                appendLog("D", "write block=$blockIndex failed attempt=$attempt: ${e.message}")
+                lastErrorKind = MifareClassicSession.classifyError(e)
+                appendLog("D", "write block=$blockIndex failed attempt=$attempt kind=$lastErrorKind: ${e.message}")
                 MifareClassicSession.reconnect(
                     mifare = mifare,
                     reconnectDelayMs = config.reconnectDelayMs,
@@ -685,7 +743,14 @@ object BambuMifareOperator {
                 }
             }
         }
-        return StepResult.Failed(context.nfcText(R.string.bambu_nfc_io_retry_exhausted))
+        // 区分失败原因：异常（传输/IO）→ 具体原因；写后回读不一致 → 校验不一致；否则笼统重试用尽。
+        return StepResult.Failed(
+            when {
+                lastErrorKind != null -> retryExhaustedText(context, lastErrorKind)
+                verifyMismatch -> context.nfcText(R.string.bambu_nfc_write_verify_mismatch)
+                else -> context.nfcText(R.string.bambu_nfc_io_retry_exhausted)
+            }
+        )
     }
 
     private fun readBlockWithRetry(
@@ -729,30 +794,45 @@ object BambuMifareOperator {
         uidHex: String,
         sectorKeys: List<Pair<ByteArray, ByteArray>>
     ): BambuNfcResult.Failure {
+        val kind = MifareClassicSession.classifyStaleMessage(message)
         return BambuNfcResult.Failure(
-            message = context.nfcText(R.string.bambu_nfc_tag_expired),
+            message = context.nfcText(R.string.bambu_nfc_retap_format, causeText(context, kind, message)),
             uidHex = uidHex,
             keyA0Hex = sectorKeys.getOrNull(0)?.first?.toHex().orEmpty(),
             keyB0Hex = sectorKeys.getOrNull(0)?.second?.toHex().orEmpty(),
             keyA1Hex = sectorKeys.getOrNull(1)?.first?.toHex().orEmpty(),
             keyB1Hex = sectorKeys.getOrNull(1)?.second?.toHex().orEmpty(),
             staleTag = true
-        ).also {
-            if (message.isNotBlank()) {
-                // Keep the original Android message in debug logs via callers' appendLog paths.
-            }
-        }
+        )
     }
 
     private fun staleMessage(context: Context, message: String): BambuNfcResult.Message {
-        val text = if (message.isBlank()) {
-            context.nfcText(R.string.bambu_nfc_tag_expired)
-        } else {
-            context.nfcText(R.string.bambu_nfc_tag_expired_detail_format,
-                message
-            )
-        }
-        return BambuNfcResult.Message(false, text)
+        val kind = MifareClassicSession.classifyStaleMessage(message)
+        return BambuNfcResult.Message(
+            false,
+            context.nfcText(R.string.bambu_nfc_retap_format, causeText(context, kind, message))
+        )
+    }
+
+    /** 把失败类型翻译成本地化的原因短语；OTHER 时退回原始异常消息。 */
+    private fun causeText(
+        context: Context,
+        kind: MifareClassicSession.NfcErrorKind,
+        rawMessage: String
+    ): String = when (kind) {
+        MifareClassicSession.NfcErrorKind.TAG_LOST -> context.nfcText(R.string.bambu_nfc_cause_tag_lost)
+        MifareClassicSession.NfcErrorKind.TAG_OUT_OF_DATE -> context.nfcText(R.string.bambu_nfc_cause_tag_out_of_date)
+        MifareClassicSession.NfcErrorKind.TRANSCEIVE_FAILED -> context.nfcText(R.string.bambu_nfc_cause_transceive)
+        MifareClassicSession.NfcErrorKind.IO_ERROR -> context.nfcText(R.string.bambu_nfc_cause_io)
+        MifareClassicSession.NfcErrorKind.OTHER -> rawMessage.ifBlank { context.nfcText(R.string.bambu_nfc_cause_unknown) }
+    }
+
+    private fun retryExhaustedText(
+        context: Context,
+        kind: MifareClassicSession.NfcErrorKind?
+    ): String {
+        val cause = if (kind != null) causeText(context, kind, "") else context.nfcText(R.string.bambu_nfc_cause_unknown)
+        return context.nfcText(R.string.bambu_nfc_io_retry_exhausted_format, cause)
     }
 }
 
