@@ -25,14 +25,14 @@ class BambuFilamentMatcherTest {
             colorValues = listOf("#000000FF")
         )
 
-        assertEquals(
-            black,
-            findBambuFilamentMatch(
-                entries = listOf(oldColorValueOnly, black),
-                filaId = "GFG00",
-                rawColorCode = "A01-K00"
-            )
+        val matched = findBambuFilamentMatch(
+            entries = listOf(oldColorValueOnly, black),
+            filaId = "GFG00",
+            rawColorCode = "A01-K00"
         )
+        assertEquals(black, matched)
+        assertEquals("legacy-K00", matched?.filaColorCode)
+        assertEquals("K00", matched?.colorCode)
     }
 
     @Test
@@ -50,6 +50,18 @@ class BambuFilamentMatcherTest {
                 rawColorCode = "A01-K00"
             )
         )
+    }
+
+    @Test
+    fun resolvesSpecificFilamentTypeToBaseType() {
+        val groups = mapOf(
+            "PLA" to listOf("PLA Basic", "PLA Matte"),
+            "ASA" to listOf("ASA-Aero")
+        )
+
+        assertEquals("PLA", resolveBambuBaseFilamentType("PLA Basic", groups))
+        assertEquals("ASA", resolveBambuBaseFilamentType("ASA Aero", groups))
+        assertEquals("Unknown Blend", resolveBambuBaseFilamentType("Unknown Blend", groups))
     }
 
     private fun entry(

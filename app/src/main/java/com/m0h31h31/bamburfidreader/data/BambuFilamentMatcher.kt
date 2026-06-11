@@ -25,3 +25,21 @@ internal fun findBambuFilamentMatch(
             normalizeBambuColorCode(entry.colorCode) == normalizedColorCode
     }
 }
+
+internal fun resolveBambuBaseFilamentType(
+    specificType: String,
+    typeGroups: Map<String, List<String>>
+): String {
+    val normalizedSpecific = normalizeFilamentTypeForMatch(specificType)
+    if (normalizedSpecific.isBlank()) return ""
+    return typeGroups.entries.firstOrNull { (_, specifics) ->
+        specifics.any { normalizeFilamentTypeForMatch(it) == normalizedSpecific }
+    }?.key.orEmpty().ifBlank { specificType.trim() }
+}
+
+private fun normalizeFilamentTypeForMatch(value: String): String {
+    return value
+        .trim()
+        .uppercase(Locale.US)
+        .filter { it.isLetterOrDigit() }
+}

@@ -247,6 +247,21 @@ Bambu parsing and inventory:
 - Do not use `fila_id + fila_color` color-value matching as a fallback for
   Bambu dictionary lookup. New `filaments_color_codes.json` entries without
   `color_code` are not considered valid for Bambu matching.
+- `fila_color_code` and `color_code` are separate business fields. In
+  `filament_inventory`, keep JSON `fila_color_code` for display/catalog codes
+  and store JSON `color_code` separately for `fila_id + color_code` matching.
+  Do not replace one with the other.
+- Inventory rows store Bambu block 12 production date in
+  `filament_inventory.production_date` when a tag read can parse it.
+- JSON `fila_type` in `filaments_color_codes.json` is treated as the detailed
+  material type. Resolve the inventory/tag-library base material type through
+  `filaments_type_mapping.json` and store both `material_type` and
+  `material_detailed_type`; do not overwrite mapped values with raw tag fields.
+- Downloaded and imported Bambu tag-library rows must derive match keys from
+  raw tag blocks, not ZIP/file metadata. Extract `color_code` and `fila_id`
+  from block 1, match with the shared Bambu filament matcher, and cache both
+  base `material_type`, detailed `material_detailed_type`, and JSON
+  `fila_color_code` in `share_tags`.
 - Keep Bambu reader, inventory, and tag-library display data on the same
   matching path. The tag library should cache matched display fields in SQLite
   and refresh them during dictionary sync instead of reparsing every raw tag on
@@ -269,7 +284,14 @@ Data/config:
 - Remote config fetch uses Gitee primary URLs and GitHub backup URLs.
 - Updating filament/color or type-mapping config triggers filament database
   re-sync; updating Creality material config triggers Creality database re-sync.
-- SQLite database name is `filaments.db`; schema version is 23.
+- Do not run Bambu filament dictionary sync automatically from
+  `MainActivity.onCreate()`. Dictionary rebuild/rematch should happen only from
+  explicit flows such as confirmed config updates or database reset.
+- Filament/color and type-mapping sync hashes include the current app
+  `versionCode`; when an explicit sync runs after an app update, the Bambu
+  dictionary is rebuilt once and `share_tags` / `filament_inventory` cached
+  display fields are fully rematched against the current matching logic.
+- SQLite database name is `filaments.db`; schema version is 29.
 - Existing schema tables include `filaments`, `filament_inventory`,
   `share_tags`, `snapmaker_share_tags`, `creality_materials`,
   `filament_type_mapping`, `meta_v2`, and `anomaly_uids`.

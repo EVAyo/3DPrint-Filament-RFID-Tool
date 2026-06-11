@@ -141,8 +141,10 @@ private fun matchesQuery(item: ShareTagItem, tokens: List<String>): Boolean {
     val fields = listOf(
         item.materialId.lowercase(),
         item.materialType.lowercase(),
+        item.materialDetailedType.lowercase(),
         item.colorName.lowercase(),
         item.colorUid.lowercase(),
+        item.filaColorCode.lowercase(),
         item.sourceUid.lowercase()
     )
     return tokens.all { token -> fields.any { it.contains(token) } }
@@ -150,6 +152,8 @@ private fun matchesQuery(item: ShareTagItem, tokens: List<String>): Boolean {
 
 private data class ColorGroup(
     val colorUid: String,
+    val filaColorCode: String,
+    val materialId: String,
     val colorName: String,
     val colorType: String,
     val colorValues: List<String>,
@@ -160,18 +164,20 @@ private data class CategoryGroup(val materialType: String, val colorGroups: List
 
 private fun buildCategoryGroups(items: List<ShareTagItem>, unknownLabel: String): List<CategoryGroup> {
     return items
-        .groupBy { it.materialType.ifBlank { unknownLabel } }
+        .groupBy { it.materialDetailedType.ifBlank { it.materialType }.ifBlank { unknownLabel } }
         .entries
         .sortedBy { it.key }
         .map { (material, matItems) ->
             val colorGroups = matItems
-                .groupBy { "${it.colorUid}|${it.colorName}" }
+                .groupBy { "${it.colorUid}|${it.filaColorCode}|${it.colorName}" }
                 .entries
                 .sortedBy { it.key }
                 .map { (_, groupItems) ->
                     val first = groupItems.first()
                     ColorGroup(
                         colorUid = first.colorUid,
+                        filaColorCode = first.filaColorCode,
+                        materialId = first.materialId,
                         colorName = first.resolvedColorName(),
                         colorType = first.colorType,
                         colorValues = first.colorValues,
@@ -246,13 +252,21 @@ private fun TagListItem(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(item.materialType.ifBlank { unknownText }, style = MaterialTheme.typography.bodyMedium, color = titleColor)
+                        Text(
+                            item.materialDetailedType.ifBlank { item.materialType }.ifBlank { unknownText },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = titleColor
+                        )
                         if (item.productionDate.isNotBlank()) {
                             Text(item.productionDate, fontSize = 10.sp, color = subtitleColor)
                         }
                     }
                     Text(
-                        text = stringResource(R.string.tag_uid_color_id_format, item.sourceUid, item.colorUid.ifBlank { unknownColorIdText }),
+                        text = listOf(
+                            item.sourceUid.ifBlank { unknownText },
+                            item.filaColorCode.ifBlank { unknownColorIdText },
+                            item.colorUid.ifBlank { unknownColorIdText }
+                        ).joinToString(" \u00B7 "),
                         fontSize = 12.sp, color = subtitleColor
                     )
                 }
@@ -317,11 +331,20 @@ private fun ColorSwatchTile(
         ) {
             Text(
                 text = group.colorName,
-                fontSize = 9.sp,
-                lineHeight = 10.sp,
+                fontSize = 8.sp,
+                lineHeight = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor,
-                maxLines = 2,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = group.filaColorCode.ifBlank { group.colorUid },
+                fontSize = 8.sp,
+                lineHeight = 9.sp,
+                color = textColor.copy(alpha = 0.9f),
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
@@ -388,6 +411,7 @@ private fun UidSelectionDialog(
                             text = buildString {
                                 append(group.colorName.ifBlank { unknownColorText })
                                 if (group.colorUid.isNotBlank()) append("  ${group.colorUid}")
+                                if (group.filaColorCode.isNotBlank()) append("  ${group.filaColorCode}")
                             },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -885,6 +909,7 @@ fun TagScreen(
         } else {
             filtered = filtered.sortedWith(
                 compareBy<ShareTagItem> { it.materialType.ifBlank { "\uFFFF" } }
+                    .thenBy { it.materialDetailedType.ifBlank { "\uFFFF" } }
                     .thenByDescending { it.productionDate.ifBlank { "" } }
             )
         }

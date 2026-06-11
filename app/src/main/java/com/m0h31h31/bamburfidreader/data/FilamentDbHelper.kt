@@ -10,7 +10,7 @@ import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 24
+private const val FILAMENT_DB_VERSION = 29
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -79,11 +79,13 @@ class FilamentDbHelper(val context: Context) :
                 material_detailed_type TEXT,
                 color_name TEXT,
                 color_name_en TEXT,
+                fila_color_code TEXT,
                 color_code TEXT,
                 color_type TEXT,
                 color_values TEXT,
                 original_material TEXT,
                 notes TEXT,
+                production_date TEXT,
                 FOREIGN KEY (filament_id) REFERENCES $FILAMENT_TABLE(id)
             )
             """.trimIndent()
@@ -109,7 +111,9 @@ class FilamentDbHelper(val context: Context) :
                 tray_uid TEXT,
                 material_id TEXT,
                 material_type TEXT,
+                material_detailed_type TEXT,
                 color_uid TEXT,
+                fila_color_code TEXT,
                 color_name TEXT,
                 color_name_en TEXT,
                 color_type TEXT,
@@ -371,6 +375,43 @@ class FilamentDbHelper(val context: Context) :
                 db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 25) {
+            addTrayColumn(db, "fila_color_code", "TEXT")
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 26) {
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_type_content_hash'")
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 27) {
+            try {
+                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN material_detailed_type TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_type_content_hash'")
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 28) {
+            try {
+                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN fila_color_code TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_type_content_hash'")
+            } catch (_: Exception) {}
+        }
+        if (oldVersion < 29) {
+            addTrayColumn(db, "production_date", "TEXT")
+        }
     }
 
     private fun recreateFilamentsTableWithColorCode(db: SQLiteDatabase) {
@@ -416,7 +457,9 @@ class FilamentDbHelper(val context: Context) :
         trayUid: String?,
         materialId: String? = null,
         materialType: String?,
+        materialDetailedType: String? = null,
         colorUid: String?,
+        filaColorCode: String? = null,
         colorName: String?,
         colorNameEn: String? = null,
         colorType: String?,
@@ -429,7 +472,9 @@ class FilamentDbHelper(val context: Context) :
         if (!trayUid.isNullOrBlank()) values.put("tray_uid", trayUid)
         if (!materialId.isNullOrBlank()) values.put("material_id", materialId)
         if (!materialType.isNullOrBlank()) values.put("material_type", materialType)
+        if (!materialDetailedType.isNullOrBlank()) values.put("material_detailed_type", materialDetailedType)
         if (!colorUid.isNullOrBlank()) values.put("color_uid", colorUid)
+        if (!filaColorCode.isNullOrBlank()) values.put("fila_color_code", filaColorCode)
         if (!colorName.isNullOrBlank()) values.put("color_name", colorName)
         if (!colorNameEn.isNullOrBlank()) values.put("color_name_en", colorNameEn)
         if (!colorType.isNullOrBlank()) values.put("color_type", colorType)
@@ -468,7 +513,7 @@ class FilamentDbHelper(val context: Context) :
         val result = mutableListOf<ShareTagDbRow>()
         val cursor = db.query(
             SHARE_TAGS_TABLE,
-            arrayOf("id", "file_uid", "tray_uid", "material_id", "material_type", "color_uid", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
+            arrayOf("id", "file_uid", "tray_uid", "material_id", "material_type", "material_detailed_type", "color_uid", "fila_color_code", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
             null, null, null, null,
             "material_type ASC, color_uid ASC, file_uid ASC"
         )
@@ -480,15 +525,17 @@ class FilamentDbHelper(val context: Context) :
                     trayUid = it.getString(2),
                     materialId = it.getString(3),
                     materialType = it.getString(4),
-                    colorUid = it.getString(5),
-                    colorName = it.getString(6),
-                    colorNameEn = it.getString(7),
-                    colorType = it.getString(8),
-                    colorValues = it.getString(9),
-                    rawData = it.getString(10),
-                    copyCount = it.getInt(11),
-                    verified = it.getInt(12) != 0,
-                    productionDate = it.getString(13)
+                    materialDetailedType = it.getString(5),
+                    colorUid = it.getString(6),
+                    filaColorCode = it.getString(7),
+                    colorName = it.getString(8),
+                    colorNameEn = it.getString(9),
+                    colorType = it.getString(10),
+                    colorValues = it.getString(11),
+                    rawData = it.getString(12),
+                    copyCount = it.getInt(13),
+                    verified = it.getInt(14) != 0,
+                    productionDate = it.getString(15)
                 ))
             }
         }
@@ -830,9 +877,11 @@ class FilamentDbHelper(val context: Context) :
         detailedMaterialType: String? = null,
         colorName: String? = null,
         colorNameEn: String? = null,
+        filaColorCode: String? = null,
         colorCode: String? = null,
         colorType: String? = null,
-        colorValues: String? = null
+        colorValues: String? = null,
+        productionDate: String? = null
     ) {
         val values = ContentValues()
         values.put("remaining_percent", remainingPercent)
@@ -860,6 +909,9 @@ class FilamentDbHelper(val context: Context) :
         if (colorNameEn != null) {
             values.put("color_name_en", colorNameEn)
         }
+        if (filaColorCode != null) {
+            values.put("fila_color_code", filaColorCode)
+        }
         if (colorCode != null) {
             values.put("color_code", colorCode)
         }
@@ -868,6 +920,9 @@ class FilamentDbHelper(val context: Context) :
         }
         if (colorValues != null) {
             values.put("color_values", colorValues)
+        }
+        if (productionDate != null) {
+            values.put("production_date", productionDate)
         }
         // UPDATE first to preserve original_material/notes; INSERT only for new rows.
         val updated = db.update(
@@ -918,13 +973,15 @@ class FilamentDbHelper(val context: Context) :
                 material_type LIKE ? OR
                 material_detailed_type LIKE ? OR
                 color_name LIKE ? OR
+                fila_color_code LIKE ? OR
                 color_code LIKE ? OR
                 color_type LIKE ? OR
                 color_values LIKE ? OR
+                production_date LIKE ? OR
                 CAST(remaining_percent AS TEXT) LIKE ?
             """.trimIndent()
             val pattern = "%$trimmed%"
-            selectionArgs = Array(8) { pattern }
+            selectionArgs = Array(10) { pattern }
         }
         val sql = """
             SELECT
@@ -933,13 +990,15 @@ class FilamentDbHelper(val context: Context) :
                 material_detailed_type,
                 color_name,
                 color_name_en,
+                fila_color_code,
                 color_code,
                 color_type,
                 color_values,
                 remaining_percent,
                 remaining_grams,
                 original_material,
-                notes
+                notes,
+                production_date
             FROM
                 "$TRAY_UID_TABLE"
             ${if (selection != null) "WHERE $selection" else ""}
@@ -950,7 +1009,7 @@ class FilamentDbHelper(val context: Context) :
         cursor.use {
             val results = ArrayList<InventoryItem>()
             while (it.moveToNext()) {
-                val colorValues = it.getString(7).orEmpty()
+                val colorValues = it.getString(8).orEmpty()
                     .split(",")
                     .map { value -> value.trim() }
                     .filter { value -> value.isNotBlank() }
@@ -961,13 +1020,15 @@ class FilamentDbHelper(val context: Context) :
                         materialDetailedType = it.getString(2).orEmpty(),
                         colorName = it.getString(3).orEmpty(),
                         colorNameEn = it.getString(4).orEmpty(),
-                        colorCode = it.getString(5).orEmpty(),
-                        colorType = it.getString(6).orEmpty(),
+                        filaColorCode = it.getString(5).orEmpty(),
+                        colorCode = it.getString(6).orEmpty(),
+                        colorType = it.getString(7).orEmpty(),
                         colorValues = colorValues,
-                        remainingPercent = it.getFloat(8),
-                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
-                        originalMaterial = it.getString(10).orEmpty(),
-                        notes = it.getString(11).orEmpty()
+                        remainingPercent = it.getFloat(9),
+                        remainingGrams = if (!it.isNull(10)) it.getInt(10) else null,
+                        productionDate = it.getString(13).orEmpty(),
+                        originalMaterial = it.getString(11).orEmpty(),
+                        notes = it.getString(12).orEmpty()
                     )
                 )
             }
@@ -986,13 +1047,15 @@ class FilamentDbHelper(val context: Context) :
                 material_detailed_type,
                 color_name,
                 color_name_en,
+                fila_color_code,
                 color_code,
                 color_type,
                 color_values,
                 remaining_percent,
                 remaining_grams,
                 original_material,
-                notes
+                notes,
+                production_date
             FROM
                 "$TRAY_UID_TABLE"
             ORDER BY
@@ -1002,7 +1065,7 @@ class FilamentDbHelper(val context: Context) :
         cursor.use {
             val results = ArrayList<InventoryItem>()
             while (it.moveToNext()) {
-                val colorValues = it.getString(7).orEmpty()
+                val colorValues = it.getString(8).orEmpty()
                     .split(",")
                     .map { value -> value.trim() }
                     .filter { value -> value.isNotBlank() }
@@ -1013,13 +1076,15 @@ class FilamentDbHelper(val context: Context) :
                         materialDetailedType = it.getString(2).orEmpty(),
                         colorName = it.getString(3).orEmpty(),
                         colorNameEn = it.getString(4).orEmpty(),
-                        colorCode = it.getString(5).orEmpty(),
-                        colorType = it.getString(6).orEmpty(),
+                        filaColorCode = it.getString(5).orEmpty(),
+                        colorCode = it.getString(6).orEmpty(),
+                        colorType = it.getString(7).orEmpty(),
                         colorValues = colorValues,
-                        remainingPercent = it.getFloat(8),
-                        remainingGrams = if (!it.isNull(9)) it.getInt(9) else null,
-                        originalMaterial = it.getString(10).orEmpty(),
-                        notes = it.getString(11).orEmpty()
+                        remainingPercent = it.getFloat(9),
+                        remainingGrams = if (!it.isNull(10)) it.getInt(10) else null,
+                        productionDate = it.getString(13).orEmpty(),
+                        originalMaterial = it.getString(11).orEmpty(),
+                        notes = it.getString(12).orEmpty()
                     )
                 )
             }

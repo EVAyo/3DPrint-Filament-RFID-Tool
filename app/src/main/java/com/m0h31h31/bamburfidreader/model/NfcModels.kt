@@ -33,8 +33,10 @@ data class ParsedField(
 
 data class DisplayData(
     val type: String,
+    val detailedType: String = "",
     val colorName: String,
     val colorNameEn: String = "",
+    val filaColorCode: String = "",
     val colorCode: String,
     val colorType: String,
     val colorValues: List<String>,

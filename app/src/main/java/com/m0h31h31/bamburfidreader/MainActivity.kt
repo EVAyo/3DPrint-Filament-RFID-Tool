@@ -552,6 +552,7 @@ class MainActivity : ComponentActivity() {
     private val readingInProgress = AtomicBoolean(false)
     // 防止共享目录重复并发扫描。
     private val shareLoadingInProgress = AtomicBoolean(false)
+    private val shareLoadStatusRequested = AtomicBoolean(false)
     private var toneGenerator: ToneGenerator? = null
     private val importTagPackageLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -1062,7 +1063,6 @@ class MainActivity : ComponentActivity() {
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         filamentDbHelper = FilamentDbHelper(this)
         filamentDbHelper?.let {
-            syncFilamentDatabase(this, it)
             syncCrealityMaterialDatabase(this, it)
             // 加载本地缓存的异常UID，然后后台同步最新列表
             anomalyUids = it.getAnomalyUids(it.readableDatabase)
@@ -1070,9 +1070,7 @@ class MainActivity : ComponentActivity() {
         syncAnomalyUidsAsync()
         ensureShareDirectory()
         refreshSelfTagCount()
-        lifecycleScope.launch(Dispatchers.IO) {
-            ensureBundledShareDataExtracted()
-        }
+        preloadShareTagItemsInBackground()
         if (voiceEnabled) {
             initTts()
         }
@@ -2031,7 +2029,9 @@ class MainActivity : ComponentActivity() {
                     trayUid = trayUid.ifBlank { null },
                     materialId = preview.materialId.ifBlank { null },
                     materialType = preview.displayData.type.ifBlank { null },
+                    materialDetailedType = preview.displayData.detailedType.ifBlank { null },
                     colorUid = preview.displayData.colorCode.ifBlank { null },
+                    filaColorCode = preview.displayData.filaColorCode.ifBlank { null },
                     colorName = preview.displayData.colorName.ifBlank { null },
                     colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                     colorType = preview.displayData.colorType.ifBlank { null },
@@ -2351,7 +2351,9 @@ class MainActivity : ComponentActivity() {
                     db, fileUid = incomingUid, trayUid = trayUid.ifBlank { null },
                     materialId = preview.materialId.ifBlank { null },
                     materialType = preview.displayData.type.ifBlank { null },
+                    materialDetailedType = preview.displayData.detailedType.ifBlank { null },
                     colorUid = preview.displayData.colorCode.ifBlank { null },
+                    filaColorCode = preview.displayData.filaColorCode.ifBlank { null },
                     colorName = preview.displayData.colorName.ifBlank { null },
                     colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                     colorType = preview.displayData.colorType.ifBlank { null },
@@ -3125,7 +3127,9 @@ class MainActivity : ComponentActivity() {
                     trayUid = row.trayUid.orEmpty(),
                     materialId = row.materialId.orEmpty(),
                     materialType = row.materialType.orEmpty(),
+                    materialDetailedType = row.materialDetailedType.orEmpty(),
                     colorUid = row.colorUid.orEmpty(),
+                    filaColorCode = row.filaColorCode.orEmpty(),
                     colorName = row.colorName.orEmpty(),
                     colorNameEn = row.colorNameEn.orEmpty(),
                     colorType = row.colorType.orEmpty(),
@@ -3182,7 +3186,9 @@ class MainActivity : ComponentActivity() {
                             trayUid = trayUid.ifBlank { null },
                             materialId = preview.materialId.ifBlank { null },
                             materialType = preview.displayData.type.ifBlank { null },
+                            materialDetailedType = preview.displayData.detailedType.ifBlank { null },
                             colorUid = preview.displayData.colorCode.ifBlank { null },
+                            filaColorCode = preview.displayData.filaColorCode.ifBlank { null },
                             colorName = preview.displayData.colorName.ifBlank { null },
                             colorNameEn = preview.displayData.colorNameEn.ifBlank { null },
                             colorType = preview.displayData.colorType.ifBlank { null },
@@ -3220,13 +3226,24 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun preloadShareTagItemsInBackground(): Boolean {
+        return loadShareTagItemsInBackground(showStatus = false)
+    }
+
     private fun refreshShareTagItemsAsync(): Boolean {
+        return loadShareTagItemsInBackground(showStatus = true)
+    }
+
+    private fun loadShareTagItemsInBackground(showStatus: Boolean): Boolean {
+        if (showStatus) {
+            shareLoadStatusRequested.set(true)
+            shareLoading = true
+            shareRefreshStatusClearJob?.cancel()
+            shareRefreshStatusMessage = uiString(R.string.share_refreshing)
+        }
         if (!shareLoadingInProgress.compareAndSet(false, true)) {
             return false
         }
-        shareLoading = true
-        shareRefreshStatusClearJob?.cancel()
-        shareRefreshStatusMessage = uiString(R.string.share_refreshing)
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 ensureBundledShareDataExtracted()
@@ -3234,14 +3251,23 @@ class MainActivity : ComponentActivity() {
                 val loadedItems = loadShareTagItems()
                 withContext(Dispatchers.Main) {
                     shareTagItems = loadedItems
+                    val statusRequested = shareLoadStatusRequested.getAndSet(false)
+                    val shouldShowStatus = showStatus || statusRequested
+                    if (shouldShowStatus) {
+                        shareRefreshStatusMessage = uiString(R.string.share_refreshed_format, loadedItems.size)
+                        scheduleClearShareRefreshStatusMessage()
+                    }
                     shareLoading = false
-                    shareRefreshStatusMessage = uiString(R.string.share_refreshed_format, loadedItems.size)
-                    scheduleClearShareRefreshStatusMessage()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    shareRefreshStatusMessage = uiString(R.string.share_refresh_failed_format, e.message.orEmpty())
-                    scheduleClearShareRefreshStatusMessage()
+                    val statusRequested = shareLoadStatusRequested.getAndSet(false)
+                    val shouldShowStatus = showStatus || statusRequested
+                    if (shouldShowStatus) {
+                        shareRefreshStatusMessage = uiString(R.string.share_refresh_failed_format, e.message.orEmpty())
+                        scheduleClearShareRefreshStatusMessage()
+                    }
+                    shareLoading = false
                 }
             } finally {
                 shareLoadingInProgress.set(false)

@@ -801,15 +801,6 @@ fun MiscScreen(
                                     }
                                 }
                             }
-                            Text(
-                                text = when (nfcCompatibilityMode) {
-                                    NfcCompatibilityMode.FAST -> stringResource(R.string.nfc_compat_mode_fast_desc)
-                                    NfcCompatibilityMode.BALANCED -> stringResource(R.string.nfc_compat_mode_balanced_desc)
-                                    NfcCompatibilityMode.STABLE -> stringResource(R.string.nfc_compat_mode_stable_desc)
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)

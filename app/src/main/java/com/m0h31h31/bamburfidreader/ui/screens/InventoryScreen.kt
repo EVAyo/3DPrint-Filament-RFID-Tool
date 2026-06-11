@@ -107,9 +107,11 @@ private fun matchesInventoryQuery(item: InventoryItem, query: String): Boolean {
         add(item.materialType)
         add(item.materialDetailedType)
         add(item.colorName)
+        add(item.filaColorCode)
         add(item.colorCode)
         add(item.colorType)
         add(item.colorValues.joinToString(separator = ","))
+        add(item.productionDate)
         add(item.remainingPercent.toString())
         add(String.format(Locale.ROOT, "%.1f", item.remainingPercent))
         add(item.originalMaterial)
@@ -521,34 +523,22 @@ fun InventoryScreen(
                                                         )
                                                     }
                                                 }
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Text(
-                                                        text = item.resolvedColorName().ifBlank {
-                                                            stringResource(
-                                                                R.string.inventory_unknown_color
-                                                            )
-                                                        },
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                    Text(
-                                                        text = if (item.colorCode.isNotBlank()) {
-                                                            stringResource(
-                                                                R.string.inventory_color_code_format,
-                                                                item.colorCode
-                                                            )
-                                                        } else {
-                                                            stringResource(
-                                                                R.string.inventory_color_code_unknown
-                                                            )
-                                                        },
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
+                                                val colorNameText = item.resolvedColorName().ifBlank {
+                                                    stringResource(R.string.inventory_unknown_color)
                                                 }
+                                                val colorNumberText = item.filaColorCode.ifBlank {
+                                                    stringResource(R.string.inventory_color_code_unknown)
+                                                }
+                                                Text(
+                                                    text = listOf(
+                                                        colorNameText,
+                                                        colorNumberText,
+                                                        item.colorCode,
+                                                        item.productionDate
+                                                    ).filter { it.isNotBlank() }.joinToString(" \u00B7 "),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
                                                 if (item.notes.isNotBlank()) {
                                                     Text(
                                                         text = item.notes,

@@ -144,6 +144,7 @@ object NfcTagProcessor {
 
         // 解析显示字段（类型、颜色名、颜色代码、颜色展示方案）。
         val displayData = buildDisplayData(parsedBlockData, dbHelper, logger)
+        val productionDate = findFieldValue(parsedBlockData.fields, "Block 12 Production Date")
         // 持久化库存详情，便于库存页与数据页直接查询展示。
         if (trayUidHex.isNotBlank()) {
             val db = dbHelper?.writableDatabase
@@ -158,13 +159,15 @@ object NfcTagProcessor {
                     totalWeightGrams = totalWeightGrams,
                     filamentId = filamentId,
                     materialId = parsedBlockData.materialId,
-                    materialType = parsedBlockData.filamentType,
-                    detailedMaterialType = parsedBlockData.detailedFilamentType,
+                    materialType = displayData.type,
+                    detailedMaterialType = displayData.detailedType,
                     colorName = displayData.colorName,
                     colorNameEn = displayData.colorNameEn.ifBlank { null },
+                    filaColorCode = displayData.filaColorCode.ifBlank { null },
                     colorCode = displayData.colorCode,
                     colorType = displayData.colorType,
-                    colorValues = displayData.colorValues.joinToString(separator = ",")
+                    colorValues = displayData.colorValues.joinToString(separator = ","),
+                    productionDate = productionDate.ifBlank { null }
                 )
             }
         }
@@ -395,8 +398,10 @@ private fun buildDisplayData(
     filamentCache: HashMap<String, List<FilamentColorEntry>>? = null
 ): DisplayData {
     var type = ""
+    var detailedType = ""
     var colorName = ""
     var colorNameEn = ""
+    var filaColorCode = ""
     var colorCode = parsedBlockData.colorCode
     var colorType = ""
     var colorValues = parsedBlockData.colorValues
@@ -412,8 +417,10 @@ private fun buildDisplayData(
         val entry = findBambuFilamentMatch(entries, parsedBlockData.materialId, parsedBlockData.colorCode)
         if (entry != null) {
             type = entry.filaType
+            detailedType = entry.filaDetailedType
             colorName = entry.resolvedColorName()
             colorNameEn = entry.colorNameEn
+            filaColorCode = entry.filaColorCode
             colorCode = entry.colorCode
             colorType = entry.colorType
             if (entry.colorValues.isNotEmpty()) colorValues = entry.colorValues
@@ -423,10 +430,16 @@ private fun buildDisplayData(
     if (type.isBlank()) {
         type = findFieldValue(
             parsedBlockData.fields,
-            "Block 4 Detailed Filament Type",
             "Block 2 Filament Type"
         )
         if (isLikelyHex(type)) type = ""
+    }
+    if (detailedType.isBlank()) {
+        detailedType = findFieldValue(
+            parsedBlockData.fields,
+            "Block 4 Detailed Filament Type"
+        )
+        if (isLikelyHex(detailedType)) detailedType = ""
     }
 
     val secondaryFields = buildSecondaryFields(parsedBlockData.fields, context).toMutableList()
@@ -438,8 +451,10 @@ private fun buildDisplayData(
 
     return DisplayData(
         type = type,
+        detailedType = detailedType,
         colorName = colorName,
         colorNameEn = colorNameEn,
+        filaColorCode = filaColorCode,
         colorCode = colorCode,
         colorType = colorType,
         colorValues = colorValues,
