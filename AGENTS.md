@@ -284,6 +284,10 @@ Data/config:
 - Remote config fetch uses Gitee primary URLs and GitHub backup URLs.
 - Updating filament/color or type-mapping config triggers filament database
   re-sync; updating Creality material config triggers Creality database re-sync.
+- Version-specific tag-library resets use `meta_v2` keys with the app
+  `versionCode`; for this release the app clears `share_tags` and
+  `snapmaker_share_tags` once before tag-library preload, and marks disk
+  migration done so local/bundled tag files are not immediately imported again.
 - Do not run Bambu filament dictionary sync automatically from
   `MainActivity.onCreate()`. Dictionary rebuild/rematch should happen only from
   explicit flows such as confirmed config updates or database reset.
@@ -291,7 +295,7 @@ Data/config:
   `versionCode`; when an explicit sync runs after an app update, the Bambu
   dictionary is rebuilt once and `share_tags` / `filament_inventory` cached
   display fields are fully rematched against the current matching logic.
-- SQLite database name is `filaments.db`; schema version is 29.
+- SQLite database name is `filaments.db`; schema version is 30.
 - Existing schema tables include `filaments`, `filament_inventory`,
   `share_tags`, `snapmaker_share_tags`, `creality_materials`,
   `filament_type_mapping`, `meta_v2`, and `anomaly_uids`.
