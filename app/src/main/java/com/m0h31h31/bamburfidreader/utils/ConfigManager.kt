@@ -24,7 +24,7 @@ object ConfigManager {
         "bambulab://bbl/design/model/detail?design_id=2020787&instance_id=2253290&appSharePlatform=copy"
     private const val DEFAULT_USER_COUNT_ENDPOINT = "https://brr.jacki.cn/events"
     private const val DEFAULT_TAG_SHARE_ENDPOINT = "https://brr.jacki.cn/api/tags"
-    private const val DEFAULT_TAG_DOWNLOAD_ENDPOINT = "https://brr.jacki.cn/api/public/tags/download"
+    private const val DEFAULT_TAG_DOWNLOAD_ENDPOINT = "https://brr.jacki.cn/api/public/tags/download/v2"
     private const val DEFAULT_TAG_CAN_DOWNLOAD_ENDPOINT = "https://brr.jacki.cn/api/public/tags/can-download"
     private const val DEFAULT_ANOMALY_REPORT_ENDPOINT = "https://brr.jacki.cn/api/anomaly"
     private const val DEFAULT_ANOMALY_UIDS_ENDPOINT = "https://brr.jacki.cn/api/anomaly/uids"
