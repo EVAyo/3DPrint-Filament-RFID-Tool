@@ -2,6 +2,8 @@ package com.m0h31h31.bamburfidreader
 
 import android.content.Context
 import com.m0h31h31.bamburfidreader.R
+import com.m0h31h31.bamburfidreader.data.findBambuFilamentMatch
+import com.m0h31h31.bamburfidreader.data.normalizeBambuColorCode
 import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
 import com.m0h31h31.bamburfidreader.model.DisplayData
 import com.m0h31h31.bamburfidreader.model.FilamentColorEntry
@@ -16,6 +18,8 @@ data class ProcessedTagData(
     val blockHexes: List<String>,
     val parsedFields: List<ParsedField>,
     val displayData: DisplayData,
+    val materialId: String = "",
+    val rawColorCode: String = "",
     val trayUidHex: String,
     val remainingPercent: Float,
     val remainingGrams: Int,
@@ -62,6 +66,8 @@ object NfcTagProcessor {
             blockHexes = blocksForParsing.map { it?.toHex().orEmpty() },
             parsedFields = parsedBlockData.fields,
             displayData = displayData,
+            materialId = parsedBlockData.materialId,
+            rawColorCode = parsedBlockData.colorCode,
             trayUidHex = trayUidHex,
             remainingPercent = 0f,
             remainingGrams = 0,
@@ -168,6 +174,8 @@ object NfcTagProcessor {
             blockHexes = blocksForParsing.map { it?.toHex().orEmpty() },
             parsedFields = parsedBlockData.fields,
             displayData = displayData,
+            materialId = parsedBlockData.materialId,
+            rawColorCode = parsedBlockData.colorCode,
             trayUidHex = trayUidHex,
             remainingPercent = remainingPercent,
             remainingGrams = remainingGrams,
@@ -188,6 +196,7 @@ private fun parseBlocks(
 ): ParsedBlockData {
     val parsed = ArrayList<ParsedField>()
     var materialId = ""
+    var colorCode = ""
     var filamentType = ""
     var detailedFilamentType = ""
     val colorValues = ArrayList<String>()
@@ -196,6 +205,7 @@ private fun parseBlocks(
     val block1 = blocks.getOrNull(1)
     if (block1 != null && block1.size >= 16) {
         val variantId = asciiOrHex(block1.copyOfRange(0, 8))
+        colorCode = normalizeBambuColorCode(variantId)
         val materialIdBytes = block1.copyOfRange(8, 16)
         materialId = asciiOnly(materialIdBytes)
         val materialDisplay = materialId.ifBlank { materialIdBytes.toHex() }
@@ -298,6 +308,7 @@ private fun parseBlocks(
     return ParsedBlockData(
         fields = parsed,
         materialId = materialId,
+        colorCode = colorCode,
         filamentType = filamentType,
         detailedFilamentType = detailedFilamentType,
         colorValues = colorValues
@@ -386,7 +397,7 @@ private fun buildDisplayData(
     var type = ""
     var colorName = ""
     var colorNameEn = ""
-    var colorCode = ""
+    var colorCode = parsedBlockData.colorCode
     var colorType = ""
     var colorValues = parsedBlockData.colorValues
 
@@ -394,13 +405,11 @@ private fun buildDisplayData(
         val entries = queryFilamentEntries(
             dbHelper,
             parsedBlockData.materialId,
-            parsedBlockData.colorValues,
+            parsedBlockData.colorCode,
             logger = logger,
             filamentCache = filamentCache
         )
-        val matched = findMatchingEntry(entries, parsedBlockData.colorValues)
-        val entry =
-            matched ?: if (parsedBlockData.colorValues.isEmpty()) entries.firstOrNull() else null
+        val entry = findBambuFilamentMatch(entries, parsedBlockData.materialId, parsedBlockData.colorCode)
         if (entry != null) {
             type = entry.filaType
             colorName = entry.resolvedColorName()
@@ -476,13 +485,13 @@ private fun localizeColorType(raw: String, context: Context?): String {
 private fun queryFilamentEntries(
     dbHelper: FilamentDbHelper,
     filaId: String,
-    readColors: List<String>,
+    rawColorCode: String,
     logger: (String) -> Unit,
     filamentCache: HashMap<String, List<FilamentColorEntry>>? = null
 ): List<FilamentColorEntry> {
     val db = dbHelper.readableDatabase
-    val normalizedColors = readColors.map { normalizeColorValue(it) }.filter { it.isNotBlank() }
-    logger("查询颜色: ${normalizedColors.joinToString(", ")}")
+    val colorCode = normalizeBambuColorCode(rawColorCode)
+    logger("Query filament by fila_id=$filaId color_code=$colorCode")
 
     fun queryBy(selection: String, selectionArgs: Array<String>, cacheKey: String): List<FilamentColorEntry> {
         filamentCache?.get(cacheKey)?.let { return it }
@@ -491,6 +500,7 @@ private fun queryFilamentEntries(
             "filaments",
             arrayOf(
                 "fila_color_code",
+                "color_code",
                 "fila_id",
                 "fila_color_type",
                 "fila_type",
@@ -508,22 +518,23 @@ private fun queryFilamentEntries(
         )
         cursor.use {
             while (it.moveToNext()) {
-                val colorValues = it.getString(7)
+                val colorValues = it.getString(8)
                     ?.split(',')
                     ?.map { value -> normalizeColorValue(value.trim()) }
                     ?.filter { value -> value.isNotEmpty() }
                     ?: emptyList()
                 entries.add(
                     FilamentColorEntry(
-                        colorCode = it.getString(0).orEmpty(),
-                        filaId = it.getString(1).orEmpty(),
-                        colorType = it.getString(2).orEmpty(),
-                        filaType = it.getString(3).orEmpty(),
-                        filaDetailedType = it.getString(4).orEmpty(),
-                        colorNameZh = it.getString(5).orEmpty(),
-                        colorNameEn = it.getString(6).orEmpty(),
+                        filaColorCode = it.getString(0).orEmpty(),
+                        colorCode = it.getString(1).orEmpty(),
+                        filaId = it.getString(2).orEmpty(),
+                        colorType = it.getString(3).orEmpty(),
+                        filaType = it.getString(4).orEmpty(),
+                        filaDetailedType = it.getString(5).orEmpty(),
+                        colorNameZh = it.getString(6).orEmpty(),
+                        colorNameEn = it.getString(7).orEmpty(),
                         colorValues = colorValues,
-                        colorCount = it.getInt(8)
+                        colorCount = it.getInt(9)
                     )
                 )
             }
@@ -532,21 +543,11 @@ private fun queryFilamentEntries(
         return entries
     }
 
-    if (normalizedColors.isNotEmpty()) {
-        val exactCountEntries = queryBy(
-            selection = "fila_id = ? AND color_count = ?",
-            selectionArgs = arrayOf(filaId, normalizedColors.size.toString()),
-            cacheKey = "$filaId:${normalizedColors.size}"
-        )
-        if (exactCountEntries.isNotEmpty()) {
-            return exactCountEntries
-        }
-        logger("按颜色数量未命中，回退为仅按 fila_id 查询")
-    }
+    if (filaId.isBlank() || colorCode.isBlank()) return emptyList()
     return queryBy(
-        selection = "fila_id = ?",
-        selectionArgs = arrayOf(filaId),
-        cacheKey = "$filaId:*"
+        selection = "fila_id = ? AND color_code = ?",
+        selectionArgs = arrayOf(filaId, colorCode),
+        cacheKey = "$filaId:$colorCode"
     )
 }
 
@@ -555,26 +556,6 @@ private fun extractWeightGrams(fields: List<ParsedField>): Int {
     val field = fields.firstOrNull { it.label == "Block 5 Spool Weight" } ?: return 0
     val digits = field.value.filter { it.isDigit() }
     return digits.toIntOrNull() ?: 0
-}
-
-// 在候选中寻找颜色完全匹配的一条记录。
-private fun findMatchingEntry(
-    entries: List<FilamentColorEntry>,
-    readColors: List<String>
-): FilamentColorEntry? {
-    val normalizedRead = readColors.map { normalizeColorValue(it) }.filter { it.isNotBlank() }
-    if (normalizedRead.isEmpty()) return null
-    return entries.firstOrNull { colorsMatch(it.colorValues, normalizedRead) }
-}
-
-// 严格比较颜色列表（数量一致且顺序一致）。
-private fun colorsMatch(entryColors: List<String>, readColors: List<String>): Boolean {
-    val normalizedEntry = entryColors.map { normalizeColorValue(it) }.filter { it.isNotBlank() }
-    val normalizedRead = readColors.map { normalizeColorValue(it) }.filter { it.isNotBlank() }
-    if (normalizedEntry.isEmpty() || normalizedRead.isEmpty()) return false
-    if (normalizedEntry.size != normalizedRead.size) return false
-    // 多色匹配改为“顺序无关”，避免数据库颜色顺序与标签顺序不一致时漏匹配。
-    return normalizedEntry.sorted() == normalizedRead.sorted()
 }
 
 // 按优先顺序取第一个非空字段值。

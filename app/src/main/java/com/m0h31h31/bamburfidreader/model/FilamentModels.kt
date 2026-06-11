@@ -3,6 +3,7 @@ package com.m0h31h31.bamburfidreader.model
 import java.util.Locale
 
 data class FilamentColorEntry(
+    val filaColorCode: String,
     val colorCode: String,
     val filaId: String,
     val colorType: String,
@@ -49,6 +50,7 @@ data class ShareTagDbRow(
     val id: Long,
     val fileUid: String,
     val trayUid: String?,
+    val materialId: String?,
     val materialType: String?,
     val colorUid: String?,
     val colorName: String?,
@@ -66,13 +68,15 @@ data class ShareTagItem(
     val fileName: String,
     val sourceUid: String,
     val trayUid: String,
+    val materialId: String,
     val materialType: String,
     val colorUid: String,
     val colorName: String,
     val colorNameEn: String = "",
     val colorType: String,
     val colorValues: List<String>,
-    val rawBlocks: List<ByteArray?>,
+    val rawData: String = "",
+    val rawBlocks: List<ByteArray?> = emptyList(),
     val dbId: Long = -1L,
     val copyCount: Int = 0,
     val verified: Boolean = false,

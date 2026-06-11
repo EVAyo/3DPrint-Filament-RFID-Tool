@@ -199,7 +199,7 @@
     <string name="config_hide_copied_tags_desc">Hide tags that have been successfully copied</string>
     <string name="config_dual_tag_mode">Dual-tag Mode</string>
     <string name="config_dual_tag_mode_desc">Hide after copying 2 times</string>
-    <string name="config_tag_view_mode">Copy Page View</string>
+    <string name="config_tag_view_mode">Tag Library View Style</string>
     <string name="config_tag_view_list">List</string>
     <string name="config_tag_view_category">Category</string>
     <string name="reader_original_material">Original Material</string>

@@ -10,7 +10,7 @@ import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 23
+private const val FILAMENT_DB_VERSION = 24
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -42,6 +42,7 @@ class FilamentDbHelper(val context: Context) :
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fila_id TEXT NOT NULL,
                 fila_color_code TEXT NOT NULL,
+                color_code TEXT NOT NULL,
                 fila_color_type TEXT,
                 fila_type TEXT,
                 fila_detailed_type TEXT,
@@ -49,12 +50,12 @@ class FilamentDbHelper(val context: Context) :
                 color_name_en TEXT,
                 color_values TEXT,
                 color_count INTEGER,
-                UNIQUE (fila_id, fila_color_code)
+                UNIQUE (fila_id, color_code)
             )
             """.trimIndent()
         )
         db.execSQL(
-            "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color ON $FILAMENT_TABLE (fila_id, color_count)"
+            "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color_code ON $FILAMENT_TABLE (fila_id, color_code)"
         )
         db.execSQL(
             """
@@ -106,6 +107,7 @@ class FilamentDbHelper(val context: Context) :
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_uid TEXT UNIQUE NOT NULL,
                 tray_uid TEXT,
+                material_id TEXT,
                 material_type TEXT,
                 color_uid TEXT,
                 color_name TEXT,
@@ -360,6 +362,42 @@ class FilamentDbHelper(val context: Context) :
                 db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
             } catch (_: Exception) {}
         }
+        if (oldVersion < 24) {
+            recreateFilamentsTableWithColorCode(db)
+            try {
+                db.execSQL("ALTER TABLE $SHARE_TAGS_TABLE ADD COLUMN material_id TEXT")
+            } catch (_: Exception) {}
+            try {
+                db.execSQL("DELETE FROM $FILAMENT_META_TABLE WHERE meta_key = 'filament_color_content_hash'")
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun recreateFilamentsTableWithColorCode(db: SQLiteDatabase) {
+        val tempFilamentTable = "${FILAMENT_TABLE}_v24"
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $tempFilamentTable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fila_id TEXT NOT NULL,
+                fila_color_code TEXT NOT NULL,
+                color_code TEXT NOT NULL,
+                fila_color_type TEXT,
+                fila_type TEXT,
+                fila_detailed_type TEXT,
+                color_name_zh TEXT,
+                color_name_en TEXT,
+                color_values TEXT,
+                color_count INTEGER,
+                UNIQUE (fila_id, color_code)
+            )
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE IF EXISTS $FILAMENT_TABLE")
+        db.execSQL("ALTER TABLE $tempFilamentTable RENAME TO $FILAMENT_TABLE")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_color_code ON $FILAMENT_TABLE (fila_id, color_code)"
+        )
     }
 
     private fun addTrayColumn(db: SQLiteDatabase, column: String, type: String) {
@@ -376,6 +414,7 @@ class FilamentDbHelper(val context: Context) :
         db: SQLiteDatabase,
         fileUid: String,
         trayUid: String?,
+        materialId: String? = null,
         materialType: String?,
         colorUid: String?,
         colorName: String?,
@@ -388,6 +427,7 @@ class FilamentDbHelper(val context: Context) :
         val values = ContentValues()
         values.put("file_uid", fileUid)
         if (!trayUid.isNullOrBlank()) values.put("tray_uid", trayUid)
+        if (!materialId.isNullOrBlank()) values.put("material_id", materialId)
         if (!materialType.isNullOrBlank()) values.put("material_type", materialType)
         if (!colorUid.isNullOrBlank()) values.put("color_uid", colorUid)
         if (!colorName.isNullOrBlank()) values.put("color_name", colorName)
@@ -428,7 +468,7 @@ class FilamentDbHelper(val context: Context) :
         val result = mutableListOf<ShareTagDbRow>()
         val cursor = db.query(
             SHARE_TAGS_TABLE,
-            arrayOf("id", "file_uid", "tray_uid", "material_type", "color_uid", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
+            arrayOf("id", "file_uid", "tray_uid", "material_id", "material_type", "color_uid", "color_name", "color_name_en", "color_type", "color_values", "raw_data", "copy_count", "verified", "production_date"),
             null, null, null, null,
             "material_type ASC, color_uid ASC, file_uid ASC"
         )
@@ -438,16 +478,17 @@ class FilamentDbHelper(val context: Context) :
                     id = it.getLong(0),
                     fileUid = it.getString(1) ?: "",
                     trayUid = it.getString(2),
-                    materialType = it.getString(3),
-                    colorUid = it.getString(4),
-                    colorName = it.getString(5),
-                    colorNameEn = it.getString(6),
-                    colorType = it.getString(7),
-                    colorValues = it.getString(8),
-                    rawData = it.getString(9),
-                    copyCount = it.getInt(10),
-                    verified = it.getInt(11) != 0,
-                    productionDate = it.getString(12)
+                    materialId = it.getString(3),
+                    materialType = it.getString(4),
+                    colorUid = it.getString(5),
+                    colorName = it.getString(6),
+                    colorNameEn = it.getString(7),
+                    colorType = it.getString(8),
+                    colorValues = it.getString(9),
+                    rawData = it.getString(10),
+                    copyCount = it.getInt(11),
+                    verified = it.getInt(12) != 0,
+                    productionDate = it.getString(13)
                 ))
             }
         }
@@ -846,12 +887,12 @@ class FilamentDbHelper(val context: Context) :
         }
     }
 
-    fun getFilamentId(db: SQLiteDatabase, filaId: String, filaColorCode: String): Long? {
+    fun getFilamentId(db: SQLiteDatabase, filaId: String, colorCode: String): Long? {
         val cursor = db.query(
             FILAMENT_TABLE,
             arrayOf("id"),
-            "fila_id = ? AND fila_color_code = ?",
-            arrayOf(filaId, filaColorCode),
+            "fila_id = ? AND color_code = ?",
+            arrayOf(filaId, normalizeBambuColorCode(colorCode)),
             null,
             null,
             null

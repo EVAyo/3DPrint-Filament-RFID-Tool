@@ -139,6 +139,7 @@ private fun tokenizeSearchQuery(input: String): List<String> {
 private fun matchesQuery(item: ShareTagItem, tokens: List<String>): Boolean {
     if (tokens.isEmpty()) return true
     val fields = listOf(
+        item.materialId.lowercase(),
         item.materialType.lowercase(),
         item.colorName.lowercase(),
         item.colorUid.lowercase(),

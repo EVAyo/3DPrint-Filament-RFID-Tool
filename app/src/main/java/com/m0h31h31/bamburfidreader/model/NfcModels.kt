@@ -44,6 +44,7 @@ data class DisplayData(
 data class ParsedBlockData(
     val fields: List<ParsedField>,
     val materialId: String,
+    val colorCode: String = "",
     val filamentType: String = "",
     val detailedFilamentType: String = "",
     val colorValues: List<String>

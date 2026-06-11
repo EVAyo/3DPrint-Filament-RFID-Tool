@@ -72,7 +72,8 @@ internal fun syncFilamentDatabase(context: Context, dbHelper: FilamentDbHelper) 
         entries.forEach { entry ->
             values.clear()
             values.put("fila_id", entry.filaId)
-            values.put("fila_color_code", entry.colorCode)
+            values.put("fila_color_code", entry.filaColorCode)
+            values.put("color_code", entry.colorCode)
             values.put("fila_color_type", entry.colorType)
             values.put("fila_type", entry.filaType)
             val detailedType = entry.filaDetailedType
@@ -121,7 +122,7 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
 
     val invCursor = db.query(
         TRAY_UID_TABLE,
-        arrayOf("tray_uid", "material_id", "color_values"),
+        arrayOf("tray_uid", "material_id", "color_code"),
         "material_id IS NOT NULL AND material_id != ''",
         null, null, null, null
     )
@@ -129,14 +130,16 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
         while (it.moveToNext()) {
             val trayUid = it.getString(0) ?: continue
             val materialId = it.getString(1) ?: continue
-            val rawColors = it.getString(2).orEmpty()
-                .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
-            val matched = findFilamentEntryInDb(db, materialId, rawColors) ?: continue
+            val colorCode = it.getString(2).orEmpty()
+            val matched = findFilamentEntryInDb(db, materialId, colorCode) ?: continue
             val values = ContentValues()
+            values.put("material_type", matched.filaType)
+            values.put("material_detailed_type", matched.filaDetailedType)
             values.put("color_name", matched.resolvedColorName())
             values.put("color_name_en", matched.colorNameEn)
             values.put("color_code", matched.colorCode)
             values.put("color_type", matched.colorType)
+            values.put("color_values", matched.colorValues.joinToString(separator = ","))
             db.update(TRAY_UID_TABLE, values, "tray_uid = ?", arrayOf(trayUid))
             updated++
         }
@@ -144,21 +147,25 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
 
     val tagCursor = db.query(
         SHARE_TAGS_TABLE,
-        arrayOf("file_uid", "color_uid", "color_values"),
-        "color_uid IS NOT NULL AND color_uid != ''",
+        arrayOf("file_uid", "material_id", "color_uid", "raw_data"),
+        null,
         null, null, null, null
     )
     tagCursor.use {
         while (it.moveToNext()) {
             val fileUid = it.getString(0) ?: continue
-            val colorUid = it.getString(1) ?: continue
-            val rawColors = it.getString(2).orEmpty()
-                .split(',').map { v -> normalizeColorValue(v.trim()) }.filter { v -> v.isNotBlank() }
-            val matched = findFilamentEntryInDb(db, colorUid, rawColors) ?: continue
+            val parsed = parseBambuMaterialAndColorFromRawData(it.getString(3).orEmpty())
+            val materialId = it.getString(1).orEmpty().ifBlank { parsed?.first.orEmpty() }
+            val colorUid = it.getString(2).orEmpty().ifBlank { parsed?.second.orEmpty() }
+            val matched = findFilamentEntryInDb(db, materialId, colorUid) ?: continue
             val values = ContentValues()
+            values.put("material_id", materialId)
+            values.put("color_uid", matched.colorCode)
+            values.put("material_type", matched.filaType)
             values.put("color_name", matched.resolvedColorName())
             values.put("color_name_en", matched.colorNameEn)
             values.put("color_type", matched.colorType)
+            values.put("color_values", matched.colorValues.joinToString(separator = ","))
             db.update(SHARE_TAGS_TABLE, values, "file_uid = ?", arrayOf(fileUid))
             updated++
         }
@@ -167,45 +174,77 @@ private fun rematchUnnamedInventoryColors(db: SQLiteDatabase) {
     if (updated > 0) logDebug("颜色重新匹配完成: $updated 条记录已更新")
 }
 
-private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, colorValues: List<String>): FilamentColorEntry? {
+private fun parseBambuMaterialAndColorFromRawData(rawData: String): Pair<String, String>? {
+    val block1Hex = rawData.lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .drop(1)
+        .firstOrNull()
+        ?: return null
+    val block1 = hexToBytes(block1Hex) ?: return null
+    if (block1.size < 16) return null
+    val rawColorCode = asciiOnly(block1.copyOfRange(0, 8))
+    val materialId = asciiOnly(block1.copyOfRange(8, 16))
+    val colorCode = normalizeBambuColorCode(rawColorCode)
+    if (materialId.isBlank() || colorCode.isBlank()) return null
+    return materialId to colorCode
+}
+
+private fun hexToBytes(value: String): ByteArray? {
+    val cleaned = value.filter { it.isDigit() || it.lowercaseChar() in 'a'..'f' }
+    if (cleaned.length < 32 || cleaned.length % 2 != 0) return null
+    return try {
+        ByteArray(cleaned.length / 2) { index ->
+            cleaned.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun asciiOnly(bytes: ByteArray): String {
+    val trimmed = bytes.dropLastWhile { it == 0x00.toByte() || it == 0xFF.toByte() }.toByteArray()
+    if (trimmed.isEmpty()) return ""
+    return if (trimmed.all { it in 0x20..0x7E }) String(trimmed, Charsets.US_ASCII) else ""
+}
+
+private fun findFilamentEntryInDb(db: SQLiteDatabase, filaId: String, rawColorCode: String): FilamentColorEntry? {
+    val colorCode = normalizeBambuColorCode(rawColorCode)
+    if (filaId.isBlank() || colorCode.isBlank()) return null
+
     fun query(selection: String, args: Array<String>): List<FilamentColorEntry> {
         val list = mutableListOf<FilamentColorEntry>()
         db.query(
             FILAMENT_TABLE,
-            arrayOf("fila_color_code", "fila_id", "fila_color_type", "fila_type", "fila_detailed_type", "color_name_zh", "color_name_en", "color_values", "color_count"),
+            arrayOf("fila_color_code", "color_code", "fila_id", "fila_color_type", "fila_type", "fila_detailed_type", "color_name_zh", "color_name_en", "color_values", "color_count"),
             selection, args, null, null, "fila_color_code ASC"
         ).use { c ->
             while (c.moveToNext()) {
-                val cv = c.getString(7)?.split(',')
+                val cv = c.getString(8)?.split(',')
                     ?.map { normalizeColorValue(it.trim()) }?.filter { it.isNotEmpty() }
                     ?: emptyList()
                 list.add(FilamentColorEntry(
-                    colorCode = c.getString(0).orEmpty(),
-                    filaId = c.getString(1).orEmpty(),
-                    colorType = c.getString(2).orEmpty(),
-                    filaType = c.getString(3).orEmpty(),
-                    filaDetailedType = c.getString(4).orEmpty(),
-                    colorNameZh = c.getString(5).orEmpty(),
-                    colorNameEn = c.getString(6).orEmpty(),
+                    filaColorCode = c.getString(0).orEmpty(),
+                    colorCode = c.getString(1).orEmpty(),
+                    filaId = c.getString(2).orEmpty(),
+                    colorType = c.getString(3).orEmpty(),
+                    filaType = c.getString(4).orEmpty(),
+                    filaDetailedType = c.getString(5).orEmpty(),
+                    colorNameZh = c.getString(6).orEmpty(),
+                    colorNameEn = c.getString(7).orEmpty(),
                     colorValues = cv,
-                    colorCount = c.getInt(8)
+                    colorCount = c.getInt(9)
                 ))
             }
         }
         return list
     }
 
-    val candidates = if (colorValues.isNotEmpty()) {
-        val byCount = query("fila_id = ? AND color_count = ?", arrayOf(filaId, colorValues.size.toString()))
-        byCount.ifEmpty { query("fila_id = ?", arrayOf(filaId)) }
-    } else {
-        query("fila_id = ?", arrayOf(filaId))
-    }
-
-    if (colorValues.isEmpty()) return candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
-    val normalized = colorValues.sorted()
-    return candidates.firstOrNull { it.colorValues.sorted() == normalized && it.resolvedColorName().isNotBlank() }
-        ?: candidates.firstOrNull { it.resolvedColorName().isNotBlank() }
+    return findBambuFilamentMatch(
+        query("fila_id = ? AND color_code = ?", arrayOf(filaId, colorCode)),
+        filaId,
+        colorCode
+    )
 }
 
 internal fun syncCrealityMaterialDatabase(context: Context, dbHelper: FilamentDbHelper) {
@@ -315,6 +354,10 @@ private fun parseFilamentEntries(jsonText: String): List<FilamentColorEntry> {
         if (filaId.isBlank()) {
             continue
         }
+        val colorCode = normalizeBambuColorCode(item.optString("color_code"))
+        if (colorCode.isBlank()) {
+            continue
+        }
         val colorNames = item.optJSONObject("fila_color_name")
         val colorNameZh = resolveColorName(colorNames, "zh")
         val colorNameEn = resolveColorName(colorNames, "en")
@@ -330,7 +373,8 @@ private fun parseFilamentEntries(jsonText: String): List<FilamentColorEntry> {
         }
         entries.add(
             FilamentColorEntry(
-                colorCode = item.optString("fila_color_code"),
+                filaColorCode = item.optString("fila_color_code"),
+                colorCode = colorCode,
                 filaId = filaId,
                 colorType = item.optString("fila_color_type"),
                 filaType = item.optString("fila_type"),

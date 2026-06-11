@@ -241,6 +241,16 @@ Bambu parsing and inventory:
 - Parsed fields include material variant/id, base filament type, detailed
   filament type, RGBA color, spool weight, diameter, drying settings, bed/nozzle
   temperatures, production date, and optional block 16 multi-color data.
+- Bambu material/color dictionary matching uses `fila_id + color_code`.
+  `color_code` is parsed from the first half of block 1 and normalized before
+  matching; for example `A01-W2` matches JSON `color_code` `W2`.
+- Do not use `fila_id + fila_color` color-value matching as a fallback for
+  Bambu dictionary lookup. New `filaments_color_codes.json` entries without
+  `color_code` are not considered valid for Bambu matching.
+- Keep Bambu reader, inventory, and tag-library display data on the same
+  matching path. The tag library should cache matched display fields in SQLite
+  and refresh them during dictionary sync instead of reparsing every raw tag on
+  each screen load.
 - Tray UID is read from block 9 and is the key used for inventory persistence.
 - New inventory uses a default remaining percent of 100.
 - If remaining grams are missing/zero and total spool weight is available,

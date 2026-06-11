@@ -82,7 +82,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.OutlinedTextField
 
-private enum class StatusTone {
+internal enum class StatusTone {
     SUCCESS,
     ERROR,
     WARNING,
@@ -94,8 +94,17 @@ private const val KEY_NOTICE_EXPANDED = "notice_expanded"
 private const val KEY_AD_EXPANDED = "ad_expanded"
 private const val KEY_NICKNAME = "user_nickname"
 
-private fun resolveStatusTone(message: String): StatusTone {
+internal fun resolveStatusTone(message: String): StatusTone {
     val text = message.lowercase()
+    if (listOf("失败", "错误", "异常", "取消", "不可用", "未找到").any { it in text }) {
+        return StatusTone.ERROR
+    }
+    if (listOf("成功", "完成", "已保存", "已打包", "已停止", "已导入", "此卡可用").any { it in text }) {
+        return StatusTone.SUCCESS
+    }
+    if (listOf("提醒", "警告", "请", "等待", "准备", "覆盖", "正在").any { it in text }) {
+        return StatusTone.WARNING
+    }
     return when {
         listOf(
             "失败",
@@ -1540,20 +1549,6 @@ fun MiscScreen(
                         },
                         modifier = Modifier.weight(1f)
                     )
-                }
-
-                NeuPanel(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Text(text = stringResource(R.string.misc_format_debug))
-                        AppSwitch(
-                            checked = formatTagDebugEnabled,
-                            onCheckedChange = onFormatTagDebugEnabledChange
-                        )
-                    }
                 }
 
                 Row(

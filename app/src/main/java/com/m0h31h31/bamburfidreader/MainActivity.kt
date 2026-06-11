@@ -863,6 +863,7 @@ class MainActivity : ComponentActivity() {
                     }
                     pendingNfcCompatibilityTest = null
                 }
+                return@ReaderCallback
             } else if (pendingSnapmakerWriteItem != null) {
                 val targetItem = pendingSnapmakerWriteItem!!
                 val writeResult = writeSnapmakerTagFromDump(tag, targetItem) { status ->
@@ -2028,6 +2029,7 @@ class MainActivity : ComponentActivity() {
                     db,
                     fileUid = incomingUid,
                     trayUid = trayUid.ifBlank { null },
+                    materialId = preview.materialId.ifBlank { null },
                     materialType = preview.displayData.type.ifBlank { null },
                     colorUid = preview.displayData.colorCode.ifBlank { null },
                     colorName = preview.displayData.colorName.ifBlank { null },
@@ -2347,6 +2349,7 @@ class MainActivity : ComponentActivity() {
                 val productionDate = extractProductionDate(rawBlocks)
                 val rowId = helper.insertShareTag(
                     db, fileUid = incomingUid, trayUid = trayUid.ifBlank { null },
+                    materialId = preview.materialId.ifBlank { null },
                     materialType = preview.displayData.type.ifBlank { null },
                     colorUid = preview.displayData.colorCode.ifBlank { null },
                     colorName = preview.displayData.colorName.ifBlank { null },
@@ -3111,29 +3114,23 @@ class MainActivity : ComponentActivity() {
         val result = ArrayList<ShareTagItem>(rows.size)
         for (row in rows) {
             val rawData = row.rawData ?: continue
-            val rawBlocks = parseHexTagFileStrict(rawData) ?: continue
             val colorValuesList = row.colorValues?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
             // 若 DB 中尚无生产日期，尝试从 raw_data 提取并回填
-            val productionDate = if (!row.productionDate.isNullOrBlank()) {
-                row.productionDate
-            } else {
-                extractProductionDate(rawBlocks)?.also { date ->
-                    dbHelper.updateShareTagProductionDate(db, row.fileUid, date)
-                }.orEmpty()
-            }
+            val productionDate = row.productionDate.orEmpty()
             result.add(
                 ShareTagItem(
                     relativePath = row.fileUid.lowercase(Locale.US),
                     fileName = "${row.fileUid}.txt",
                     sourceUid = row.fileUid,
                     trayUid = row.trayUid.orEmpty(),
+                    materialId = row.materialId.orEmpty(),
                     materialType = row.materialType.orEmpty(),
                     colorUid = row.colorUid.orEmpty(),
                     colorName = row.colorName.orEmpty(),
                     colorNameEn = row.colorNameEn.orEmpty(),
                     colorType = row.colorType.orEmpty(),
                     colorValues = colorValuesList,
-                    rawBlocks = rawBlocks,
+                    rawData = rawData,
                     dbId = row.id,
                     copyCount = row.copyCount,
                     verified = row.verified,
@@ -3183,6 +3180,7 @@ class MainActivity : ComponentActivity() {
                             db,
                             fileUid = fileUid,
                             trayUid = trayUid.ifBlank { null },
+                            materialId = preview.materialId.ifBlank { null },
                             materialType = preview.displayData.type.ifBlank { null },
                             colorUid = preview.displayData.colorCode.ifBlank { null },
                             colorName = preview.displayData.colorName.ifBlank { null },
@@ -3479,11 +3477,18 @@ class MainActivity : ComponentActivity() {
         return blocks
     }
 
+    private fun resolveShareTagBlocks(item: ShareTagItem): List<ByteArray?>? {
+        if (item.rawBlocks.isNotEmpty()) return item.rawBlocks
+        return parseHexTagFileStrict(item.rawData)
+    }
+
     private fun writeTagFromDump(tag: Tag, item: ShareTagItem, onStatusUpdate: ((String) -> Unit)? = null): String {
+        val sourceBlocks = resolveShareTagBlocks(item)
+            ?: return uiString(R.string.write_failed_format, uiString(R.string.tag_import_invalid_zip))
         return when (val result = BambuMifareOperator.run(
             tag = tag,
             config = nfcCompatibilityConfig,
-            operation = BambuNfcOperation.WriteDumpWithFf(item.rawBlocks),
+            operation = BambuNfcOperation.WriteDumpWithFf(sourceBlocks),
             context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
@@ -3507,10 +3512,12 @@ class MainActivity : ComponentActivity() {
         item: ShareTagItem,
         onStatusUpdate: ((String) -> Unit)? = null
     ): String {
+        val sourceBlocks = resolveShareTagBlocks(item)
+            ?: return uiString(R.string.cmodify_failed_format, uiString(R.string.tag_import_invalid_zip), uiString(R.string.cmodify_retry_hint))
         return when (val result = BambuMifareOperator.run(
             tag = tag,
             config = nfcCompatibilityConfig,
-            operation = BambuNfcOperation.FormatThenWriteDump(item.rawBlocks),
+            operation = BambuNfcOperation.FormatThenWriteDump(sourceBlocks),
             context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) },
@@ -4052,10 +4059,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun verifyTagAgainstDump(tag: Tag, item: ShareTagItem): String {
+        val sourceBlocks = resolveShareTagBlocks(item)
+            ?: return uiString(R.string.verify_failed_format, uiString(R.string.tag_import_invalid_zip))
         return when (val result = BambuMifareOperator.run(
             tag = tag,
             config = nfcCompatibilityConfig,
-            operation = BambuNfcOperation.VerifyDump(item.rawBlocks),
+            operation = BambuNfcOperation.VerifyDump(sourceBlocks),
             context = this,
             logger = ::logDebug,
             appendLog = { level, message -> LogCollector.append(applicationContext, level, message) }
