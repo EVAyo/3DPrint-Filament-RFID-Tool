@@ -12,6 +12,7 @@ data class NfcUiState(
     val blockHexes: List<String> = List(8) { "" },
     val parsedFields: List<ParsedField> = emptyList(),
     val displayType: String = "",
+    val displayDetailedType: String = "",
     val displayColorName: String = "",
     val displayColorCode: String = "",
     val displayFilaColorCode: String = "",

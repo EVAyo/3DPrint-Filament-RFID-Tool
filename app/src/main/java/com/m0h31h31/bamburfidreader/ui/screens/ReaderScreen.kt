@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
@@ -261,11 +262,14 @@ fun ReaderScreen(
                 // 状态文本：Bambu 用 state.status，其他品牌用 readerBrandStatus（始终显示）
                 val displayStatus = if (readerBrand == ReaderBrand.BAMBU) state.status else readerBrandStatus
                 if (readerBrand != ReaderBrand.BAMBU || displayStatus.isNotBlank()) {
-                    NeuPanel(modifier = Modifier.fillMaxWidth()) {
+                    NeuPanel(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                    ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                                .padding(horizontal = 12.dp, vertical = 0.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val statusIsWaiting = displayStatus.contains("正在") ||
@@ -442,7 +446,10 @@ fun ReaderScreen(
                                 when (readerBrand) {
                                     ReaderBrand.BAMBU -> {
                                         Text(
-                                            text = state.displayType.ifBlank { stringResource(R.string.label_unknown) },
+                                            // 显示完整子类型（如 PLA Basic），匹配不到时退回大类型。
+                                            text = state.displayDetailedType
+                                                .ifBlank { state.displayType }
+                                                .ifBlank { stringResource(R.string.label_unknown) },
                                             style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.ExtraBold,
                                             modifier = modifier.padding(3.dp),

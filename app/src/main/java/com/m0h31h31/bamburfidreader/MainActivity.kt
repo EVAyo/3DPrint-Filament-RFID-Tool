@@ -5280,6 +5280,7 @@ class MainActivity : ComponentActivity() {
             blockHexes = processed.blockHexes,
             parsedFields = processed.parsedFields,
             displayType = processed.displayData.type,
+            displayDetailedType = processed.displayData.detailedType,
             displayColorName = processed.displayData.colorName,
             displayColorCode = processed.displayData.colorCode,
             displayFilaColorCode = processed.displayData.filaColorCode,
