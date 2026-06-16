@@ -47,7 +47,9 @@
       "PowerShell(Select-String *)",
       "PowerShell($txt = 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\app\\\\build\\\\intermediates\\\\lint_intermediate_text_report\\\\debug\\\\lintReportDebug\\\\lint-results-debug.txt'; $lines = Get-Content $txt; for \\($i=0; $i -lt $lines.Count; $i++\\) { if \\($lines[$i] -match 'zero_write_failed_detail'\\) { for \\($j=[Math]::Max\\(0,$i-3\\); $j -le $i; $j++\\) { $lines[$j] } ; '----' } })",
       "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat assembleDebug --console=plain -q; \"exit=$LASTEXITCODE\")",
-      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; & 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\gradlew.bat' -p 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader' compileDebugKotlin --console=plain -q; \"exit=$LASTEXITCODE\")"
+      "PowerShell($env:JAVA_HOME = 'D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; & 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader\\\\gradlew.bat' -p 'E:\\\\AndroidStudioProjects\\\\BambuRfidReader' compileDebugKotlin --console=plain -q; \"exit=$LASTEXITCODE\")",
+      "PowerShell($env:JAVA_HOME='D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat compileDebugKotlin -q 2>&1 | Select-Object -Last 40)",
+      "Bash(git check-ignore *)"
     ]
   }
 }

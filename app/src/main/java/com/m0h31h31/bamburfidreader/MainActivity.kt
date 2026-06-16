@@ -160,6 +160,7 @@ private const val KEY_AUTO_SHARE_TAG = "auto_share_tag"
 private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
 private const val KEY_NOTICE_GUIDE_SHOWN = "notice_guide_shown"
 private const val KEY_LAST_WRITTEN_SOURCE_UID = "last_written_source_uid"
+private const val KEY_LAST_DICT_SYNC_VERSION_CODE = "last_dict_sync_version_code"
 private const val SHARE_TAG_CLEAR_VERSION_META_PREFIX = "share_tags_cleared_for_version_"
 
 private enum class PendingNfcCompatibilityTest {
@@ -1076,6 +1077,13 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             filamentDbHelper?.let {
                 syncCrealityMaterialDatabase(this@MainActivity, it)
+            }
+            // 应用升级后强制触发一次 Bambu 字典 re-sync（按 versionCode 去重，每个版本只跑一次），
+            // 使存量字典/库存/分享标签的颜色编码用新归一化逻辑（中间 0 统一）重新匹配。
+            val lastSyncedVersion = uiPrefs.getInt(KEY_LAST_DICT_SYNC_VERSION_CODE, 0)
+            if (lastSyncedVersion != BuildConfig.VERSION_CODE) {
+                filamentDbHelper?.let { syncFilamentDatabase(this@MainActivity, it) }
+                uiPrefs.edit().putInt(KEY_LAST_DICT_SYNC_VERSION_CODE, BuildConfig.VERSION_CODE).apply()
             }
             refreshSelfTagCount()
         }
