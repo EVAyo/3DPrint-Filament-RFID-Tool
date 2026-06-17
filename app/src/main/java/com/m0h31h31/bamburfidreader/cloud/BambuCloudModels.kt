@@ -25,7 +25,10 @@ data class BambuCloudPrinter(
     val taskName: String,
     val taskStatus: String,
     val progress: Int?,
-    val thumbnailUrl: String
+    val thumbnailUrl: String,
+    val structure: String = "",
+    val nozzleDiameter: Double? = null,
+    val accessCode: String = ""
 )
 
 data class BambuCloudFilament(

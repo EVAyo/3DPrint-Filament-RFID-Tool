@@ -167,6 +167,8 @@ fun AppNavigation(
     onSelectImportSnapmakerTagPackage: () -> String = { "" },
     snapmakerTagEnabled: Boolean = false,
     onSnapmakerTagEnabledChange: (Boolean) -> Unit = {},
+    cloudConnectEnabled: Boolean = true,
+    onCloudConnectEnabledChange: (Boolean) -> Unit = {},
     snapmakerShareTagItems: List<SnapmakerShareTagItem> = emptyList(),
     snapmakerShareLoading: Boolean = false,
     snapmakerWriteStatusMessage: String = "",
@@ -222,13 +224,14 @@ fun AppNavigation(
     LaunchedEffect(currentRoute) {
         onActiveRouteChange(currentRoute ?: "reader")
     }
-    val visibleDestinations = remember(inventoryEnabled, crealityEnabled, snapmakerTagEnabled, bambuTagEnabled) {
+    val visibleDestinations = remember(inventoryEnabled, crealityEnabled, snapmakerTagEnabled, bambuTagEnabled, cloudConnectEnabled) {
         topDestinations.filter { dest ->
             when (dest.route) {
                 "inventory", "data" -> inventoryEnabled
                 "tag" -> bambuTagEnabled
                 "creality" -> crealityEnabled
                 "snapmaker" -> snapmakerTagEnabled
+                "connect" -> cloudConnectEnabled
                 else -> true
             }
         }
@@ -263,6 +266,19 @@ fun AppNavigation(
             navController.navigate("reader") {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = false }
                 launchSingleTop = true
+            }
+        }
+    }
+    val appContext = LocalContext.current.applicationContext
+    LaunchedEffect(cloudConnectEnabled) {
+        if (!cloudConnectEnabled) {
+            // 关闭"拓竹云连接"功能时断开实时连接，并离开连接页
+            com.m0h31h31.bamburfidreader.ui.screens.BambuCloudController.get(appContext).shutdownRealtime()
+            if (currentRoute == "connect") {
+                navController.navigate("reader") {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = false }
+                    launchSingleTop = true
+                }
             }
         }
     }
@@ -432,7 +448,7 @@ fun AppNavigation(
                                         modifier = Modifier
                                             .size(36.dp)
                                             .background(
-                                                if (selected) ModernWorkbenchTokens.OrangeSoft else Color.Transparent,
+                                                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
                                                 RoundedCornerShape(10.dp)
                                             ),
                                         contentAlignment = Alignment.Center
@@ -442,7 +458,7 @@ fun AppNavigation(
                                             contentDescription = label,
                                             modifier = Modifier.size(24.dp),
                                             tint = if (selected) {
-                                                ModernWorkbenchTokens.Orange
+                                                MaterialTheme.colorScheme.primary
                                             } else {
                                                 ModernWorkbenchTokens.Muted
                                             }
@@ -451,7 +467,7 @@ fun AppNavigation(
                                     Text(
                                         text = label,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (selected) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Muted,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else ModernWorkbenchTokens.Muted,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1
                                     )
@@ -649,6 +665,8 @@ fun AppNavigation(
                             onSelectImportSnapmakerTagPackage = onSelectImportSnapmakerTagPackage,
                             snapmakerTagEnabled = snapmakerTagEnabled,
                             onSnapmakerTagEnabledChange = onSnapmakerTagEnabledChange,
+                            cloudConnectEnabled = cloudConnectEnabled,
+                            onCloudConnectEnabledChange = onCloudConnectEnabledChange,
                                 appConfigMessage = appConfigMessage,
                                 appConfigAdMessage = appConfigAdMessage,
                                 boostLink = appConfigBoostLink,

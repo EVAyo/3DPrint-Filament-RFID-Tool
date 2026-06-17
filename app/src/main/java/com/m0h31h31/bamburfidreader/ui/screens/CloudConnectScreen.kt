@@ -31,12 +31,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -95,10 +99,25 @@ fun CloudConnectScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val repository = remember(context) { BambuCloudRepository(context.applicationContext) }
+    val controller = remember(context) { BambuCloudController.get(context) }
+    val repository = controller.repository
     val coroutineScope = rememberCoroutineScope()
-    var session by remember { mutableStateOf<BambuCloudSession?>(null) }
-    var statusMessage by remember { mutableStateOf("") }
+
+    // 持久状态（跨页面保留，由 controller 持有）
+    var session by controller.sessionState
+    var statusMessage by controller.statusMessageState
+    var printers by controller.printersState
+    var printersLoading by controller.printersLoadingState
+    var printerStatusMessage by controller.printerStatusMessageState
+    var realtimeStatuses by controller.realtimeStatusesState
+    var mqttStatusMessage by controller.mqttStatusMessageState
+    var filaments by controller.filamentsState
+    var filamentCatalogInfo by controller.filamentCatalogInfoState
+    var filamentsLoading by controller.filamentsLoadingState
+    var filamentsSyncing by controller.filamentsSyncingState
+    var filamentStatusMessage by controller.filamentStatusMessageState
+
+    // 仅 UI 内的临时状态（弹窗/输入框），离开页面可重置
     var showLoginDialog by remember { mutableStateOf(false) }
     var account by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -106,189 +125,27 @@ fun CloudConnectScreen(
     var verificationRequired by remember { mutableStateOf(false) }
     var loginInProgress by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
-    var printers by remember { mutableStateOf<List<BambuCloudPrinter>>(emptyList()) }
-    var printersLoading by remember { mutableStateOf(false) }
-    var printerStatusMessage by remember { mutableStateOf("") }
-    var realtimeStatuses by remember { mutableStateOf<Map<String, BambuPrinterRealtimeStatus>>(emptyMap()) }
-    var mqttStatusMessage by remember { mutableStateOf("") }
-    var filaments by remember { mutableStateOf<List<BambuCloudFilament>>(emptyList()) }
-    var filamentCatalogInfo by remember { mutableStateOf<Map<Long, BambuCloudFilamentCatalogInfo>>(emptyMap()) }
-    var filamentsLoading by remember { mutableStateOf(false) }
-    var filamentsSyncing by remember { mutableStateOf(false) }
-    var filamentStatusMessage by remember { mutableStateOf("") }
 
-    suspend fun refreshPrinters() {
-        if (repository.loadSession() == null) {
-            printers = emptyList()
-            printerStatusMessage = ""
-            realtimeStatuses = emptyMap()
-            mqttStatusMessage = ""
-            printersLoading = false
-            return
+    fun syncFilamentRemainingToLocal() {
+        controller.syncFilamentRemainingToLocal(context) { list ->
+            BambuCloudRemainingSyncer.syncToLocalInventory(context, list).updatedCount
         }
-        printersLoading = true
-        printerStatusMessage = context.getString(R.string.cloud_printers_loading)
-        when (val result = repository.fetchPrinters()) {
-            is BambuCloudPrinterResult.Success -> {
-                printers = result.printers
-                printerStatusMessage = if (result.printers.isEmpty()) {
-                    context.getString(R.string.cloud_printers_empty)
-                } else {
-                    ""
-                }
-            }
-            is BambuCloudPrinterResult.Failure -> {
-                printerStatusMessage = context.getString(
-                    R.string.cloud_printers_refresh_failed,
-                    result.message
-                )
-            }
-        }
-        printersLoading = false
-    }
-
-    suspend fun refreshFilaments() {
-        if (repository.loadSession() == null) {
-            filaments = emptyList()
-            filamentCatalogInfo = emptyMap()
-            filamentStatusMessage = ""
-            filamentsLoading = false
-            filamentsSyncing = false
-            return
-        }
-        filamentsLoading = true
-        filamentStatusMessage = context.getString(R.string.cloud_filaments_loading)
-        when (val result = repository.fetchFilaments(offset = 0, limit = 20)) {
-            is BambuCloudFilamentResult.Success -> {
-                filaments = result.filaments
-                filamentStatusMessage = if (result.filaments.isEmpty()) {
-                    context.getString(R.string.cloud_filaments_empty)
-                } else {
-                    ""
-                }
-            }
-            is BambuCloudFilamentResult.Failure -> {
-                filamentStatusMessage = context.getString(
-                    R.string.cloud_filaments_refresh_failed,
-                    result.message
-                )
-            }
-        }
-        filamentsLoading = false
     }
 
     LaunchedEffect(filaments) {
-        filamentCatalogInfo = if (filaments.isEmpty()) {
-            emptyMap()
-        } else {
-            withContext(Dispatchers.IO) {
-                filaments.mapNotNull { filament ->
-                    BambuCloudFilamentCatalog.lookup(context, filament)?.let { info ->
-                        filament.id to info
-                    }
-                }.toMap()
-            }
-        }
-    }
-
-    suspend fun refreshCloudLists() {
-        refreshPrinters()
-        refreshFilaments()
-    }
-
-    fun syncFilamentRemainingToLocal() {
-        if (filaments.isEmpty() || filamentsSyncing) return
-        filamentsSyncing = true
-        filamentStatusMessage = context.getString(R.string.cloud_filaments_syncing_remaining)
-        coroutineScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    BambuCloudRemainingSyncer.syncToLocalInventory(context, filaments)
-                }
-            }
-            result.onSuccess { syncResult ->
-                filamentStatusMessage = if (syncResult.updatedCount > 0) {
-                    context.getString(
-                        R.string.cloud_filaments_sync_remaining_success,
-                        syncResult.updatedCount
-                    )
-                } else {
-                    context.getString(R.string.cloud_filaments_sync_remaining_no_match)
-                }
-            }.onFailure { error ->
-                filamentStatusMessage = context.getString(
-                    R.string.cloud_filaments_sync_remaining_failed,
-                    error.message.orEmpty().ifBlank { context.getString(R.string.label_unknown) }
-                )
-            }
-            filamentsSyncing = false
-        }
+        controller.recomputeCatalog(context)
     }
 
     val deviceIdsKey = remember(printers) {
         printers.map { it.deviceId }.filter { it.isNotBlank() }.joinToString("|")
     }
-    DisposableEffect(session?.account?.uid, session?.tokens?.accessToken, deviceIdsKey) {
-        val activeSession = session
-        if (activeSession == null || deviceIdsKey.isBlank()) {
-            onDispose { }
-        } else {
-            val client = BambuMqttRealtimeClient(
-                session = activeSession,
-                deviceIds = printers.map { it.deviceId },
-                onStatus = { status ->
-                    coroutineScope.launch {
-                        realtimeStatuses = realtimeStatuses + (
-                            status.deviceId to mergeRealtimeStatus(
-                                realtimeStatuses[status.deviceId],
-                                status
-                            )
-                        )
-                    }
-                },
-                onConnectionState = { state, error ->
-                    coroutineScope.launch {
-                        mqttStatusMessage = when (state) {
-                            BambuMqttConnectionState.DISCONNECTED -> ""
-                            BambuMqttConnectionState.CONNECTING -> {
-                                context.getString(R.string.cloud_mqtt_connecting)
-                            }
-                            BambuMqttConnectionState.CONNECTED -> {
-                                context.getString(R.string.cloud_mqtt_connected)
-                            }
-                            BambuMqttConnectionState.FAILED -> {
-                                context.getString(
-                                    R.string.cloud_mqtt_failed,
-                                    error.ifBlank { context.getString(R.string.label_unknown) }
-                                )
-                            }
-                        }
-                    }
-                }
-            )
-            client.start()
-            onDispose {
-                client.stop()
-            }
-        }
+    // 维护 MQTT 实时连接；离开页面不再 stop，连接保持
+    LaunchedEffect(session?.account?.uid, session?.tokens?.accessToken, deviceIdsKey) {
+        controller.syncRealtime(context)
     }
 
     LaunchedEffect(Unit) {
-        session = repository.loadSession()
-        statusMessage = if (session == null) {
-            context.getString(R.string.cloud_status_not_logged_in)
-        } else {
-            context.getString(R.string.cloud_status_logged_in)
-        }
-        if (session != null) {
-            when (val result = repository.refreshAccount()) {
-                is BambuCloudRepositoryResult.Success -> {
-                    session = result.session
-                }
-                else -> Unit
-            }
-            refreshCloudLists()
-        }
+        controller.ensureLoaded(context)
     }
 
     fun handleLoginResult(result: BambuCloudRepositoryResult) {
@@ -302,7 +159,7 @@ fun CloudConnectScreen(
                 verificationRequired = false
                 statusMessage = context.getString(R.string.cloud_status_login_success)
                 coroutineScope.launch {
-                    refreshCloudLists()
+                    controller.refreshCloudLists(context)
                 }
             }
             BambuCloudRepositoryResult.VerificationCodeRequired -> {
@@ -359,6 +216,19 @@ fun CloudConnectScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
+                    if (activeSession != null) {
+                        IconButton(
+                            onClick = { controller.forceRefreshAll(context) },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = com.m0h31h31.bamburfidreader.ui.components.AppIcons.Sync,
+                                contentDescription = stringResource(R.string.cloud_refresh_all),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     CloudStatusPill(
                         text = statusMessage,
                         connected = activeSession != null
@@ -494,17 +364,7 @@ fun CloudConnectScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        repository.logout()
-                        session = null
-                        printers = emptyList()
-                        filaments = emptyList()
-                        filamentCatalogInfo = emptyMap()
-                        printerStatusMessage = ""
-                        filamentStatusMessage = ""
-                        filamentsSyncing = false
-                        realtimeStatuses = emptyMap()
-                        mqttStatusMessage = ""
-                        statusMessage = context.getString(R.string.cloud_status_logged_out)
+                        controller.logout(context)
                         showLogoutConfirm = false
                     }
                 ) {
@@ -543,7 +403,7 @@ private fun CloudPrinterCarousel(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.cloud_printers_title),
+                        text = stringResource(R.string.cloud_printers_title_count, printers.size),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -592,10 +452,11 @@ private fun CloudPrinterCarousel(
             } else {
                 val pagerState = rememberPagerState(pageCount = { printers.size })
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val cardWidth = if (maxWidth < 330.dp) {
-                        maxWidth - 24.dp
+                    // 卡片尽量占满宽度，仅保留少量边距露出相邻卡片，提示可左右滑动
+                    val cardWidth = if (printers.size > 1) {
+                        maxWidth - 36.dp
                     } else {
-                        286.dp
+                        maxWidth - 8.dp
                     }
                     HorizontalPager(
                         state = pagerState,
@@ -633,7 +494,7 @@ private fun CloudFilamentLibraryCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.cloud_filaments_title),
+                        text = stringResource(R.string.cloud_filaments_title_count, filaments.size),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -645,12 +506,25 @@ private fun CloudFilamentLibraryCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                TextButton(
+                OutlinedButton(
                     onClick = onSyncRemaining,
-                    enabled = filaments.isNotEmpty() && !loading && !syncing
+                    enabled = filaments.isNotEmpty() && !loading && !syncing,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
+                    Icon(
+                        imageVector = AppIcons.Sync,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
                         text = stringResource(R.string.cloud_filaments_sync_remaining),
+                        style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -858,7 +732,6 @@ private fun CloudPrinterCard(
 ) {
     val unknown = stringResource(R.string.label_unknown)
     val productName = printer.productName.ifBlank { unknown }
-    val deviceId = printer.deviceId.ifBlank { unknown }
     val progress = realtimeStatus?.progress ?: printer.progress?.coerceIn(0, 100)
     val taskName = realtimeStatus?.taskName?.ifBlank { realtimeStatus.taskId }?.ifBlank { null }
         ?: printer.taskName.ifBlank { printer.taskId.ifBlank { unknown } }
@@ -869,7 +742,6 @@ private fun CloudPrinterCard(
         taskStatus != unknown ||
         progress != null
     var showAmsDialog by remember(printer.deviceId) { mutableStateOf(false) }
-    var showDeviceIdPlain by remember(printer.deviceId) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -901,7 +773,7 @@ private fun CloudPrinterCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = productName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -910,11 +782,30 @@ private fun CloudPrinterCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     CloudOnlinePill(online = printer.online)
                 }
-                MaskedInfoText(
-                    value = deviceId,
-                    plain = showDeviceIdPlain,
-                    onToggle = { showDeviceIdPlain = !showDeviceIdPlain }
-                )
+                if (printer.deviceName.isNotBlank()) {
+                    Text(
+                        text = printer.deviceName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                val specLine = listOf(
+                    printer.modelName,
+                    printer.structure,
+                    printer.nozzleDiameter?.let { stringResource(R.string.cloud_printer_nozzle_diameter, formatNozzle(it)) }.orEmpty()
+                ).filter { it.isNotBlank() }.joinToString("  |  ")
+                if (specLine.isNotBlank()) {
+                    Text(
+                        text = specLine,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         CloudPrinterTaskBlock(
@@ -935,23 +826,6 @@ private fun CloudPrinterCard(
             onDismiss = { showAmsDialog = false }
         )
     }
-}
-
-@Composable
-private fun MaskedInfoText(
-    value: String,
-    plain: Boolean,
-    onToggle: () -> Unit
-) {
-    if (value.isBlank()) return
-    Text(
-        text = if (plain) value else SensitiveValueMasker.maskMiddle(value),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.clickable(onClick = onToggle)
-    )
 }
 
 @Composable
@@ -1116,12 +990,27 @@ private fun CloudPrinterTaskBlock(
                     .height(6.dp)
                     .clip(RoundedCornerShape(999.dp))
             )
-            Text(
-                text = stringResource(R.string.cloud_printer_progress, progress),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.cloud_printer_progress, progress),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                val remaining = realtimeStatus?.remainingMinutes
+                if (remaining != null && remaining > 0) {
+                    Text(
+                        text = formatRemainingTime(remaining),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
         if (realtimeStatus != null) {
             CloudRealtimeMetricLine(realtimeStatus)
@@ -1132,9 +1021,6 @@ private fun CloudPrinterTaskBlock(
 @Composable
 private fun CloudRealtimeMetricLine(status: BambuPrinterRealtimeStatus) {
     val metrics = buildList {
-        status.remainingMinutes?.let {
-            add(stringResource(R.string.cloud_printer_remaining_time, it))
-        }
         if (status.nozzleTemperature != null || status.nozzleTargetTemperature != null) {
             add(
                 stringResource(
@@ -1524,7 +1410,7 @@ private fun rememberPrinterAssetBitmap(assetName: String?): ImageBitmap? {
     return bitmap
 }
 
-private fun mergeRealtimeStatus(
+internal fun mergeRealtimeStatus(
     previous: BambuPrinterRealtimeStatus?,
     next: BambuPrinterRealtimeStatus
 ): BambuPrinterRealtimeStatus {
@@ -1544,6 +1430,19 @@ private fun mergeRealtimeStatus(
         currentTray = next.currentTray.ifBlank { previous.currentTray },
         amsUnits = next.amsUnits.ifEmpty { previous.amsUnits }
     )
+}
+
+@Composable
+private fun formatRemainingTime(minutes: Int): String {
+    return if (minutes >= 60) {
+        stringResource(R.string.cloud_printer_remaining_hm, minutes / 60, minutes % 60)
+    } else {
+        stringResource(R.string.cloud_printer_remaining_time, minutes)
+    }
+}
+
+private fun formatNozzle(value: Double): String {
+    return if (value % 1.0 == 0.0) value.toInt().toString() else String.format("%.1f", value)
 }
 
 private fun formatTemperature(value: Double?): String {

@@ -36,6 +36,7 @@ import com.m0h31h31.bamburfidreader.model.CrealityMaterial
 import com.m0h31h31.bamburfidreader.model.CrealityTagData
 import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
 import com.m0h31h31.bamburfidreader.R
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -695,6 +696,8 @@ fun CrealityScreen(
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
                         ) {
+                            Icon(AppIcons.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.creality_btn_cancel_write))
                         }
                     } else {
@@ -708,6 +711,8 @@ fun CrealityScreen(
                             enabled = canWrite,
                             modifier = Modifier.fillMaxWidth()
                         ) {
+                            Icon(AppIcons.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.creality_btn_prepare_write))
                         }
                     }

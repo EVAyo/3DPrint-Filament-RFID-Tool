@@ -54,7 +54,7 @@ class BambuCloudApiClient(
         val response = executeSafely(
             BambuCloudHttpRequest(
                 method = "GET",
-                url = "$baseUrl/v1/iot-service/api/user/print?force=true",
+                url = "$baseUrl/v1/iot-service/api/user/bind",
                 headers = mapOf(
                     "Accept" to "application/json",
                     "Authorization" to "Bearer $accessToken"
@@ -70,15 +70,18 @@ class BambuCloudApiClient(
                     add(
                         BambuCloudPrinter(
                             deviceId = device.optCleanString("dev_id"),
-                            deviceName = device.optCleanString("dev_name"),
+                            deviceName = device.optCleanString("name"),
                             modelName = device.optCleanString("dev_model_name"),
                             productName = device.optCleanString("dev_product_name"),
-                            online = device.optBoolean("dev_online", false),
-                            taskId = device.optCleanString("task_id"),
-                            taskName = device.optCleanString("task_name"),
-                            taskStatus = device.optCleanString("task_status"),
-                            progress = device.optNullableInt("progress"),
-                            thumbnailUrl = device.optCleanString("thumbnail")
+                            online = device.optBoolean("online", false),
+                            taskId = device.optLong("print_job", 0L).takeIf { it > 0L }?.toString().orEmpty(),
+                            taskName = "",
+                            taskStatus = device.optCleanString("print_status"),
+                            progress = null,
+                            thumbnailUrl = "",
+                            structure = device.optCleanString("dev_structure"),
+                            nozzleDiameter = device.optNullableDouble("nozzle_diameter"),
+                            accessCode = device.optCleanString("dev_access_code")
                         )
                     )
                 }
@@ -208,6 +211,11 @@ class BambuCloudApiClient(
     private fun JSONObject.optNullableInt(key: String): Int? {
         if (!has(key) || isNull(key)) return null
         return optInt(key).takeIf { it >= 0 }
+    }
+
+    private fun JSONObject.optNullableDouble(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        return optDouble(key).takeIf { !it.isNaN() && it > 0.0 }
     }
 
     private fun JSONObject.optStringList(key: String): List<String> {

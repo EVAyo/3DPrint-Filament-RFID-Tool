@@ -775,6 +775,7 @@ private fun CModifyRecoveryDialog(
                 ) {
                     NeuButton(
                         text = stringResource(R.string.tag_cuid_copy_keys),
+                        icon = AppIcons.ContentCopy,
                         onClick = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             cm.setPrimaryClip(ClipData.newPlainText("cuid_keys", copyText))
@@ -783,6 +784,7 @@ private fun CModifyRecoveryDialog(
                     )
                     NeuButton(
                         text = stringResource(R.string.action_close),
+                        icon = AppIcons.Close,
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f)
                     )
@@ -1183,6 +1185,7 @@ fun TagScreen(
                 NeuButton(
                     text = if (writeInProgress) stringResource(R.string.tag_cancel_write)
                            else stringResource(R.string.tag_start_write),
+                    icon = if (writeInProgress) AppIcons.Close else AppIcons.Edit,
                     onClick = {
                         if (writeInProgress) {
                             onCancelWrite()
@@ -1205,6 +1208,7 @@ fun TagScreen(
                 NeuButton(
                     text = if (cModifyInProgress) stringResource(R.string.tag_cancel_c_modify)
                            else stringResource(R.string.tag_cuid_change),
+                    icon = if (cModifyInProgress) AppIcons.Close else AppIcons.ContentCopy,
                     onClick = {
                         if (cModifyInProgress) {
                             onCancelWrite()

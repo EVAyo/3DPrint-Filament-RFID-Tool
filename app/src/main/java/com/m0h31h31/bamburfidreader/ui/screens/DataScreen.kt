@@ -1,7 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
 import android.content.Context
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,8 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
@@ -69,7 +66,6 @@ import com.m0h31h31.bamburfidreader.ui.theme.LocalAppUiStyle
 import com.m0h31h31.bamburfidreader.util.parseColorValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 private data class StackedColorGroup(
     val stackKey: String,
@@ -78,6 +74,13 @@ private data class StackedColorGroup(
 ) {
     val count: Int get() = items.size
 }
+
+private data class DataRenderGroup(
+    val materialType: String,
+    val totalCount: Int,
+    val sortedItems: List<InventoryItem>,
+    val stackedGroups: List<StackedColorGroup>
+)
 
 private fun buildColorStackKey(item: InventoryItem): String {
     val normalizedValues = item.colorValues
@@ -115,35 +118,6 @@ private fun getTextColorForBackground(colorValues: List<String>, colorCode: Stri
         return if (calculateBrightness(firstColor) < 0.5f) Color.White else Color.Black
     }
     return Color.Black
-}
-
-private fun needsCheckerboardBackground(colorValues: List<String>, colorCode: String): Boolean {
-    val candidates = if (colorValues.isNotEmpty()) colorValues else listOf(colorCode)
-    return candidates.any { raw ->
-        val alpha = parseColorValue(raw.trim())?.alpha ?: 1f
-        alpha < 1f
-    }
-}
-
-@Composable
-private fun TransparencyCheckerboard(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val tileSize = 6.dp.toPx()
-        if (tileSize <= 0f) return@Canvas
-        val columns = (size.width / tileSize).roundToInt() + 1
-        val rows = (size.height / tileSize).roundToInt() + 1
-        val light = Color(0xFFF6F6F6)
-        val dark = Color(0xFFE1E1E1)
-        for (y in 0 until rows) {
-            for (x in 0 until columns) {
-                drawRect(
-                    color = if ((x + y) % 2 == 0) light else dark,
-                    topLeft = Offset(x * tileSize, y * tileSize),
-                    size = androidx.compose.ui.geometry.Size(tileSize, tileSize)
-                )
-            }
-        }
-    }
 }
 
 private val swatchShape = RoundedCornerShape(14.dp)
@@ -332,22 +306,30 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                 Text(text = stringResource(R.string.data_empty))
             }
         } else {
+            val renderGroups = remember(visibleGroups, mergeSameColorItems.value) {
+                visibleGroups.map { (materialType, items) ->
+                    val sortedItems = items.sortedByDescending { colorSortValue(it) }
+                    val stackedGroups = if (mergeSameColorItems.value) {
+                        sortedItems.groupBy { buildColorStackKey(it) }
+                            .map { (stackKey, grouped) ->
+                                StackedColorGroup(stackKey, grouped.first(), grouped)
+                            }
+                            .sortedByDescending { colorSortValue(it.displayItem) }
+                    } else {
+                        emptyList()
+                    }
+                    DataRenderGroup(materialType, items.size, sortedItems, stackedGroups)
+                }
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                visibleGroups.forEach { (materialType, items) ->
-                    item {
-                        val sortedItems = items.sortedByDescending { colorSortValue(it) }
-                        val stackedGroups = if (mergeSameColorItems.value) {
-                            sortedItems.groupBy { buildColorStackKey(it) }
-                                .map { (stackKey, grouped) ->
-                                    StackedColorGroup(stackKey, grouped.first(), grouped)
-                                }
-                                .sortedByDescending { colorSortValue(it.displayItem) }
-                        } else {
-                            emptyList()
-                        }
+                items(renderGroups, key = { it.materialType }) { group ->
+                    run {
+                        val materialType = group.materialType
+                        val sortedItems = group.sortedItems
+                        val stackedGroups = group.stackedGroups
 
                         val sectionContent: @Composable () -> Unit = {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -356,7 +338,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                         title = stringResource(
                                             R.string.data_group_title_format,
                                             materialType,
-                                            items.size
+                                            group.totalCount
                                         )
                                     )
                                 } else {
@@ -364,7 +346,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                         text = stringResource(
                                             R.string.data_group_title_format,
                                             materialType,
-                                            items.size
+                                            group.totalCount
                                         ),
                                         fontSize = 17.sp,
                                         fontWeight = FontWeight.Medium
@@ -618,7 +600,7 @@ private fun ModernDataHeader(
             )
             Text(
                 text = "  $totalItems",
-                color = ModernWorkbenchTokens.Orange,
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -635,7 +617,7 @@ private fun ModernDataHeader(
             )
             Text(
                 text = "  $visibleItems",
-                color = ModernWorkbenchTokens.Orange,
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -696,9 +678,6 @@ private fun ModernSwatchCell(
                         .fillMaxWidth()
                         .height(42.dp)
                 ) {
-                    if (needsCheckerboardBackground(colorValues, colorCode)) {
-                        TransparencyCheckerboard(modifier = Modifier.fillMaxSize())
-                    }
                     ColorSwatch(
                         colorValues = colorValues,
                         colorType = colorType,
@@ -769,13 +748,6 @@ private fun SwatchCell(
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.size(size)) {
-        if (needsCheckerboardBackground(colorValues, colorCode)) {
-            TransparencyCheckerboard(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(swatchShape)
-            )
-        }
         ColorSwatch(
             colorValues = colorValues,
             colorType = colorType,

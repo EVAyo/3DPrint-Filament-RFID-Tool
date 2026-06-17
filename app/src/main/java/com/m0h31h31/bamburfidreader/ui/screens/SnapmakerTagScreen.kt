@@ -65,6 +65,7 @@ import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.model.SnapmakerShareTagItem
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.AppSearchBar
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
@@ -310,6 +311,7 @@ fun SnapmakerTagScreen(
             ) {
                 NeuButton(
                     text = if (writeInProgress) stringResource(R.string.creality_btn_cancel_write) else stringResource(R.string.snapmaker_btn_start_write),
+                    icon = if (writeInProgress) AppIcons.Close else AppIcons.Edit,
                     onClick = {
                         if (writeInProgress) {
                             onCancelWrite()

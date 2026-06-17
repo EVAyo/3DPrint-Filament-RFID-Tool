@@ -1237,7 +1237,7 @@ private fun ModernReaderScreen(
                         color = if (statusText.contains("成功") || statusText.contains("success", ignoreCase = true)) {
                             ModernWorkbenchTokens.Success
                         } else {
-                            ModernWorkbenchTokens.Orange
+                            MaterialTheme.colorScheme.primary
                         },
                         size = 16.dp
                     )
@@ -1265,7 +1265,7 @@ private fun ModernReaderScreen(
                             imageVector = if (voiceEnabled) AppIcons.VolumeUp else AppIcons.VolumeOff,
                             contentDescription = null,
                             modifier = Modifier.size(15.dp),
-                            tint = if (voiceEnabled) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Muted
+                            tint = if (voiceEnabled) MaterialTheme.colorScheme.primary else ModernWorkbenchTokens.Muted
                         )
                         Text(
                             text = when {
@@ -1274,7 +1274,7 @@ private fun ModernReaderScreen(
                                 voiceEnabled -> stringResource(R.string.voice_status_on)
                                 else -> stringResource(R.string.voice_status_off)
                             },
-                            color = if (voiceEnabled) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Ink,
+                            color = if (voiceEnabled) MaterialTheme.colorScheme.primary else ModernWorkbenchTokens.Ink,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -1385,7 +1385,7 @@ private fun ModernReaderScreen(
                                     )
                                     Text(
                                         text = String.format("%.1f%%", percentValue),
-                                        color = ModernWorkbenchTokens.Orange,
+                                        color = MaterialTheme.colorScheme.primary,
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -1434,7 +1434,7 @@ private fun ModernReaderScreen(
                                         modifier = Modifier
                                             .fillMaxWidth((percentValue / 100f).coerceIn(0f, 1f))
                                             .fillMaxHeight()
-                                            .background(ModernWorkbenchTokens.Orange, RoundedCornerShape(999.dp))
+                                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(999.dp))
                                     )
                                 }
                                 if (trayUidAvailable && hasWeight && barWidthPx > 0f) {
@@ -1447,7 +1447,7 @@ private fun ModernReaderScreen(
                                             .size(thumbSizeDp)
                                             .shadow(if (isDragging) 4.dp else 1.dp, androidx.compose.foundation.shape.CircleShape)
                                             .background(Color.White, androidx.compose.foundation.shape.CircleShape)
-                                            .border(2.dp, ModernWorkbenchTokens.Orange, androidx.compose.foundation.shape.CircleShape)
+                                            .border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
                                     )
                                 }
                             }
@@ -1609,16 +1609,16 @@ private fun ModernIconButton(
     enabled: Boolean = true,
     compact: Boolean = false
 ) {
-    val accent = if (danger) ModernWorkbenchTokens.Danger else ModernWorkbenchTokens.Orange
+    val accent = if (danger) ModernWorkbenchTokens.Danger else MaterialTheme.colorScheme.primary
     val background = when {
         filled -> accent
-        selected -> ModernWorkbenchTokens.OrangeSoft
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
         else -> Color.White
     }
     val contentColor = when {
         filled -> Color.White
         danger -> ModernWorkbenchTokens.Danger
-        selected -> ModernWorkbenchTokens.Orange
+        selected -> MaterialTheme.colorScheme.primary
         else -> ModernWorkbenchTokens.Ink
     }
     Surface(
@@ -1758,11 +1758,12 @@ private fun ModernInfoList(
 }
 
 private fun modernInfoIcon(index: Int): ImageVector = when (index) {
-    0, 1 -> AppIcons.Label
-    2 -> AppIcons.Palette
-    3 -> AppIcons.Scale
-    4 -> AppIcons.Straighten
-    5 -> AppIcons.Thermostat
+    0 -> AppIcons.Palette          // 颜色
+    1 -> AppIcons.FitnessCenter    // 重量
+    2 -> AppIcons.FormatColorFill  // 颜色类型
+    3 -> AppIcons.Scale            // 耗材重量
+    4 -> AppIcons.Straighten       // 耗材直径
+    5 -> AppIcons.Thermostat       // 烘干温度
     else -> AppIcons.CalendarToday
 }
 

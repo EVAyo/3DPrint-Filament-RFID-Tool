@@ -126,27 +126,27 @@ class BambuCloudApiClientTest {
                       "devices": [
                         {
                           "dev_id": "printer-1",
-                          "dev_name": "Studio X1C",
-                          "dev_model_name": "BL-P001",
+                          "name": "Studio X1C",
+                          "online": true,
+                          "print_status": "RUNNING",
+                          "print_job": 214306601,
+                          "dev_model_name": "C12",
                           "dev_product_name": "X1 Carbon",
-                          "dev_online": true,
-                          "task_id": "task-1",
-                          "task_name": "AMS Riser",
-                          "task_status": "RUNNING",
-                          "progress": 42,
-                          "thumbnail": "https://example.com/plate.png"
+                          "dev_access_code": "982a8dd4",
+                          "nozzle_diameter": 0.4,
+                          "dev_structure": "CoreXY"
                         },
                         {
                           "dev_id": "printer-2",
-                          "dev_name": "Desk A1",
+                          "name": "Desk A1",
+                          "online": false,
+                          "print_status": "SUCCESS",
+                          "print_job": 0,
                           "dev_model_name": "N2S",
                           "dev_product_name": "A1 mini",
-                          "dev_online": false,
-                          "task_id": null,
-                          "task_name": null,
-                          "task_status": null,
-                          "progress": null,
-                          "thumbnail": null
+                          "dev_access_code": "10843109",
+                          "nozzle_diameter": 0.4,
+                          "dev_structure": "I3"
                         }
                       ]
                     }
@@ -162,17 +162,18 @@ class BambuCloudApiClientTest {
         assertEquals(2, printers.size)
         assertEquals("printer-1", printers[0].deviceId)
         assertEquals("Studio X1C", printers[0].deviceName)
-        assertEquals("BL-P001", printers[0].modelName)
+        assertEquals("C12", printers[0].modelName)
         assertEquals("X1 Carbon", printers[0].productName)
         assertTrue(printers[0].online)
-        assertEquals("task-1", printers[0].taskId)
-        assertEquals("AMS Riser", printers[0].taskName)
+        assertEquals("214306601", printers[0].taskId)
         assertEquals("RUNNING", printers[0].taskStatus)
-        assertEquals(42, printers[0].progress)
-        assertEquals("https://example.com/plate.png", printers[0].thumbnailUrl)
+        assertEquals("CoreXY", printers[0].structure)
+        assertEquals(0.4, printers[0].nozzleDiameter)
+        assertEquals("982a8dd4", printers[0].accessCode)
         assertFalse(printers[1].online)
+        assertEquals("", printers[1].taskId)
         assertEquals("GET", transport.lastRequest.method)
-        assertEquals("https://api.bambulab.cn/v1/iot-service/api/user/print?force=true", transport.lastRequest.url)
+        assertEquals("https://api.bambulab.cn/v1/iot-service/api/user/bind", transport.lastRequest.url)
         assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
     }
 

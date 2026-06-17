@@ -71,16 +71,16 @@ fun ModernPillButton(
     danger: Boolean = false,
     enabled: Boolean = true
 ) {
-    val accent = if (danger) ModernWorkbenchTokens.Danger else ModernWorkbenchTokens.Orange
+    val accent = if (danger) ModernWorkbenchTokens.Danger else MaterialTheme.colorScheme.primary
     val background = when {
         filled -> accent
-        selected -> ModernWorkbenchTokens.OrangeSoft
+        selected -> accent.copy(alpha = 0.12f)
         else -> Color.White
     }
     val textColor = when {
         filled -> Color.White
         danger -> ModernWorkbenchTokens.Danger
-        selected -> ModernWorkbenchTokens.Orange
+        selected -> accent
         else -> ModernWorkbenchTokens.Ink
     }
     Surface(

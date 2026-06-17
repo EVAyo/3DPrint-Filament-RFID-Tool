@@ -157,6 +157,7 @@ private const val CURRENT_USER_AGREEMENT_VERSION = 1
 private const val KEY_BAMBU_TAG_ENABLED = "bambu_tag_enabled"
 private const val KEY_CREALITY_ENABLED = "creality_enabled"
 private const val KEY_SNAPMAKER_TAG_ENABLED = "snapmaker_tag_enabled"
+private const val KEY_CLOUD_CONNECT_ENABLED = "cloud_connect_enabled"
 private const val KEY_AUTO_SHARE_TAG = "auto_share_tag"
 private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
 private const val KEY_NOTICE_GUIDE_SHOWN = "notice_guide_shown"
@@ -489,6 +490,7 @@ class MainActivity : ComponentActivity() {
     private var bambuTagEnabled by mutableStateOf(true) // 控制拓竹RFID页面显示
     private var crealityEnabled by mutableStateOf(false) // 控制创想三维RFID页面显示
     private var snapmakerTagEnabled by mutableStateOf(false) // 控制快造复制页面显示
+    private var cloudConnectEnabled by mutableStateOf(true) // 控制拓竹云连接页面显示
     private var snapmakerShareTagItems by mutableStateOf<List<SnapmakerShareTagItem>>(emptyList())
     private var snapmakerShareLoading by mutableStateOf(false)
     private var snapmakerWriteStatusMessage by mutableStateOf("")
@@ -1044,6 +1046,7 @@ class MainActivity : ComponentActivity() {
         bambuTagEnabled = uiPrefs.getBoolean(KEY_BAMBU_TAG_ENABLED, true)
         crealityEnabled = uiPrefs.getBoolean(KEY_CREALITY_ENABLED, false)
         snapmakerTagEnabled = uiPrefs.getBoolean(KEY_SNAPMAKER_TAG_ENABLED, false)
+        cloudConnectEnabled = uiPrefs.getBoolean(KEY_CLOUD_CONNECT_ENABLED, true)
         inventoryEnabled = uiPrefs.getBoolean(KEY_INVENTORY_ENABLED, true)
         autoDetectBrand = uiPrefs.getBoolean(KEY_AUTO_DETECT_BRAND, false)
         autoShareTag = uiPrefs.getBoolean(KEY_AUTO_SHARE_TAG, true)
@@ -1190,6 +1193,11 @@ class MainActivity : ComponentActivity() {
                     onSnapmakerTagEnabledChange = { enabled ->
                         snapmakerTagEnabled = enabled
                         uiPrefs.edit().putBoolean(KEY_SNAPMAKER_TAG_ENABLED, enabled).apply()
+                    },
+                    cloudConnectEnabled = cloudConnectEnabled,
+                    onCloudConnectEnabledChange = { enabled ->
+                        cloudConnectEnabled = enabled
+                        uiPrefs.edit().putBoolean(KEY_CLOUD_CONNECT_ENABLED, enabled).apply()
                     },
                     snapmakerShareTagItems = snapmakerShareTagItems,
                     snapmakerShareLoading = snapmakerShareLoading,

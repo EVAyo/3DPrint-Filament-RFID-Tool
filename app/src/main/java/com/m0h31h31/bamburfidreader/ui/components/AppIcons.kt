@@ -150,6 +150,105 @@ object AppIcons {
             autoMirror = true
         )
     }
+
+    val ChevronRight: ImageVector by lazy {
+        materialIcon(
+            "Filled.ChevronRight",
+            "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"
+        )
+    }
+
+    val Nfc: ImageVector by lazy {
+        materialIcon(
+            "Filled.Nfc",
+            "M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM18 8h-5c-1.1 0-2 .9-2 2v1.28c-.6.35-1 .98-1 1.72 0 1.1.9 2 2 2s2-.9 2-2c0-.74-.4-1.38-1-1.72V10h3v6h2V8zM6 8v8h2v-6h2V8H6z"
+        )
+    }
+
+    val GridView: ImageVector by lazy {
+        materialIcon(
+            "Outlined.GridView",
+            "M3 3v8h8V3H3zm6 6H5V5h4v4zm-6 4v8h8v-8H3zm6 6H5v-4h4v4zm4-16v8h8V3h-8zm6 6h-4V5h4v4zm-6 4v8h8v-8h-8zm6 6h-4v-4h4v4z"
+        )
+    }
+
+    val Storage: ImageVector by lazy {
+        materialIcon(
+            "Filled.Storage",
+            "M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"
+        )
+    }
+
+    val Shield: ImageVector by lazy {
+        materialIcon(
+            "Outlined.Shield",
+            "M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm7 10c0 4.52-3.05 8.69-7 9.93V3.19l7 3.11V11z"
+        )
+    }
+
+    val Edit: ImageVector by lazy {
+        materialIcon(
+            "Outlined.Edit",
+            "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+        )
+    }
+
+    val FileDownload: ImageVector by lazy {
+        materialIcon(
+            "Outlined.FileDownload",
+            "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
+        )
+    }
+
+    val FileUpload: ImageVector by lazy {
+        materialIcon(
+            "Outlined.FileUpload",
+            "M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"
+        )
+    }
+
+    val Save: ImageVector by lazy {
+        materialIcon(
+            "Outlined.Save",
+            "M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm2 16H5V5h11.17L19 7.83V19zm-7-7c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zM6 6h9v4H6V6z"
+        )
+    }
+
+    val Person: ImageVector by lazy {
+        materialIcon(
+            "Outlined.Person",
+            "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 8c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4zm-6 4c.22-.72 3.31-2 6-2 2.7 0 5.8 1.29 6 2H6z"
+        )
+    }
+
+    val DeleteOutline: ImageVector by lazy {
+        materialIcon(
+            "Outlined.DeleteOutline",
+            "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM8 9h8v10H8V9zm7.5-5l-1-1h-5l-1 1H5v2h14V4z"
+        )
+    }
+
+    val Sync: ImageVector by lazy {
+        materialIcon(
+            "Filled.Sync",
+            "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+        )
+    }
+
+    val FitnessCenter: ImageVector by lazy {
+        materialIcon(
+            "Filled.FitnessCenter",
+            "M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"
+        )
+    }
+
+    val FormatColorFill: ImageVector by lazy {
+        materialIcon(
+            "Filled.FormatColorFill",
+            "M16.56 8.94L7.62 0 6.21 1.41l2.38 2.38-5.15 5.15c-.59.59-.59 1.54 0 2.12l5.5 5.5c.29.29.68.44 1.06.44s.77-.15 1.06-.44l5.5-5.5c.59-.58.59-1.53 0-2.12zM5.21 10L10 5.21 14.79 10H5.21zM19 11.5s-2 2.17-2 3.5c0 1.1.9 2 2 2s2-.9 2-2c0-1.33-2-3.5-2-3.5z",
+            "M2 20h20v4H2z"
+        )
+    }
 }
 
 private fun materialIcon(

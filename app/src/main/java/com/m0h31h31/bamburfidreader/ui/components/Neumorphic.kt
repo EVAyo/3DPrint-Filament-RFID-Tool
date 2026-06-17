@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -159,7 +161,8 @@ fun NeuButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     val uiStyle = LocalAppUiStyle.current
     val buttonModifier = when (uiStyle) {
@@ -195,6 +198,14 @@ fun NeuButton(
         colors = buttonColors,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = if (uiStyle.isModernWorkbenchStyle()) 10.dp else 12.dp)
     ) {
+        if (icon != null) {
+            androidx.compose.material3.Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+        }
         Text(
             text = text,
             fontWeight = if (uiStyle == AppUiStyle.MIUIX) FontWeight.Normal else FontWeight.SemiBold
