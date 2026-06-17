@@ -62,6 +62,29 @@ private fun buildLightScheme(primary: Color, miuix: Boolean) = lightColorScheme(
     error = ColorError, errorContainer = Coral.copy(alpha = 0.18f), onErrorContainer = Ink
 )
 
+private fun buildModernLightScheme(primary: Color) = lightColorScheme(
+    primary = primary,
+    onPrimary = if (lum(primary) > 0.4f) Ink else Color.White,
+    primaryContainer = lerp(Color.White, primary, 0.14f),
+    onPrimaryContainer = Ink,
+    secondary = Mint,
+    tertiary = Coral,
+    background = Color(0xFFFAFAFB),
+    surface = Color.White,
+    surfaceVariant = Color(0xFFF3F5F8),
+    surfaceContainer = Color(0xFFFFFFFF),
+    surfaceContainerHigh = Color(0xFFF5F6F8),
+    surfaceContainerHighest = Color(0xFFEFF2F5),
+    onBackground = Ink,
+    onSurface = Ink,
+    onSurfaceVariant = Color(0xFF667386),
+    outline = Color(0xFFD8DEE7),
+    outlineVariant = Color(0xFFE6EAF0),
+    error = ColorError,
+    errorContainer = ColorError.copy(alpha = 0.12f),
+    onErrorContainer = Ink
+)
+
 private fun buildDarkScheme(primary: Color) = darkColorScheme(
     primary = primary,
     onPrimary = if (lum(primary) > 0.4f) DarkMist else DarkInk,
@@ -88,6 +111,14 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp)
 )
 
+private val ModernShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp)
+)
+
 private val MiuixLightColors = miuixLightColorScheme(
     background = ColorWhiteAlt,
     surface = ColorWhite,
@@ -112,7 +143,7 @@ private val MiuixDarkColors = miuixDarkColorScheme(
 fun BambuRfidReaderTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = false,
-    uiStyle: AppUiStyle = AppUiStyle.NEUMORPHIC,
+    uiStyle: AppUiStyle = DEFAULT_APP_UI_STYLE,
     colorPalette: ColorPalette = ColorPalette.OCEAN,
     content: @Composable () -> Unit
 ) {
@@ -121,7 +152,15 @@ fun BambuRfidReaderTheme(
         ThemeMode.DARK -> true
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
-    val colorScheme = paletteColorScheme(colorPalette, miuix = uiStyle == AppUiStyle.MIUIX, dark = darkTheme)
+    val isModernWorkbench = uiStyle == AppUiStyle.MODERN_WORKBENCH ||
+            uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE
+    val colorScheme = if (isModernWorkbench && !darkTheme) {
+        val spec = paletteSpecs[colorPalette] ?: paletteSpecs[ColorPalette.OCEAN]!!
+        buildModernLightScheme(spec.l)
+    } else {
+        paletteColorScheme(colorPalette, miuix = uiStyle == AppUiStyle.MIUIX, dark = darkTheme)
+    }
+    val shapes = if (isModernWorkbench) ModernShapes else AppShapes
     CompositionLocalProvider(LocalAppUiStyle provides uiStyle) {
         if (uiStyle == AppUiStyle.MIUIX) {
             MiuixTheme(
@@ -130,7 +169,7 @@ fun BambuRfidReaderTheme(
                 MaterialTheme(
                     colorScheme = colorScheme,
                     typography = Typography,
-                    shapes = AppShapes,
+                    shapes = shapes,
                     content = content
                 )
             }
@@ -138,7 +177,7 @@ fun BambuRfidReaderTheme(
             MaterialTheme(
                 colorScheme = colorScheme,
                 typography = Typography,
-                shapes = AppShapes,
+                shapes = shapes,
                 content = content
             )
         }

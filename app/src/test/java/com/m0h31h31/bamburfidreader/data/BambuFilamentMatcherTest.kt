@@ -9,7 +9,8 @@ class BambuFilamentMatcherTest {
     @Test
     fun normalizesRfidColorCodeByDroppingA01Prefix() {
         assertEquals("W2", normalizeBambuColorCode("A01-W2"))
-        assertEquals("K00", normalizeBambuColorCode(" k00\u0000\u0000 "))
+        assertEquals("K0", normalizeBambuColorCode(" k00\u0000\u0000 "))
+        assertEquals("W1", normalizeBambuColorCode("W001"))
     }
 
     @Test

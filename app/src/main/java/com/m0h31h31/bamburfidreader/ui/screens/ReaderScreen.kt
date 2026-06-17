@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,7 @@ import android.widget.Toast
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
@@ -43,11 +45,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
@@ -71,6 +83,7 @@ import com.m0h31h31.bamburfidreader.model.SnapmakerTagData
 import com.m0h31h31.bamburfidreader.logging.LogCollector
 import com.m0h31h31.bamburfidreader.logging.logDebug
 import com.m0h31h31.bamburfidreader.openTtsSettings
+import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch
 import com.m0h31h31.bamburfidreader.ui.components.InfoLine
 import com.m0h31h31.bamburfidreader.ui.components.AppSlider
@@ -78,6 +91,12 @@ import com.m0h31h31.bamburfidreader.ui.components.AppSwitch
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
+import com.m0h31h31.bamburfidreader.ui.components.ModernCard
+import com.m0h31h31.bamburfidreader.ui.components.ModernDivider
+import com.m0h31h31.bamburfidreader.ui.components.ModernDot
+import com.m0h31h31.bamburfidreader.ui.components.ModernPillButton
+import com.m0h31h31.bamburfidreader.ui.components.ModernSectionHeader
+import com.m0h31h31.bamburfidreader.ui.components.ModernWorkbenchTokens
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
 import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.BambuRfidReaderTheme
@@ -175,6 +194,28 @@ fun ReaderScreen(
     modifier: Modifier = Modifier
 ) {
     val uiStyle = LocalAppUiStyle.current
+    if (uiStyle == AppUiStyle.MODERN_WORKBENCH || uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE) {
+        ModernReaderScreen(
+            state = state,
+            voiceEnabled = voiceEnabled,
+            ttsReady = ttsReady,
+            ttsLanguageReady = ttsLanguageReady,
+            onVoiceEnabledChange = onVoiceEnabledChange,
+            onTrayOutbound = onTrayOutbound,
+            showRecoveryAction = showRecoveryAction,
+            onAttemptRecovery = onAttemptRecovery,
+            onRemainingChange = onRemainingChange,
+            readerBrand = readerBrand,
+            onBrandChange = onBrandChange,
+            readerCrealityTagData = readerCrealityTagData,
+            readerCrealityMaterial = readerCrealityMaterial,
+            readerSnapmakerTagData = readerSnapmakerTagData,
+            readerBrandStatus = readerBrandStatus,
+            onReportAnomaly = onReportAnomaly,
+            modifier = modifier
+        )
+        return
+    }
     val meritToastPalette = if (uiStyle == AppUiStyle.MIUIX) {
         listOf(
             MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer,
@@ -255,8 +296,9 @@ fun ReaderScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .padding(bottom = 0.dp),
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp)
+                    .padding(top = 4.dp, bottom = 0.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 状态文本：Bambu 用 state.status，其他品牌用 readerBrandStatus（始终显示）
@@ -1124,6 +1166,604 @@ private fun QuantityButtonGroup(
             Text(text = "+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+@Composable
+private fun ModernReaderScreen(
+    state: NfcUiState,
+    voiceEnabled: Boolean,
+    ttsReady: Boolean,
+    ttsLanguageReady: Boolean,
+    onVoiceEnabledChange: (Boolean) -> Unit,
+    onTrayOutbound: (String) -> Unit,
+    showRecoveryAction: Boolean,
+    onAttemptRecovery: () -> Unit,
+    onRemainingChange: (String, Float, Int?) -> Unit,
+    readerBrand: ReaderBrand,
+    onBrandChange: (ReaderBrand) -> Unit,
+    readerCrealityTagData: CrealityTagData?,
+    readerCrealityMaterial: CrealityMaterial?,
+    readerSnapmakerTagData: SnapmakerTagData?,
+    readerBrandStatus: String,
+    onReportAnomaly: ((cardUid: String) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val displayStatus = if (readerBrand == ReaderBrand.BAMBU) state.status else readerBrandStatus
+    val statusText = displayStatus.ifBlank { stringResource(R.string.status_waiting_tag) }
+    val trayUidAvailable = state.trayUidHex.isNotBlank()
+    val totalWeight = state.totalWeightGrams
+    val hasWeight = totalWeight > 0
+    val initialGrams = when {
+        state.remainingGrams > 0 -> state.remainingGrams
+        hasWeight -> (totalWeight * state.remainingPercent / 100f).roundToInt()
+        else -> 0
+    }.coerceAtLeast(0)
+    var gramsText by remember(state.trayUidHex, state.remainingPercent, state.remainingGrams, totalWeight) {
+        mutableStateOf(if (initialGrams > 0) initialGrams.toString() else "")
+    }
+    val gramsInt = gramsText.toIntOrNull()?.coerceIn(0, totalWeight.coerceAtLeast(0)) ?: 0
+    val percentValue = if (hasWeight) {
+        ((gramsInt * 100f / totalWeight) * 10).roundToInt() / 10f
+    } else {
+        state.remainingPercent
+    }
+    var showOutboundConfirm by remember(state.trayUidHex) { mutableStateOf(false) }
+    var showAnomalyConfirm by remember { mutableStateOf(false) }
+    var anomalyReportResult by remember { mutableStateOf("") }
+
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = ModernWorkbenchTokens.Page
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    ModernDot(
+                        color = if (statusText.contains("成功") || statusText.contains("success", ignoreCase = true)) {
+                            ModernWorkbenchTokens.Success
+                        } else {
+                            ModernWorkbenchTokens.Orange
+                        },
+                        size = 16.dp
+                    )
+                    Text(
+                        text = statusText,
+                        color = ModernWorkbenchTokens.Ink,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Surface(
+                    modifier = Modifier.clickable { onVoiceEnabledChange(!voiceEnabled) },
+                    shape = RoundedCornerShape(999.dp),
+                    color = Color.White,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (voiceEnabled) AppIcons.VolumeUp else AppIcons.VolumeOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = if (voiceEnabled) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Muted
+                        )
+                        Text(
+                            text = when {
+                                voiceEnabled && !ttsReady -> stringResource(R.string.voice_status_engine_not_ready)
+                                voiceEnabled && !ttsLanguageReady -> stringResource(R.string.voice_status_language_unavailable)
+                                voiceEnabled -> stringResource(R.string.voice_status_on)
+                                else -> stringResource(R.string.voice_status_off)
+                            },
+                            color = if (voiceEnabled) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Ink,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            ModernCard(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        val swatchValues = when (readerBrand) {
+                            ReaderBrand.BAMBU -> state.displayColors
+                            ReaderBrand.CREALITY -> readerCrealityTagData?.colorHex?.takeIf { it.isNotBlank() }?.let { listOf(it) }.orEmpty()
+                            ReaderBrand.SNAPMAKER -> readerSnapmakerTagData?.let { listOf("%06X".format(it.rgb1)) }.orEmpty()
+                        }
+                        ColorSwatch(
+                            colorValues = swatchValues,
+                            colorType = if (readerBrand == ReaderBrand.BAMBU) state.displayColorType else "",
+                            modifier = Modifier.size(68.dp)
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            val title = when (readerBrand) {
+                                ReaderBrand.BAMBU -> state.displayDetailedType.ifBlank { state.displayType }.ifBlank { stringResource(R.string.label_unknown) }
+                                ReaderBrand.CREALITY -> readerCrealityMaterial?.name?.ifBlank { null } ?: readerCrealityMaterial?.materialType ?: "-"
+                                ReaderBrand.SNAPMAKER -> readerSnapmakerTagData?.let { "${it.mainType} ${it.subType}".trim() }?.ifBlank { null } ?: "-"
+                            }
+                            val subtitle = when (readerBrand) {
+                                ReaderBrand.BAMBU -> listOf(
+                                    state.displayColorName,
+                                    state.displayFilaColorCode.ifBlank { state.displayColorCode }
+                                ).filter { it.isNotBlank() }.joinToString(" - ")
+                                ReaderBrand.CREALITY -> listOf(
+                                    readerCrealityMaterial?.brand.orEmpty(),
+                                    readerCrealityTagData?.materialId.orEmpty()
+                                ).filter { it.isNotBlank() }.joinToString(" - ")
+                                ReaderBrand.SNAPMAKER -> readerSnapmakerTagData?.vendor.orEmpty()
+                            }
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = ModernWorkbenchTokens.Ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = subtitle.ifBlank { stringResource(R.string.label_unknown) },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = ModernWorkbenchTokens.Muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (readerBrand == ReaderBrand.BAMBU && state.uidHex.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFFBFBFC),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
+                                ) {
+                                    Text(
+                                        text = "${stringResource(R.string.reader_label_card_uid)}: ${state.uidHex}",
+                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                        color = ModernWorkbenchTokens.Muted,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                        if (readerBrand == ReaderBrand.BAMBU && trayUidAvailable) {
+                            ModernIconButton(
+                                text = stringResource(R.string.reader_outbound),
+                                icon = AppIcons.Logout,
+                                onClick = { showOutboundConfirm = true },
+                                selected = true,
+                                compact = true
+                            )
+                        }
+                    }
+                    if (readerBrand == ReaderBrand.BAMBU) {
+                        ModernDivider()
+                        val density = androidx.compose.ui.platform.LocalDensity.current
+                        var barWidthPx by remember { mutableStateOf(0f) }
+                        var isDragging by remember { mutableStateOf(false) }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.inventory_remaining_grams_label),
+                                        color = ModernWorkbenchTokens.Muted,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = String.format("%.1f%%", percentValue),
+                                        color = ModernWorkbenchTokens.Orange,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = if (hasWeight) "$gramsInt${stringResource(R.string.unit_grams)} / ${totalWeight}${stringResource(R.string.unit_grams)}" else "-",
+                                    color = ModernWorkbenchTokens.Muted,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            val thumbSizeDp = if (isDragging) 22.dp else 16.dp
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(maxOf(thumbSizeDp, 8.dp))
+                                    .onSizeChanged { barWidthPx = it.width.toFloat() }
+                                    .pointerInput(trayUidAvailable, hasWeight, totalWeight, barWidthPx) {
+                                        if (!trayUidAvailable || !hasWeight || totalWeight <= 0 || barWidthPx == 0f) return@pointerInput
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown()
+                                            isDragging = true
+                                            val applyX = { x: Float ->
+                                                val clamped = x.coerceIn(0f, barWidthPx)
+                                                val newGrams = (clamped / barWidthPx * totalWeight).roundToInt().coerceIn(0, totalWeight)
+                                                gramsText = newGrams.toString()
+                                                onRemainingChange(state.trayUidHex, newGrams * 100f / totalWeight, newGrams)
+                                            }
+                                            applyX(down.position.x)
+                                            do {
+                                                val event = awaitPointerEvent()
+                                                val ch = event.changes.firstOrNull() ?: break
+                                                if (ch.pressed) { ch.consume(); applyX(ch.position.x) }
+                                            } while (event.changes.any { it.pressed })
+                                            isDragging = false
+                                        }
+                                    }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(if (isDragging) 10.dp else 8.dp)
+                                        .align(Alignment.Center)
+                                        .background(ModernWorkbenchTokens.Line, RoundedCornerShape(999.dp))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth((percentValue / 100f).coerceIn(0f, 1f))
+                                            .fillMaxHeight()
+                                            .background(ModernWorkbenchTokens.Orange, RoundedCornerShape(999.dp))
+                                    )
+                                }
+                                if (trayUidAvailable && hasWeight && barWidthPx > 0f) {
+                                    val fraction = (percentValue / 100f).coerceIn(0f, 1f)
+                                    val thumbOffsetDp = with(density) { (barWidthPx * fraction).toDp() } - thumbSizeDp / 2
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterStart)
+                                            .offset(x = thumbOffsetDp.coerceAtLeast(0.dp))
+                                            .size(thumbSizeDp)
+                                            .shadow(if (isDragging) 4.dp else 1.dp, androidx.compose.foundation.shape.CircleShape)
+                                            .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+                                            .border(2.dp, ModernWorkbenchTokens.Orange, androidx.compose.foundation.shape.CircleShape)
+                                    )
+                                }
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(13.dp),
+                            color = Color.White,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
+                        ) {
+                            QuantityButtonGroup(
+                                value = gramsText.ifBlank { "0" },
+                                enabled = trayUidAvailable && hasWeight,
+                                onValueChange = { text ->
+                                    val digits = text.filter { it.isDigit() }
+                                    val next = digits.toIntOrNull()?.coerceIn(0, totalWeight) ?: 0
+                                    gramsText = if (digits.isEmpty()) "" else next.toString()
+                                    if (trayUidAvailable && hasWeight) {
+                                        val nextPercent = ((next * 100f / totalWeight) * 10).roundToInt() / 10f
+                                        onRemainingChange(state.trayUidHex, nextPercent, next)
+                                    }
+                                },
+                                onDecrease = {
+                                    val next = (gramsInt - 1).coerceAtLeast(0)
+                                    gramsText = next.toString()
+                                    onRemainingChange(state.trayUidHex, (next * 100f / totalWeight), next)
+                                },
+                                onIncrease = {
+                                    val next = (gramsInt + 1).coerceAtMost(totalWeight)
+                                    gramsText = next.toString()
+                                    onRemainingChange(state.trayUidHex, (next * 100f / totalWeight), next)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    ReaderBrand.BAMBU to stringResource(R.string.tab_tag),
+                    ReaderBrand.CREALITY to stringResource(R.string.tab_creality),
+                    ReaderBrand.SNAPMAKER to stringResource(R.string.tab_snapmaker)
+                ).forEach { (brand, label) ->
+                    ModernIconButton(
+                        text = label,
+                        icon = when (brand) {
+                            ReaderBrand.BAMBU -> ImageVector.vectorResource(R.drawable.bambu)
+                            ReaderBrand.CREALITY -> ImageVector.vectorResource(R.drawable.chuangxiang)
+                            ReaderBrand.SNAPMAKER -> ImageVector.vectorResource(R.drawable.snapmaker)
+                        },
+                        onClick = { onBrandChange(brand) },
+                        selected = readerBrand == brand,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            ModernInfoList(
+                onReportAnomaly = if (onReportAnomaly != null && state.uidHex.isNotBlank()) {
+                    { showAnomalyConfirm = true }
+                } else null,
+                rows = when (readerBrand) {
+                    ReaderBrand.BAMBU -> buildList {
+                        val colorHex = state.displayColors.firstOrNull()
+                            ?.let { if (it.length == 9) it.removeRange(7, 9) else it }
+                            ?.ifBlank { null }
+                            ?: "-"
+                        add(stringResource(R.string.reader_label_color) to colorHex)
+                        add(stringResource(R.string.reader_label_weight) to if (state.totalWeightGrams > 0) "${state.totalWeightGrams} ${stringResource(R.string.unit_grams)}" else "-")
+                        state.secondaryFields.take(8).forEach { add(it.label to it.value) }
+                    }
+                    ReaderBrand.CREALITY -> buildList {
+                        val d = readerCrealityTagData
+                        add(stringResource(R.string.reader_label_material_id) to (d?.materialId ?: "-"))
+                        add(stringResource(R.string.reader_label_color) to (d?.colorHex?.let { "#$it" } ?: "-"))
+                        add(stringResource(R.string.reader_label_weight) to (d?.weight ?: "-"))
+                        readerCrealityMaterial?.let {
+                            add(stringResource(R.string.reader_label_print_temp) to "${it.minTemp}-${it.maxTemp} °C")
+                            add(stringResource(R.string.reader_label_diameter) to "${it.diameter} mm")
+                        }
+                    }
+                    ReaderBrand.SNAPMAKER -> buildList {
+                        val d = readerSnapmakerTagData
+                        add(stringResource(R.string.reader_label_brand) to (d?.vendor ?: "-"))
+                        add(stringResource(R.string.reader_label_weight) to (d?.weight?.takeIf { it > 0 }?.let { "$it g" } ?: "-"))
+                        add(stringResource(R.string.reader_label_diameter) to (d?.diameter?.takeIf { it > 0 }?.let { "%.2f mm".format(it / 100.0) } ?: "-"))
+                        add(stringResource(R.string.reader_label_print_temp) to (d?.hotendMinTemp?.takeIf { it > 0 }?.let { "$it-${d.hotendMaxTemp} °C" } ?: "-"))
+                        add(stringResource(R.string.reader_label_bed_temp) to (d?.bedTemp?.takeIf { it > 0 }?.let { "$it °C" } ?: "-"))
+                    }
+                }
+            )
+        }
+    }
+
+    if (showOutboundConfirm) {
+        AlertDialog(
+            onDismissRequest = { showOutboundConfirm = false },
+            title = { Text(stringResource(R.string.reader_outbound_confirm_title)) },
+            text = { Text(stringResource(R.string.reader_outbound_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onTrayOutbound(state.trayUidHex)
+                        showOutboundConfirm = false
+                    }
+                ) { Text(stringResource(R.string.action_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOutboundConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+    if (showAnomalyConfirm && onReportAnomaly != null) {
+        val reportSuccessText = stringResource(R.string.anomaly_report_success)
+        AlertDialog(
+            onDismissRequest = { showAnomalyConfirm = false },
+            title = { Text(stringResource(R.string.anomaly_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.anomaly_dialog_message))
+                    if (anomalyReportResult.isNotBlank()) {
+                        Text(anomalyReportResult, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onReportAnomaly(state.uidHex)
+                        anomalyReportResult = reportSuccessText
+                        showAnomalyConfirm = false
+                    }
+                ) { Text(stringResource(R.string.anomaly_dialog_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAnomalyConfirm = false }) {
+                    Text(stringResource(R.string.anomaly_dialog_cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ModernIconButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    filled: Boolean = false,
+    danger: Boolean = false,
+    enabled: Boolean = true,
+    compact: Boolean = false
+) {
+    val accent = if (danger) ModernWorkbenchTokens.Danger else ModernWorkbenchTokens.Orange
+    val background = when {
+        filled -> accent
+        selected -> ModernWorkbenchTokens.OrangeSoft
+        else -> Color.White
+    }
+    val contentColor = when {
+        filled -> Color.White
+        danger -> ModernWorkbenchTokens.Danger
+        selected -> ModernWorkbenchTokens.Orange
+        else -> ModernWorkbenchTokens.Ink
+    }
+    Surface(
+        modifier = modifier
+            .height(if (compact) 36.dp else 44.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = if (enabled) background else Color(0xFFF4F4F5),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            when {
+                filled -> Color.Transparent
+                selected || danger -> accent
+                else -> ModernWorkbenchTokens.Line
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (compact) 10.dp else 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = text,
+                modifier = Modifier.size(if (compact) 15.dp else 18.dp),
+                tint = if (enabled) contentColor else ModernWorkbenchTokens.Muted
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = text,
+                color = if (enabled) contentColor else ModernWorkbenchTokens.Muted,
+                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModernInfoList(
+    rows: List<Pair<String, String>>,
+    onReportAnomaly: (() -> Unit)? = null
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
+    ModernCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 7.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.reader_filament_detail_title),
+                    color = ModernWorkbenchTokens.Ink,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (onReportAnomaly != null) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onReportAnomaly() }
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.ErrorOutline,
+                            contentDescription = stringResource(R.string.reader_anomaly_report_btn),
+                            modifier = Modifier.size(15.dp),
+                            tint = Color(0xFFD32F2F)
+                        )
+                        Text(
+                            text = stringResource(R.string.reader_anomaly_report_btn).replace("\n", ""),
+                            color = Color(0xFFD32F2F),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+            rows.forEachIndexed { index, row ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                val value = row.second.ifBlank { "-" }
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(value))
+                                Toast.makeText(context, value, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        .padding(vertical = 9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = modernInfoIcon(index),
+                        contentDescription = row.first,
+                        modifier = Modifier.size(18.dp),
+                        tint = ModernWorkbenchTokens.Muted
+                    )
+                    Text(
+                        text = row.first,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ModernWorkbenchTokens.Muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = row.second.ifBlank { "-" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ModernWorkbenchTokens.Ink,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.End,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (index != rows.lastIndex) {
+                    ModernDivider()
+                }
+            }
+        }
+    }
+}
+
+private fun modernInfoIcon(index: Int): ImageVector = when (index) {
+    0, 1 -> AppIcons.Label
+    2 -> AppIcons.Palette
+    3 -> AppIcons.Scale
+    4 -> AppIcons.Straighten
+    5 -> AppIcons.Thermostat
+    else -> AppIcons.CalendarToday
 }
 
 

@@ -6,11 +6,16 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -25,9 +30,12 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,10 +49,13 @@ import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.data.FilamentDbHelper
 import com.m0h31h31.bamburfidreader.model.ShareTagItem
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
+import com.m0h31h31.bamburfidreader.ui.components.ModernCard
+import com.m0h31h31.bamburfidreader.ui.components.ModernWorkbenchTokens
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
 import com.m0h31h31.bamburfidreader.ui.screens.InventoryScreen
 import com.m0h31h31.bamburfidreader.ui.screens.ReaderScreen
 import com.m0h31h31.bamburfidreader.ui.screens.TagScreen
+import com.m0h31h31.bamburfidreader.ui.screens.CloudConnectScreen
 import com.m0h31h31.bamburfidreader.ui.screens.MiscScreen
 import com.m0h31h31.bamburfidreader.ui.screens.DataScreen
 import com.m0h31h31.bamburfidreader.ui.screens.NdefWriteRequest
@@ -78,6 +89,7 @@ private val topDestinations = listOf(
     TopDestination("tag", R.string.tab_tag, R.drawable.bambu),
     TopDestination("snapmaker", R.string.tab_snapmaker, R.drawable.snapmaker),
     TopDestination("creality", R.string.tab_creality, R.drawable.chuangxiang),
+    TopDestination("connect", R.string.tab_connect, R.drawable.lianjie),
     TopDestination("misc", R.string.tab_misc, R.drawable.zaxiang)
 )
 
@@ -376,6 +388,78 @@ fun AppNavigation(
                     }
                 }
                 } // key
+            } else if (
+                resolvedUiStyle == AppUiStyle.MODERN_WORKBENCH ||
+                resolvedUiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE
+            ) {
+                key(inventoryEnabled, bambuTagEnabled, crealityEnabled) {
+                    ModernCard(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .navigationBarsPadding(),
+                        radius = 16.dp
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            visibleDestinations.forEach { destination ->
+                                val selected = currentRoute == destination.route
+                                val onNavigate = {
+                                    navController.navigate(destination.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                                val label = stringResource(destination.labelRes)
+                                val icon = ImageVector.vectorResource(destination.iconRes)
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable(onClick = onNavigate)
+                                        .padding(vertical = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(
+                                                if (selected) ModernWorkbenchTokens.OrangeSoft else Color.Transparent,
+                                                RoundedCornerShape(10.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        androidx.compose.material3.Icon(
+                                            imageVector = icon,
+                                            contentDescription = label,
+                                            modifier = Modifier.size(24.dp),
+                                            tint = if (selected) {
+                                                ModernWorkbenchTokens.Orange
+                                            } else {
+                                                ModernWorkbenchTokens.Muted
+                                            }
+                                        )
+                                    }
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (selected) ModernWorkbenchTokens.Orange else ModernWorkbenchTokens.Muted,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
                 key(inventoryEnabled, bambuTagEnabled, crealityEnabled) {
                 NeuPanel(
@@ -431,7 +515,7 @@ fun AppNavigation(
         NavHost(
             navController = navController,
             startDestination = "reader",
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
         ) {
             composable("reader") {
                 ReaderScreen(
@@ -518,6 +602,9 @@ fun AppNavigation(
                     onCancelWrite = onCrealityCancelWrite,
                     onClearTagData = onCrealityClearTagData
                 )
+            }
+            composable("connect") {
+                CloudConnectScreen()
             }
             composable("misc") {
                             val context = LocalContext.current

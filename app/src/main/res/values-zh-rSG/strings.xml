@@ -12,6 +12,7 @@
     <string name="action_backup_db">备份数据库</string>
     <string name="action_import_db">导入数据库</string>
     <string name="action_boost_open_bambu">助力：打开 Bambu Handy</string>
+    <string name="action_more">更多</string>
     <string name="tab_reader">识别</string>
     <string name="tab_inventory">库存</string>
     <string name="tab_data">数据</string>
@@ -94,6 +95,9 @@
     <string name="data_uid_short">UID %1$s</string>
     <string name="data_close">关闭</string>
     <string name="data_group_title_format">%1$s (%2$d)</string>
+    <string name="data_search_placeholder">搜索颜色、料号、材质</string>
+    <string name="data_total_count">总数</string>
+    <string name="data_current_filter">当前筛选</string>
     <string name="data_stack_title_format">%1$s · %2$d</string>
     <string name="tag_search_placeholder">搜索任意字段</string>
     <string name="tag_refresh">刷新</string>
@@ -143,6 +147,14 @@
     <string name="misc_ui_style">界面风格</string>
     <string name="misc_ui_style_neumorphism">新拟态</string>
     <string name="misc_ui_style_miuix">MIUIX</string>
+    <string name="misc_ui_style_modern_compose">Modern Compose</string>
+    <string name="misc_ui_style_modern_workbench">现代工具台</string>
+    <string name="misc_modern_subtitle">阅读、写入与数据管理</string>
+    <string name="misc_modern_section_appearance">外观</string>
+    <string name="misc_modern_section_nfc">NFC</string>
+    <string name="misc_modern_section_features">功能入口</string>
+    <string name="misc_modern_section_data">数据维护</string>
+    <string name="misc_modern_style_hint">选择应用界面风格</string>
     <string name="misc_theme_mode">深色模式</string>
     <string name="misc_theme_mode_light">浅色</string>
     <string name="misc_theme_mode_dark">深色</string>
@@ -619,4 +631,5 @@
     <string name="config_update_filaments_color">颜色配置文件有更新，是否更新？</string>
     <string name="config_update_type_mapping">耗材类型映射文件有更新，是否更新？</string>
     <string name="config_update_creality">创想三维耗材列表有更新，是否更新？</string>
+    <string name="reader_filament_detail_title">耗材详情</string>
 </resources>

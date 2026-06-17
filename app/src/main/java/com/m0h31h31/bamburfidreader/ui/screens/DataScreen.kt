@@ -13,21 +13,30 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,7 +59,13 @@ import com.m0h31h31.bamburfidreader.ui.components.ColorSwatch
 import com.m0h31h31.bamburfidreader.ui.components.AppSwitch
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
+import com.m0h31h31.bamburfidreader.ui.components.ModernCard
+import com.m0h31h31.bamburfidreader.ui.components.ModernPillButton
+import com.m0h31h31.bamburfidreader.ui.components.ModernSectionHeader
+import com.m0h31h31.bamburfidreader.ui.components.ModernWorkbenchTokens
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
+import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
+import com.m0h31h31.bamburfidreader.ui.theme.LocalAppUiStyle
 import com.m0h31h31.bamburfidreader.util.parseColorValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -140,6 +155,7 @@ private const val KEY_MERGE_SAME_COLOR_ITEMS = "merge_same_color_items"
 @Composable
 fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val uiStyle = LocalAppUiStyle.current
     val unknownColorText = stringResource(R.string.data_unknown_color)
     val prefs = remember(context) {
         context.getSharedPreferences(DATA_SCREEN_PREFS, Context.MODE_PRIVATE)
@@ -153,6 +169,9 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
         mutableStateOf(prefs.getBoolean(KEY_MERGE_SAME_COLOR_ITEMS, false))
     }
     val activeStackDialog = remember { mutableStateOf<StackedColorGroup?>(null) }
+    val isModernWorkbench = uiStyle == AppUiStyle.MODERN_WORKBENCH ||
+            uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(useDetailedClassification.value) {
         prefs.edit().putBoolean(
@@ -189,17 +208,45 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
         isLoading.value = false
     }
 
+    val visibleGroups = remember(groupedItems.value, searchQuery) {
+        val query = searchQuery.trim().lowercase()
+        if (query.isBlank()) {
+            groupedItems.value
+        } else {
+            groupedItems.value.mapValues { (_, items) ->
+                items.filter { item ->
+                    listOf(
+                        item.materialType,
+                        item.materialDetailedType,
+                        item.colorName,
+                        item.colorCode,
+                        item.filaColorCode
+                    ).any { it.lowercase().contains(query) }
+                }
+            }.filterValues { it.isNotEmpty() }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .neuBackground()
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .statusBarsPadding()
+            .padding(horizontal = if (isModernWorkbench) 14.dp else 12.dp, vertical = 10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        if (isModernWorkbench) {
+            val totalItems = groupedItems.value.values.sumOf { it.size }
+            val visibleItems = visibleGroups.values.sumOf { it.size }
+            ModernDataHeader(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                totalItems = totalItems,
+                visibleItems = visibleItems,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+        val controls: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -237,6 +284,37 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                 )
             }
         }
+        if (!isModernWorkbench) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                content = { controls() }
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    stringResource(R.string.data_grouping_simple) to false,
+                    stringResource(R.string.data_grouping_detailed) to true
+                ).forEach { (label, detailed) ->
+                    ModernPillButton(
+                        text = label,
+                        selected = useDetailedClassification.value == detailed,
+                        onClick = { useDetailedClassification.value = detailed },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                ModernPillButton(
+                    text = stringResource(R.string.data_merge),
+                    selected = mergeSameColorItems.value,
+                    onClick = { mergeSameColorItems.value = !mergeSameColorItems.value },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
         Spacer(modifier = Modifier.padding(top = 3.dp))
 
         if (isLoading.value) {
@@ -249,7 +327,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                     Text(text = stringResource(R.string.data_loading), style = MaterialTheme.typography.bodyMedium)
                 }
             }
-        } else if (groupedItems.value.isEmpty()) {
+        } else if (visibleGroups.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(text = stringResource(R.string.data_empty))
             }
@@ -258,7 +336,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                groupedItems.value.forEach { (materialType, items) ->
+                visibleGroups.forEach { (materialType, items) ->
                     item {
                         val sortedItems = items.sortedByDescending { colorSortValue(it) }
                         val stackedGroups = if (mergeSameColorItems.value) {
@@ -271,23 +349,30 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                             emptyList()
                         }
 
-                        NeuPanel(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(10.dp)
-                        ) {
+                        val sectionContent: @Composable () -> Unit = {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.data_group_title_format,
-                                        materialType,
-                                        items.size
-                                    ),
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                if (isModernWorkbench) {
+                                    ModernSectionHeader(
+                                        title = stringResource(
+                                            R.string.data_group_title_format,
+                                            materialType,
+                                            items.size
+                                        )
+                                    )
+                                } else {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.data_group_title_format,
+                                            materialType,
+                                            items.size
+                                        ),
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                                    val cellWidth = 58.dp
-                                    val minGap = 6.dp
+                                    val cellWidth = if (isModernWorkbench) 62.dp else 58.dp
+                                    val minGap = if (isModernWorkbench) 10.dp else 6.dp
                                     val columns = ((maxWidth + minGap) / (cellWidth + minGap))
                                         .toInt()
                                         .coerceAtLeast(1)
@@ -298,14 +383,26 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                             itemCount = sortedItems.size
                                         ) { index ->
                                             val item = sortedItems[index]
-                                            SwatchCell(
-                                                size = cellWidth,
-                                                colorValues = item.colorValues,
-                                                colorCode = item.colorCode,
-                                                colorType = item.colorType,
-                                                title = item.resolvedColorName(),
-                                                subtitle = String.format("%.1f%%", item.remainingPercent)
-                                            )
+                                            if (isModernWorkbench) {
+                                                ModernSwatchCell(
+                                                    width = cellWidth,
+                                                    colorValues = item.colorValues,
+                                                    colorCode = item.colorCode,
+                                                    colorType = item.colorType,
+                                                    title = item.resolvedColorName(),
+                                                    code = item.filaColorCode.ifBlank { item.colorCode },
+                                                    slot = item.trayUid.takeLast(2).ifBlank { item.materialType.take(2) }
+                                                )
+                                            } else {
+                                                SwatchCell(
+                                                    size = cellWidth,
+                                                    colorValues = item.colorValues,
+                                                    colorCode = item.colorCode,
+                                                    colorType = item.colorType,
+                                                    title = item.resolvedColorName(),
+                                                    subtitle = String.format("%.1f%%", item.remainingPercent)
+                                                )
+                                            }
                                         }
                                     } else {
                                         SwatchGrid(
@@ -314,23 +411,58 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
                                             itemCount = stackedGroups.size
                                         ) { index ->
                                             val stack = stackedGroups[index]
-                                            SwatchCell(
-                                                size = cellWidth,
-                                                colorValues = stack.displayItem.colorValues,
-                                                colorCode = stack.displayItem.colorCode,
-                                                colorType = stack.displayItem.colorType,
-                                                title = stack.displayItem.resolvedColorName(),
-                                                subtitle = if (stack.count > 1) null else String.format("%.1f%%", stack.displayItem.remainingPercent),
-                                                badgeText = if (stack.count > 1) "${stack.count}" else null,
-                                                modifier = Modifier.clickable {
-                                                    if (stack.count > 1) {
-                                                        activeStackDialog.value = stack
+                                            if (isModernWorkbench) {
+                                                ModernSwatchCell(
+                                                    width = cellWidth,
+                                                    colorValues = stack.displayItem.colorValues,
+                                                    colorCode = stack.displayItem.colorCode,
+                                                    colorType = stack.displayItem.colorType,
+                                                    title = stack.displayItem.resolvedColorName(),
+                                                    code = stack.displayItem.filaColorCode.ifBlank { stack.displayItem.colorCode },
+                                                    slot = stack.displayItem.trayUid.takeLast(2).ifBlank { stack.displayItem.materialType.take(2) },
+                                                    badgeText = if (stack.count > 1) "${stack.count}" else null,
+                                                    modifier = Modifier.clickable {
+                                                        if (stack.count > 1) {
+                                                            activeStackDialog.value = stack
+                                                        }
                                                     }
-                                                }
-                                            )
+                                                )
+                                            } else {
+                                                SwatchCell(
+                                                    size = cellWidth,
+                                                    colorValues = stack.displayItem.colorValues,
+                                                    colorCode = stack.displayItem.colorCode,
+                                                    colorType = stack.displayItem.colorType,
+                                                    title = stack.displayItem.resolvedColorName(),
+                                                    subtitle = if (stack.count > 1) null else String.format("%.1f%%", stack.displayItem.remainingPercent),
+                                                    badgeText = if (stack.count > 1) "${stack.count}" else null,
+                                                    modifier = Modifier.clickable {
+                                                        if (stack.count > 1) {
+                                                            activeStackDialog.value = stack
+                                                        }
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
+                            }
+                        }
+                        if (isModernWorkbench) {
+                            ModernCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                radius = 14.dp
+                            ) {
+                                Box(modifier = Modifier.padding(12.dp)) {
+                                    sectionContent()
+                                }
+                            }
+                        } else {
+                            NeuPanel(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(10.dp)
+                            ) {
+                                sectionContent()
                             }
                         }
                     }
@@ -414,6 +546,104 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
 }
 
 @Composable
+private fun ModernDataHeader(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    totalItems: Int,
+    visibleItems: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⌕",
+                        color = ModernWorkbenchTokens.Ink,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = ModernWorkbenchTokens.Ink
+                        ),
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { innerTextField ->
+                            if (query.isBlank()) {
+                                Text(
+                                    text = stringResource(R.string.data_search_placeholder),
+                                    color = ModernWorkbenchTokens.Muted,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                }
+            }
+            Text(
+                text = "☰",
+                color = ModernWorkbenchTokens.Ink,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.data_total_count),
+                color = ModernWorkbenchTokens.Ink,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "  $totalItems",
+                color = ModernWorkbenchTokens.Orange,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "  |  ",
+                color = ModernWorkbenchTokens.Line,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = stringResource(R.string.data_current_filter),
+                color = ModernWorkbenchTokens.Ink,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "  $visibleItems",
+                color = ModernWorkbenchTokens.Orange,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
 private fun SwatchGrid(
     cellWidth: Dp,
     columns: Int,
@@ -436,6 +666,92 @@ private fun SwatchGrid(
                 repeat(columns - row.size) {
                     Spacer(modifier = Modifier.width(cellWidth))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModernSwatchCell(
+    width: Dp,
+    colorValues: List<String>,
+    colorCode: String,
+    colorType: String,
+    title: String,
+    code: String,
+    slot: String,
+    badgeText: String? = null,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.width(width).height(84.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(10.dp),
+            color = Color.White,
+            border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
+        ) {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                ) {
+                    if (needsCheckerboardBackground(colorValues, colorCode)) {
+                        TransparencyCheckerboard(modifier = Modifier.fillMaxSize())
+                    }
+                    ColorSwatch(
+                        colorValues = colorValues,
+                        colorType = colorType,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RectangleShape
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 3.dp, vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
+                    Text(
+                        text = title,
+                        color = Color.Black,
+                        fontSize = 11.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = code.ifBlank { "-" },
+                        color = Color(0xFF888888),
+                        fontSize = 9.sp,
+                        lineHeight = 10.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+        if (!badgeText.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(2.dp)
+                    .size(20.dp)
+                    .background(Color(0xCC26313F), shape = RoundedCornerShape(999.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = badgeText,
+                    style = TextStyle(
+                        fontSize = 10.sp,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false)
+                    )
+                )
             }
         }
     }

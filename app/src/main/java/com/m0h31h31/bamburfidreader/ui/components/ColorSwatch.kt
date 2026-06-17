@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -60,7 +61,8 @@ private fun CheckerboardBackground(modifier: Modifier = Modifier) {
 fun ColorSwatch(
     colorValues: List<String>,
     colorType: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(14.dp)
 ) {
     val uiStyle = LocalAppUiStyle.current
     val parsedColors = colorValues.mapNotNull { parseColorValue(it) }
@@ -74,17 +76,18 @@ fun ColorSwatch(
         colors.size > 1 -> "multi"
         else -> "single"
     }
-    val shape = RoundedCornerShape(14.dp)
     val showCheckerboard = needsCheckerboard(colors)
-    val borderColor = if (uiStyle == AppUiStyle.MIUIX) {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
-    } else {
-        Color.White.copy(alpha = 0.65f)
+    val borderColor = when (uiStyle) {
+        AppUiStyle.MIUIX -> MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> MaterialTheme.colorScheme.outlineVariant
+        AppUiStyle.NEUMORPHIC -> Color.White.copy(alpha = 0.65f)
     }
-    val containerModifier = if (uiStyle == AppUiStyle.MIUIX) {
-        modifier.clip(shape)
-    } else {
-        modifier.neuCard(shape = shape).clip(shape)
+    val containerModifier = when (uiStyle) {
+        AppUiStyle.MIUIX,
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> modifier.clip(shape)
+        AppUiStyle.NEUMORPHIC -> modifier.neuCard(shape = shape).clip(shape)
     }
 
     val isGradient = resolvedType == "渐变色" || resolvedType.equals("gradient", ignoreCase = true)

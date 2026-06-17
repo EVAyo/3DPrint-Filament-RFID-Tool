@@ -4,8 +4,12 @@ import androidx.compose.runtime.compositionLocalOf
 
 enum class AppUiStyle {
     NEUMORPHIC,
-    MIUIX
+    MIUIX,
+    MODERN_WORKBENCH_COMPOSE,
+    MODERN_WORKBENCH
 }
+
+val DEFAULT_APP_UI_STYLE = AppUiStyle.MODERN_WORKBENCH
 
 enum class ThemeMode {
     LIGHT,
@@ -41,4 +45,4 @@ enum class ColorPalette {
     DESERT        // 沙漠黄
 }
 
-val LocalAppUiStyle = compositionLocalOf { AppUiStyle.NEUMORPHIC }
+val LocalAppUiStyle = compositionLocalOf { DEFAULT_APP_UI_STYLE }

@@ -58,6 +58,7 @@ import com.m0h31h31.bamburfidreader.ui.screens.NdefWriteRequest
 import com.m0h31h31.bamburfidreader.ui.screens.NdefWriteType
 import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ColorPalette
+import com.m0h31h31.bamburfidreader.ui.theme.DEFAULT_APP_UI_STYLE
 import com.m0h31h31.bamburfidreader.ui.theme.ThemeMode
 import com.m0h31h31.bamburfidreader.ui.theme.BambuRfidReaderTheme
 import com.m0h31h31.bamburfidreader.util.normalizeColorValue
@@ -482,7 +483,7 @@ class MainActivity : ComponentActivity() {
     private var uiState by mutableStateOf(NfcUiState(status = "Waiting for RFID tag"))
     private var filamentDbHelper: FilamentDbHelper? = null
     private var voiceEnabled by mutableStateOf(false)
-    private var uiStyle by mutableStateOf(AppUiStyle.NEUMORPHIC)
+    private var uiStyle by mutableStateOf(DEFAULT_APP_UI_STYLE)
     private var themeMode by mutableStateOf(ThemeMode.SYSTEM)
     private var colorPalette by mutableStateOf(ColorPalette.OCEAN)
     private var bambuTagEnabled by mutableStateOf(true) // 控制拓竹RFID页面显示
@@ -1052,8 +1053,8 @@ class MainActivity : ComponentActivity() {
         nfcCompatibilityConfig = NfcCompatibilityPreferences.load(this)
         lastWrittenSourceUidHex = uiPrefs.getString(KEY_LAST_WRITTEN_SOURCE_UID, "").orEmpty()
         uiStyle = runCatching {
-            AppUiStyle.valueOf(uiPrefs.getString(KEY_UI_STYLE, AppUiStyle.NEUMORPHIC.name).orEmpty())
-        }.getOrDefault(AppUiStyle.NEUMORPHIC)
+            AppUiStyle.valueOf(uiPrefs.getString(KEY_UI_STYLE, DEFAULT_APP_UI_STYLE.name).orEmpty())
+        }.getOrDefault(DEFAULT_APP_UI_STYLE)
         themeMode = runCatching {
             ThemeMode.valueOf(uiPrefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name).orEmpty())
         }.getOrDefault(ThemeMode.SYSTEM)

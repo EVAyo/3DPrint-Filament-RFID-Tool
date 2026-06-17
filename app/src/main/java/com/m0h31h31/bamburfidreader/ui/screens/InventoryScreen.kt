@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -358,11 +359,15 @@ fun InventoryScreen(
         modifier = modifier.fillMaxSize().neuBackground(),
         color = MaterialTheme.colorScheme.background
     ) {
+        val isModernWorkbench = uiStyle == AppUiStyle.MODERN_WORKBENCH ||
+                uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE
+        val currentItemShape = if (isModernWorkbench) RoundedCornerShape(14.dp) else inventoryItemShape
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .statusBarsPadding()
+                .padding(horizontal = if (isModernWorkbench) 14.dp else 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(if (isModernWorkbench) 10.dp else 8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -465,8 +470,8 @@ fun InventoryScreen(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .padding(vertical = 3.dp)
-                                        .clip(inventoryItemShape)
-                                        .background(color)
+                                        .clip(currentItemShape)
+                                        .background(color, currentItemShape)
                                         .padding(horizontal = 16.dp),
                                     contentAlignment = alignment
                                 ) {
@@ -481,8 +486,8 @@ fun InventoryScreen(
                             content = {
                                 NeuPanel(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = inventoryItemShape,
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)
+                                    shape = currentItemShape,
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(if (isModernWorkbench) 12.dp else 10.dp)
                                 ) {
                                     Column(
                                         modifier = Modifier,
@@ -495,7 +500,7 @@ fun InventoryScreen(
                                             ColorSwatch(
                                                 colorValues = item.colorValues,
                                                 colorType = item.colorType,
-                                                modifier = Modifier.size(36.dp)
+                                                modifier = Modifier.size(if (isModernWorkbench) 46.dp else 36.dp)
                                             )
                                             Column(
                                                 modifier = Modifier

@@ -1,0 +1,255 @@
+package com.m0h31h31.bamburfidreader.cloud
+
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class BambuCloudApiClientTest {
+    @Test
+    fun loginWithPasswordPostsAccountAndPasswordOnly() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "accessToken": "access-123",
+                      "refreshToken": "refresh-123",
+                      "loginType": "",
+                      "expiresIn": 7776000
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val tokens = (result as BambuCloudApiResult.Success).value
+        assertEquals("access-123", tokens.accessToken)
+        assertEquals("refresh-123", tokens.refreshToken)
+        assertEquals(7776000, tokens.expiresInSeconds)
+        assertEquals("POST", transport.lastRequest.method)
+        assertEquals("https://api.bambulab.cn/v1/user-service/user/login", transport.lastRequest.url)
+        assertTrue(transport.lastRequest.body.contains("\"account\":\"user@example.com\""))
+        assertTrue(transport.lastRequest.body.contains("\"password\":\"secret\""))
+        assertFalse(transport.lastRequest.body.contains("\"code\""))
+    }
+
+    @Test
+    fun loginReturnsVerificationRequiredWhenApiRequestsCode() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "loginType": "verifyCode"
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.VerificationCodeRequired)
+    }
+
+    @Test
+    fun loginWithCodePostsAccountPasswordAndCode() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "accessToken": "access-code",
+                      "refreshToken": "refresh-code",
+                      "loginType": "",
+                      "expiresIn": 7776000
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithCode("user@example.com", "secret", "123456")
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        assertEquals("POST", transport.lastRequest.method)
+        assertEquals("https://api.bambulab.cn/v1/user-service/user/login", transport.lastRequest.url)
+        assertTrue(transport.lastRequest.body.contains("\"account\":\"user@example.com\""))
+        assertTrue(transport.lastRequest.body.contains("\"password\":\"secret\""))
+        assertTrue(transport.lastRequest.body.contains("\"code\":\"123456\""))
+    }
+
+    @Test
+    fun fetchAccountUsesBearerTokenAndParsesPreferenceProfile() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "uid": 123456,
+                      "name": "Bambu User",
+                      "handle": "maker",
+                      "avatar": "https://example.com/avatar.png",
+                      "bio": "hello"
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.fetchAccount("access-123")
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val account = (result as BambuCloudApiResult.Success).value
+        assertEquals(123456L, account.uid)
+        assertEquals("Bambu User", account.name)
+        assertEquals("maker", account.handle)
+        assertEquals("https://example.com/avatar.png", account.avatarUrl)
+        assertEquals("hello", account.bio)
+        assertEquals("GET", transport.lastRequest.method)
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+    }
+
+    @Test
+    fun fetchPrintersUsesBearerTokenAndParsesPrintStatus() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "message": "success",
+                      "devices": [
+                        {
+                          "dev_id": "printer-1",
+                          "dev_name": "Studio X1C",
+                          "dev_model_name": "BL-P001",
+                          "dev_product_name": "X1 Carbon",
+                          "dev_online": true,
+                          "task_id": "task-1",
+                          "task_name": "AMS Riser",
+                          "task_status": "RUNNING",
+                          "progress": 42,
+                          "thumbnail": "https://example.com/plate.png"
+                        },
+                        {
+                          "dev_id": "printer-2",
+                          "dev_name": "Desk A1",
+                          "dev_model_name": "N2S",
+                          "dev_product_name": "A1 mini",
+                          "dev_online": false,
+                          "task_id": null,
+                          "task_name": null,
+                          "task_status": null,
+                          "progress": null,
+                          "thumbnail": null
+                        }
+                      ]
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.fetchPrinters("access-123")
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val printers = (result as BambuCloudApiResult.Success).value
+        assertEquals(2, printers.size)
+        assertEquals("printer-1", printers[0].deviceId)
+        assertEquals("Studio X1C", printers[0].deviceName)
+        assertEquals("BL-P001", printers[0].modelName)
+        assertEquals("X1 Carbon", printers[0].productName)
+        assertTrue(printers[0].online)
+        assertEquals("task-1", printers[0].taskId)
+        assertEquals("AMS Riser", printers[0].taskName)
+        assertEquals("RUNNING", printers[0].taskStatus)
+        assertEquals(42, printers[0].progress)
+        assertEquals("https://example.com/plate.png", printers[0].thumbnailUrl)
+        assertFalse(printers[1].online)
+        assertEquals("GET", transport.lastRequest.method)
+        assertEquals("https://api.bambulab.cn/v1/iot-service/api/user/print?force=true", transport.lastRequest.url)
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+    }
+
+    @Test
+    fun fetchFilamentsUsesBearerTokenAndParsesLibraryHits() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "hits": [
+                        {
+                          "id": 1758290,
+                          "createType": "ams",
+                          "filamentVendor": "Bambu Lab",
+                          "filamentType": "PLA",
+                          "filamentName": "PLA Basic",
+                          "filamentId": "GFA00",
+                          "RFID": "1F78AB9554E34B46BC890D60A016E9CF",
+                          "color": "#8E9089FF",
+                          "colors": ["#8E9089FF"],
+                          "netWeight": 760,
+                          "totalNetWeight": 1000,
+                          "trayIdName": "A00-D00",
+                          "inPrinter": true,
+                          "devId": "01P09C4A3000216",
+                          "amsSn": "00600A492907413",
+                          "slotId": "0",
+                          "amsId": 0,
+                          "deviceName": "P1"
+                        }
+                      ]
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.fetchFilaments("access-123", offset = 0, limit = 20)
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val filaments = (result as BambuCloudApiResult.Success).value
+        assertEquals(1, filaments.size)
+        val filament = filaments.first()
+        assertEquals(1758290L, filament.id)
+        assertEquals("ams", filament.createType)
+        assertEquals("Bambu Lab", filament.vendor)
+        assertEquals("PLA", filament.type)
+        assertEquals("PLA Basic", filament.name)
+        assertEquals("GFA00", filament.filamentId)
+        assertEquals("1F78AB9554E34B46BC890D60A016E9CF", filament.rfid)
+        assertEquals("#8E9089FF", filament.color)
+        assertEquals(listOf("#8E9089FF"), filament.colors)
+        assertEquals(760, filament.netWeightGrams)
+        assertEquals(1000, filament.totalNetWeightGrams)
+        assertTrue(filament.inPrinter)
+        assertEquals("01P09C4A3000216", filament.deviceId)
+        assertEquals("00600A492907413", filament.amsSerial)
+        assertEquals("0", filament.slotId)
+        assertEquals(0, filament.amsId)
+        assertEquals("P1", filament.deviceName)
+        assertEquals("GET", transport.lastRequest.method)
+        assertEquals(
+            "https://api.bambulab.cn/v1/design-user-service/my/filament/v2?offset=0&limit=20",
+            transport.lastRequest.url
+        )
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+    }
+
+    private class RecordingTransport(
+        private val response: BambuCloudHttpResponse
+    ) : BambuCloudTransport {
+        lateinit var lastRequest: BambuCloudHttpRequest
+
+        override suspend fun execute(request: BambuCloudHttpRequest): BambuCloudHttpResponse {
+            lastRequest = request
+            return response
+        }
+    }
+}

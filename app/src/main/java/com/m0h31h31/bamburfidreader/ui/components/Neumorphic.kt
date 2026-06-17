@@ -39,6 +39,11 @@ import top.yukonga.miuix.kmp.basic.Switch as MiuixSwitch
 
 private val NeuShape = RoundedCornerShape(24.dp)
 private val NeuInnerShape = RoundedCornerShape(18.dp)
+private val ModernShape = RoundedCornerShape(16.dp)
+private val ModernInnerShape = RoundedCornerShape(12.dp)
+
+private fun AppUiStyle.isModernWorkbenchStyle(): Boolean =
+    this == AppUiStyle.MODERN_WORKBENCH || this == AppUiStyle.MODERN_WORKBENCH_COMPOSE
 
 @Composable
 fun Modifier.neuBackground(): Modifier {
@@ -52,6 +57,11 @@ fun Modifier.neuBackground(): Modifier {
             MaterialTheme.colorScheme.background,
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.98f)
         )
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> listOf(
+            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.background
+        )
     }
     return background(brush = Brush.verticalGradient(colors = colors))
 }
@@ -63,36 +73,55 @@ fun Modifier.neuCard(
 ): Modifier {
     val uiStyle = LocalAppUiStyle.current
     val base = MaterialTheme.colorScheme.surface
+    val isModernWorkbench = uiStyle.isModernWorkbenchStyle()
+    val resolvedShape = if (isModernWorkbench && shape == NeuShape) {
+        ModernShape
+    } else {
+        shape
+    }
     val darkShadow = when (uiStyle) {
         AppUiStyle.NEUMORPHIC -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f)
         AppUiStyle.MIUIX -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.10f)
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.08f)
     }
     val lightShadow = when (uiStyle) {
         AppUiStyle.NEUMORPHIC -> Color.White.copy(alpha = 0.92f)
         AppUiStyle.MIUIX -> Color.White.copy(alpha = 0.45f)
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> Color.White.copy(alpha = 0.0f)
     }
     val borderColor = when (uiStyle) {
         AppUiStyle.NEUMORPHIC -> Color.White.copy(alpha = 0.7f)
         AppUiStyle.MIUIX -> MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> MaterialTheme.colorScheme.outlineVariant
     }
     val shadowed = if (elevated) {
         when (uiStyle) {
             AppUiStyle.NEUMORPHIC -> this
                 .shadow(
                     elevation = 10.dp,
-                    shape = shape,
+                    shape = resolvedShape,
                     ambientColor = darkShadow,
                     spotColor = darkShadow
                 )
                 .shadow(
                     elevation = 2.dp,
-                    shape = shape,
+                    shape = resolvedShape,
                     ambientColor = lightShadow,
                     spotColor = lightShadow
                 )
             AppUiStyle.MIUIX -> this.shadow(
                 elevation = 4.dp,
-                shape = shape,
+                shape = resolvedShape,
+                ambientColor = darkShadow,
+                spotColor = darkShadow
+            )
+            AppUiStyle.MODERN_WORKBENCH,
+            AppUiStyle.MODERN_WORKBENCH_COMPOSE -> this.shadow(
+                elevation = 1.dp,
+                shape = resolvedShape,
                 ambientColor = darkShadow,
                 spotColor = darkShadow
             )
@@ -101,12 +130,12 @@ fun Modifier.neuCard(
         this
     }
     return shadowed
-        .clip(shape)
+        .clip(resolvedShape)
         .background(base)
         .border(
             width = 1.dp,
             color = borderColor,
-            shape = shape
+            shape = resolvedShape
         )
 }
 
@@ -133,15 +162,20 @@ fun NeuButton(
     enabled: Boolean = true
 ) {
     val uiStyle = LocalAppUiStyle.current
-    val buttonModifier = if (uiStyle == AppUiStyle.MIUIX) {
-        modifier
-    } else {
-        modifier.neuCard(shape = NeuInnerShape, elevated = true)
+    val buttonModifier = when (uiStyle) {
+        AppUiStyle.MIUIX, AppUiStyle.MODERN_WORKBENCH, AppUiStyle.MODERN_WORKBENCH_COMPOSE -> modifier
+        AppUiStyle.NEUMORPHIC -> modifier.neuCard(shape = NeuInnerShape, elevated = true)
     }
-    val buttonColors = if (uiStyle == AppUiStyle.MIUIX) {
-        ButtonDefaults.buttonColors()
-    } else {
-        ButtonDefaults.buttonColors(
+    val buttonColors = when (uiStyle) {
+        AppUiStyle.MIUIX -> ButtonDefaults.buttonColors()
+        AppUiStyle.MODERN_WORKBENCH,
+        AppUiStyle.MODERN_WORKBENCH_COMPOSE -> ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            contentColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        AppUiStyle.NEUMORPHIC -> ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -152,9 +186,14 @@ fun NeuButton(
         onClick = onClick,
         enabled = enabled,
         modifier = buttonModifier,
-        shape = if (uiStyle == AppUiStyle.MIUIX) MaterialTheme.shapes.medium else NeuInnerShape,
+        shape = when (uiStyle) {
+            AppUiStyle.NEUMORPHIC -> NeuInnerShape
+            AppUiStyle.MIUIX -> MaterialTheme.shapes.medium
+            AppUiStyle.MODERN_WORKBENCH,
+            AppUiStyle.MODERN_WORKBENCH_COMPOSE -> ModernInnerShape
+        },
         colors = buttonColors,
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = if (uiStyle.isModernWorkbenchStyle()) 10.dp else 12.dp)
     ) {
         Text(
             text = text,
@@ -172,14 +211,26 @@ fun NeuTextField(
     singleLine: Boolean = true
 ) {
     val uiStyle = LocalAppUiStyle.current
-    if (uiStyle == AppUiStyle.MIUIX) {
+    if (uiStyle == AppUiStyle.MIUIX || uiStyle.isModernWorkbenchStyle()) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             singleLine = singleLine,
             label = { Text(label) },
             modifier = modifier,
-            shape = MaterialTheme.shapes.medium
+            shape = if (uiStyle.isModernWorkbenchStyle()) ModernInnerShape else MaterialTheme.shapes.medium,
+            colors = if (uiStyle.isModernWorkbenchStyle()) {
+                OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                OutlinedTextFieldDefaults.colors()
+            }
         )
     } else {
         OutlinedTextField(
@@ -236,6 +287,13 @@ fun AppSearchBar(
             onExpandedChange = collapsed,
             modifier = modifier
         ) {}
+    } else if (uiStyle.isModernWorkbenchStyle()) {
+        NeuTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = placeholder,
+            modifier = modifier
+        )
     } else {
         NeuTextField(
             value = value,
@@ -264,7 +322,17 @@ fun AppSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             modifier = modifier,
-            colors = SwitchDefaults.colors()
+            colors = if (uiStyle.isModernWorkbenchStyle()) {
+                SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                )
+            } else {
+                SwitchDefaults.colors()
+            }
         )
     }
 }

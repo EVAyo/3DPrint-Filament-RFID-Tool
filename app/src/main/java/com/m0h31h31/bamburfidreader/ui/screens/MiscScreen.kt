@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -54,6 +55,13 @@ import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton
 import com.m0h31h31.bamburfidreader.ui.components.NeuPanel
 import com.m0h31h31.bamburfidreader.ui.components.AppSwitch
+import com.m0h31h31.bamburfidreader.ui.components.ModernCard
+import com.m0h31h31.bamburfidreader.ui.components.ModernDivider
+import com.m0h31h31.bamburfidreader.ui.components.ModernDot
+import com.m0h31h31.bamburfidreader.ui.components.ModernPillButton
+import com.m0h31h31.bamburfidreader.ui.components.ModernSectionHeader
+import com.m0h31h31.bamburfidreader.ui.components.ModernSettingRow
+import com.m0h31h31.bamburfidreader.ui.components.ModernWorkbenchTokens
 import com.m0h31h31.bamburfidreader.ui.components.neuBackground
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
 import androidx.compose.foundation.background
@@ -72,6 +80,7 @@ import androidx.compose.material3.Icon
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
 import com.m0h31h31.bamburfidreader.ui.theme.AppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ColorPalette
+import com.m0h31h31.bamburfidreader.ui.theme.DEFAULT_APP_UI_STYLE
 import com.m0h31h31.bamburfidreader.ui.theme.LocalAppUiStyle
 import com.m0h31h31.bamburfidreader.ui.theme.ThemeMode
 import com.m0h31h31.bamburfidreader.utils.AnalyticsReporter
@@ -154,6 +163,286 @@ internal fun resolveStatusTone(message: String): StatusTone {
     }
 }
 
+@Composable
+private fun ModernMiscScreen(
+    statusText: String,
+    uiStyle: AppUiStyle,
+    onUiStyleChange: (AppUiStyle) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    colorPalette: ColorPalette,
+    readAllSectors: Boolean,
+    onReadAllSectorsChange: (Boolean) -> Unit,
+    saveKeysToFile: Boolean,
+    onSaveKeysToFileChange: (Boolean) -> Unit,
+    nfcCompatibilityMode: NfcCompatibilityMode,
+    onNfcCompatibilityModeChange: (NfcCompatibilityMode) -> Unit,
+    nfcCompatibilityTestInProgress: Boolean,
+    onStartNfcCompatibilityReadTest: () -> Unit,
+    onStartNfcCompatibilityWriteTest: () -> Unit,
+    onCancelNfcCompatibilityTest: () -> Unit,
+    bambuTagEnabled: Boolean,
+    onBambuTagEnabledChange: (Boolean) -> Unit,
+    crealityEnabled: Boolean,
+    onCrealityEnabledChange: (Boolean) -> Unit,
+    snapmakerTagEnabled: Boolean,
+    onSnapmakerTagEnabledChange: (Boolean) -> Unit,
+    inventoryEnabled: Boolean,
+    onInventoryEnabledChange: (Boolean) -> Unit,
+    autoDetectBrand: Boolean,
+    onAutoDetectBrandChange: (Boolean) -> Unit,
+    onClearFuid: () -> Unit,
+    onBackupDatabase: () -> Unit,
+    onImportDatabase: () -> Unit,
+    onSelectImportTagPackage: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = ModernWorkbenchTokens.Page
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = stringResource(R.string.tab_misc),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = ModernWorkbenchTokens.Ink,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.misc_modern_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ModernWorkbenchTokens.Muted
+                    )
+                }
+                Text(
+                    text = "⚙",
+                    color = ModernWorkbenchTokens.Orange,
+                    style = MaterialTheme.typography.headlineMedium
+                )
+            }
+
+            ModernCard(modifier = Modifier.fillMaxWidth(), radius = 14.dp) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ModernDot(color = ModernWorkbenchTokens.Orange, size = 12.dp)
+                    Text(
+                        text = statusText,
+                        modifier = Modifier.weight(1f),
+                        color = ModernWorkbenchTokens.Orange,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "◉",
+                        color = ModernWorkbenchTokens.Orange,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
+
+            ModernConfigSection(title = stringResource(R.string.misc_modern_section_appearance)) {
+                ModernSettingRow(
+                    title = stringResource(R.string.misc_ui_style),
+                    subtitle = stringResource(R.string.misc_modern_style_hint)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            AppUiStyle.MODERN_WORKBENCH to stringResource(R.string.misc_ui_style_modern_workbench),
+                            AppUiStyle.MODERN_WORKBENCH_COMPOSE to stringResource(R.string.misc_ui_style_modern_compose),
+                            AppUiStyle.NEUMORPHIC to stringResource(R.string.misc_ui_style_neumorphism)
+                        ).forEach { (style, label) ->
+                            ModernPillButton(
+                                text = label,
+                                selected = uiStyle == style,
+                                onClick = { onUiStyleChange(style) }
+                            )
+                        }
+                    }
+                }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.misc_theme_mode),
+                    subtitle = when (themeMode) {
+                        ThemeMode.LIGHT -> stringResource(R.string.misc_theme_mode_light)
+                        ThemeMode.DARK -> stringResource(R.string.misc_theme_mode_dark)
+                        ThemeMode.SYSTEM -> stringResource(R.string.misc_theme_mode_system)
+                    }
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            ThemeMode.SYSTEM to stringResource(R.string.misc_theme_mode_system),
+                            ThemeMode.LIGHT to stringResource(R.string.misc_theme_mode_light),
+                            ThemeMode.DARK to stringResource(R.string.misc_theme_mode_dark)
+                        ).forEach { (mode, label) ->
+                            ModernPillButton(
+                                text = label,
+                                selected = themeMode == mode,
+                                onClick = { onThemeModeChange(mode) }
+                            )
+                        }
+                    }
+                }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.misc_color_palette),
+                    subtitle = colorPalette.name
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(ModernWorkbenchTokens.Orange, RoundedCornerShape(999.dp))
+                    )
+                }
+            }
+
+            ModernConfigSection(title = stringResource(R.string.misc_modern_section_nfc)) {
+                ModernSettingRow(
+                    title = stringResource(R.string.misc_read_all_sectors),
+                    subtitle = stringResource(R.string.misc_read_all_sectors)
+                ) {
+                    AppSwitch(checked = readAllSectors, onCheckedChange = onReadAllSectorsChange)
+                }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.misc_save_keys),
+                    subtitle = stringResource(R.string.misc_save_keys)
+                ) {
+                    AppSwitch(checked = saveKeysToFile, onCheckedChange = onSaveKeysToFileChange)
+                }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.nfc_compat_mode_title),
+                    subtitle = stringResource(R.string.nfc_compat_mode_balanced_desc)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            NfcCompatibilityMode.FAST to stringResource(R.string.nfc_compat_mode_fast),
+                            NfcCompatibilityMode.BALANCED to stringResource(R.string.nfc_compat_mode_balanced),
+                            NfcCompatibilityMode.STABLE to stringResource(R.string.nfc_compat_mode_stable)
+                        ).forEach { (mode, label) ->
+                            ModernPillButton(
+                                text = label,
+                                selected = nfcCompatibilityMode == mode,
+                                onClick = { onNfcCompatibilityModeChange(mode) }
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModernPillButton(
+                        text = if (nfcCompatibilityTestInProgress) {
+                            stringResource(R.string.nfc_compat_cancel_test)
+                        } else {
+                            stringResource(R.string.nfc_compat_read_test)
+                        },
+                        onClick = if (nfcCompatibilityTestInProgress) onCancelNfcCompatibilityTest else onStartNfcCompatibilityReadTest,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModernPillButton(
+                        text = stringResource(R.string.nfc_compat_write_test),
+                        onClick = onStartNfcCompatibilityWriteTest,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            ModernConfigSection(title = stringResource(R.string.misc_modern_section_features)) {
+                ModernSettingRow(
+                    title = stringResource(R.string.config_bambu_feature),
+                    subtitle = stringResource(R.string.config_bambu_feature_desc)
+                ) { AppSwitch(checked = bambuTagEnabled, onCheckedChange = onBambuTagEnabledChange) }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_creality_feature),
+                    subtitle = stringResource(R.string.config_creality_feature_desc)
+                ) { AppSwitch(checked = crealityEnabled, onCheckedChange = onCrealityEnabledChange) }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_snapmaker_feature),
+                    subtitle = stringResource(R.string.config_snapmaker_feature_desc)
+                ) { AppSwitch(checked = snapmakerTagEnabled, onCheckedChange = onSnapmakerTagEnabledChange) }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_inventory_feature),
+                    subtitle = stringResource(R.string.config_inventory_feature_desc)
+                ) { AppSwitch(checked = inventoryEnabled, onCheckedChange = onInventoryEnabledChange) }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_auto_detect_brand),
+                    subtitle = stringResource(R.string.config_auto_detect_brand_desc)
+                ) { AppSwitch(checked = autoDetectBrand, onCheckedChange = onAutoDetectBrandChange) }
+            }
+
+            ModernConfigSection(title = stringResource(R.string.misc_modern_section_data)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModernPillButton(
+                        text = stringResource(R.string.misc_format_tag),
+                        onClick = onClearFuid,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModernPillButton(
+                        text = stringResource(R.string.misc_import_tag_package),
+                        onClick = onSelectImportTagPackage,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ModernPillButton(
+                        text = stringResource(R.string.action_backup_db),
+                        onClick = onBackupDatabase,
+                        modifier = Modifier.weight(1f)
+                    )
+                    ModernPillButton(
+                        text = stringResource(R.string.action_import_db),
+                        onClick = onImportDatabase,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModernConfigSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    ModernCard(modifier = Modifier.fillMaxWidth(), radius = 16.dp) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ModernSectionHeader(title = title)
+            content()
+        }
+    }
+}
+
 private fun normalizeConfigMessage(message: String): String {
     return message
         .replace("\r\n", "\n")
@@ -202,7 +491,7 @@ fun MiscScreen(
     appConfigAdMessage: String = "",
     boostLink: ConfigManager.AppLinkConfig = ConfigManager.AppLinkConfig("", ""),
     logoLinks: Map<String, ConfigManager.AppLinkConfig> = emptyMap(),
-    uiStyle: AppUiStyle = AppUiStyle.NEUMORPHIC,
+    uiStyle: AppUiStyle = DEFAULT_APP_UI_STYLE,
     onUiStyleChange: (AppUiStyle) -> Unit = {},
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     onThemeModeChange: (ThemeMode) -> Unit = {},
@@ -395,6 +684,43 @@ fun MiscScreen(
     }
 
     // 图片解码放到 IO 线程，避免首次进入页面时阻塞合成
+    if (uiStyle == AppUiStyle.MODERN_WORKBENCH || uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE) {
+        ModernMiscScreen(
+            statusText = visibleStatusMessage.ifBlank { stringResource(R.string.misc_status_idle) },
+            uiStyle = uiStyle,
+            onUiStyleChange = onUiStyleChange,
+            themeMode = themeMode,
+            onThemeModeChange = onThemeModeChange,
+            colorPalette = colorPalette,
+            readAllSectors = readAllSectors,
+            onReadAllSectorsChange = onReadAllSectorsChange,
+            saveKeysToFile = saveKeysToFile,
+            onSaveKeysToFileChange = onSaveKeysToFileChange,
+            nfcCompatibilityMode = nfcCompatibilityMode,
+            onNfcCompatibilityModeChange = onNfcCompatibilityModeChange,
+            nfcCompatibilityTestInProgress = nfcCompatibilityTestInProgress,
+            onStartNfcCompatibilityReadTest = { message = onStartNfcCompatibilityReadTest() },
+            onStartNfcCompatibilityWriteTest = { message = onStartNfcCompatibilityWriteTest() },
+            onCancelNfcCompatibilityTest = { message = onCancelNfcCompatibilityTest() },
+            bambuTagEnabled = bambuTagEnabled,
+            onBambuTagEnabledChange = onBambuTagEnabledChange,
+            crealityEnabled = crealityEnabled,
+            onCrealityEnabledChange = onCrealityEnabledChange,
+            snapmakerTagEnabled = snapmakerTagEnabled,
+            onSnapmakerTagEnabledChange = onSnapmakerTagEnabledChange,
+            inventoryEnabled = inventoryEnabled,
+            onInventoryEnabledChange = onInventoryEnabledChange,
+            autoDetectBrand = autoDetectBrand,
+            onAutoDetectBrandChange = onAutoDetectBrandChange,
+            onClearFuid = { message = onClearFuid() },
+            onBackupDatabase = { message = onBackupDatabase() },
+            onImportDatabase = { message = onImportDatabase() },
+            onSelectImportTagPackage = { message = onSelectImportTagPackage() },
+            modifier = modifier
+        )
+        return
+    }
+
     val footerLogos by produceState(initialValue = emptyList<Pair<String, androidx.compose.ui.graphics.ImageBitmap>>(), context) {
         value = withContext(Dispatchers.IO) {
             runCatching {
@@ -429,7 +755,7 @@ fun MiscScreen(
     ) {
         val statusText = visibleStatusMessage.ifBlank { stringResource(R.string.misc_status_idle) }
         val visibleStatusColor = statusToneColor(resolveStatusTone(visibleStatusMessage))
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             // ── Fixed status bar — always visible at top ────────────────────
             NeuPanel(
                 modifier = Modifier
@@ -474,34 +800,52 @@ fun MiscScreen(
 
                 NeuPanel(modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(text = stringResource(R.string.misc_ui_style))
-                                Text(
-                                    text = if (uiStyle == AppUiStyle.MIUIX) {
-                                        stringResource(R.string.misc_ui_style_miuix)
-                                    } else {
-                                        stringResource(R.string.misc_ui_style_neumorphism)
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            AppSwitch(
-                                checked = uiStyle == AppUiStyle.MIUIX,
-                                onCheckedChange = {
-                                    onUiStyleChange(
-                                        if (it) AppUiStyle.MIUIX else AppUiStyle.NEUMORPHIC
-                                    )
-                                }
+                            Text(text = stringResource(R.string.misc_ui_style))
+                            val styleOptions = listOf(
+                                AppUiStyle.MODERN_WORKBENCH to stringResource(R.string.misc_ui_style_modern_workbench),
+                                AppUiStyle.MODERN_WORKBENCH_COMPOSE to stringResource(R.string.misc_ui_style_modern_compose),
+                                AppUiStyle.NEUMORPHIC to stringResource(R.string.misc_ui_style_neumorphism),
+                                AppUiStyle.MIUIX to stringResource(R.string.misc_ui_style_miuix)
                             )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                styleOptions.forEach { (style, label) ->
+                                    val selected = uiStyle == style
+                                    Surface(
+                                        shape = MaterialTheme.shapes.extraSmall,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surface
+                                        },
+                                        border = if (selected) {
+                                            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                                        },
+                                        modifier = Modifier.clickable { onUiStyleChange(style) }
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (selected) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         Row(

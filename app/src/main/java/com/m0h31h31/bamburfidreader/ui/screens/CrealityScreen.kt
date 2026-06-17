@@ -506,7 +506,7 @@ fun CrealityScreen(
     val canWrite = selectedMaterialId.isNotEmpty() && selectedWeight.isNotEmpty()
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().statusBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(16.dp)
     ) {
