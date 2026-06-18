@@ -85,6 +85,115 @@ class BambuCloudApiClientTest {
     }
 
     @Test
+    fun loginFailureUsesAccountPasswordMessageForIncorrectAccountOrPassword() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 400,
+                body = """
+                    {
+                      "code": 2,
+                      "error": "Incorrect account or password."
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.Failure)
+        assertEquals("Incorrect account or password.", (result as BambuCloudApiResult.Failure).message)
+        assertEquals(400, result.statusCode)
+        assertEquals(BambuCloudLoginFailureReason.ACCOUNT_OR_PASSWORD_INCORRECT, result.loginFailureReason)
+    }
+
+    @Test
+    fun loginFailureUsesVerificationCodeMessageForIncorrectCode() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 400,
+                body = """
+                    {
+                      "code": 2,
+                      "error": "Incorrect code"
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithCode("user@example.com", "secret", "123456")
+
+        assertTrue(result is BambuCloudApiResult.Failure)
+        assertEquals("Incorrect code", (result as BambuCloudApiResult.Failure).message)
+        assertEquals(400, result.statusCode)
+        assertEquals(BambuCloudLoginFailureReason.VERIFICATION_CODE_INCORRECT, result.loginFailureReason)
+    }
+
+    @Test
+    fun loginFailureFallsBackToApiErrorMessage() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 400,
+                body = """
+                    {
+                      "code": 99,
+                      "error": "Login temporarily unavailable"
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.Failure)
+        assertEquals("Login temporarily unavailable", (result as BambuCloudApiResult.Failure).message)
+        assertEquals(400, result.statusCode)
+        assertEquals(null, result.loginFailureReason)
+    }
+
+    @Test
+    fun loginFailureShowsApiErrorMessageForNon400Status() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 418,
+                body = """
+                    {
+                      "code": 418,
+                      "error": "Session challenge required"
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.Failure)
+        assertEquals("Session challenge required", (result as BambuCloudApiResult.Failure).message)
+        assertEquals(418, result.statusCode)
+        assertEquals(null, result.loginFailureReason)
+    }
+
+    @Test
+    fun loginFailureShowsRawBodyWhenNon200ResponseIsNotJson() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 418,
+                body = "Login blocked by server policy"
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.Failure)
+        assertEquals("Login blocked by server policy", (result as BambuCloudApiResult.Failure).message)
+        assertEquals(418, result.statusCode)
+    }
+
+    @Test
     fun fetchAccountUsesBearerTokenAndParsesPreferenceProfile() = runBlocking {
         val transport = RecordingTransport(
             BambuCloudHttpResponse(

@@ -59,12 +59,18 @@ data class BambuCloudSession(
     val expiresAtMillis: Long
 )
 
+enum class BambuCloudLoginFailureReason {
+    ACCOUNT_OR_PASSWORD_INCORRECT,
+    VERIFICATION_CODE_INCORRECT
+}
+
 sealed class BambuCloudApiResult<out T> {
     data class Success<T>(val value: T) : BambuCloudApiResult<T>()
     data object VerificationCodeRequired : BambuCloudApiResult<Nothing>()
     data class Failure(
         val message: String,
-        val statusCode: Int? = null
+        val statusCode: Int? = null,
+        val loginFailureReason: BambuCloudLoginFailureReason? = null
     ) : BambuCloudApiResult<Nothing>()
 }
 
@@ -116,7 +122,10 @@ interface BambuCloudSessionStore {
 sealed class BambuCloudRepositoryResult {
     data class Success(val session: BambuCloudSession) : BambuCloudRepositoryResult()
     data object VerificationCodeRequired : BambuCloudRepositoryResult()
-    data class Failure(val message: String) : BambuCloudRepositoryResult()
+    data class Failure(
+        val message: String,
+        val loginFailureReason: BambuCloudLoginFailureReason? = null
+    ) : BambuCloudRepositoryResult()
 }
 
 sealed class BambuCloudPrinterResult {

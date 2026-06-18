@@ -86,7 +86,10 @@ class BambuCloudRepository(
                 return BambuCloudRepositoryResult.VerificationCodeRequired
             }
             is BambuCloudApiResult.Failure -> {
-                return BambuCloudRepositoryResult.Failure(tokenResult.message)
+                return BambuCloudRepositoryResult.Failure(
+                    message = tokenResult.message,
+                    loginFailureReason = tokenResult.loginFailureReason
+                )
             }
         }
         if (tokens.accessToken.isBlank()) {

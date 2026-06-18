@@ -81,6 +81,7 @@ import com.m0h31h31.bamburfidreader.cloud.BambuPrinterRealtimeStatus
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudRepository
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudRepositoryResult
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudSession
+import com.m0h31h31.bamburfidreader.cloud.BambuCloudLoginFailureReason
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudRemainingSyncer
 import com.m0h31h31.bamburfidreader.cloud.SensitiveValueMasker
 import com.m0h31h31.bamburfidreader.ui.components.AppCircularProgressIndicator
@@ -167,7 +168,16 @@ fun CloudConnectScreen(
                 statusMessage = context.getString(R.string.cloud_status_verify_required)
             }
             is BambuCloudRepositoryResult.Failure -> {
-                statusMessage = context.getString(R.string.cloud_status_login_failed, result.message)
+                val loginFailureMessage = when (result.loginFailureReason) {
+                    BambuCloudLoginFailureReason.ACCOUNT_OR_PASSWORD_INCORRECT -> {
+                        context.getString(R.string.cloud_status_account_password_incorrect)
+                    }
+                    BambuCloudLoginFailureReason.VERIFICATION_CODE_INCORRECT -> {
+                        context.getString(R.string.cloud_status_verification_code_incorrect)
+                    }
+                    null -> result.message
+                }
+                statusMessage = context.getString(R.string.cloud_status_login_failed, loginFailureMessage)
             }
         }
     }
@@ -285,9 +295,46 @@ fun CloudConnectScreen(
             onDismissRequest = {
                 if (!loginInProgress) showLoginDialog = false
             },
-            title = { Text(stringResource(R.string.cloud_login_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(stringResource(R.string.cloud_login_title))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cloud_login_region_cn_badge),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (statusMessage.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = statusMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                     OutlinedTextField(
                         value = account,
                         onValueChange = { account = it },
@@ -327,6 +374,13 @@ fun CloudConnectScreen(
                             )
                         }
                     }
+                    Text(
+                        text = stringResource(R.string.cloud_login_security_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             },
             confirmButton = {

@@ -85,6 +85,29 @@ private fun buildModernLightScheme(primary: Color) = lightColorScheme(
     onErrorContainer = Ink
 )
 
+private fun buildModernDarkScheme(primary: Color) = darkColorScheme(
+    primary = primary,
+    onPrimary = if (lum(primary) > 0.4f) Color(0xFF101821) else Color.White,
+    primaryContainer = lerp(Color(0xFF1E2937), primary, 0.22f),
+    onPrimaryContainer = DarkInk,
+    secondary = Mint,
+    tertiary = Coral,
+    background = Color(0xFF10151C),
+    surface = Color(0xFF171E27),
+    surfaceVariant = Color(0xFF222C38),
+    surfaceContainer = Color(0xFF171E27),
+    surfaceContainerHigh = Color(0xFF1D2631),
+    surfaceContainerHighest = Color(0xFF253140),
+    onBackground = DarkInk,
+    onSurface = DarkInk,
+    onSurfaceVariant = Color(0xFFAAB4C3),
+    outline = Color(0xFF3A4655),
+    outlineVariant = Color(0xFF2E3947),
+    error = ColorError,
+    errorContainer = ColorError.copy(alpha = 0.22f),
+    onErrorContainer = DarkInk
+)
+
 private fun buildDarkScheme(primary: Color) = darkColorScheme(
     primary = primary,
     onPrimary = if (lum(primary) > 0.4f) DarkMist else DarkInk,
@@ -154,9 +177,9 @@ fun BambuRfidReaderTheme(
     }
     val isModernWorkbench = uiStyle == AppUiStyle.MODERN_WORKBENCH ||
             uiStyle == AppUiStyle.MODERN_WORKBENCH_COMPOSE
-    val colorScheme = if (isModernWorkbench && !darkTheme) {
+    val colorScheme = if (isModernWorkbench) {
         val spec = paletteSpecs[colorPalette] ?: paletteSpecs[ColorPalette.OCEAN]!!
-        buildModernLightScheme(spec.l)
+        if (darkTheme) buildModernDarkScheme(spec.d) else buildModernLightScheme(spec.l)
     } else {
         paletteColorScheme(colorPalette, miuix = uiStyle == AppUiStyle.MIUIX, dark = darkTheme)
     }

@@ -1253,7 +1253,7 @@ private fun ModernReaderScreen(
                 Surface(
                     modifier = Modifier.clickable { onVoiceEnabledChange(!voiceEnabled) },
                     shape = RoundedCornerShape(999.dp),
-                    color = Color.White,
+                    color = ModernWorkbenchTokens.Card,
                     border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
                 ) {
                     Row(
@@ -1342,7 +1342,7 @@ private fun ModernReaderScreen(
                             if (readerBrand == ReaderBrand.BAMBU && state.uidHex.isNotBlank()) {
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFFBFBFC),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
                                 ) {
                                     Text(
@@ -1446,7 +1446,7 @@ private fun ModernReaderScreen(
                                             .offset(x = thumbOffsetDp.coerceAtLeast(0.dp))
                                             .size(thumbSizeDp)
                                             .shadow(if (isDragging) 4.dp else 1.dp, androidx.compose.foundation.shape.CircleShape)
-                                            .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+                                            .background(ModernWorkbenchTokens.Card, androidx.compose.foundation.shape.CircleShape)
                                             .border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
                                     )
                                 }
@@ -1454,7 +1454,7 @@ private fun ModernReaderScreen(
                         }
                         Surface(
                             shape = RoundedCornerShape(13.dp),
-                            color = Color.White,
+                            color = ModernWorkbenchTokens.Card,
                             border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
                         ) {
                             QuantityButtonGroup(
@@ -1613,7 +1613,7 @@ private fun ModernIconButton(
     val background = when {
         filled -> accent
         selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        else -> Color.White
+        else -> ModernWorkbenchTokens.Card
     }
     val contentColor = when {
         filled -> Color.White
@@ -1626,7 +1626,7 @@ private fun ModernIconButton(
             .height(if (compact) 36.dp else 44.dp)
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = if (enabled) background else Color(0xFFF4F4F5),
+        color = if (enabled) background else MaterialTheme.colorScheme.surfaceVariant,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
             when {

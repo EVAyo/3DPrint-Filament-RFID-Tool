@@ -29,15 +29,24 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object ModernWorkbenchTokens {
-    val Orange = Color(0xFFFF6A1A)
-    val OrangeSoft = Color(0xFFFFEFE7)
-    val Ink = Color(0xFF172033)
-    val Muted = Color(0xFF697386)
-    val Line = Color(0xFFE4E7EC)
-    val Card = Color(0xFFFFFFFF)
-    val Page = Color(0xFFFAFAFA)
-    val Danger = Color(0xFFEF342C)
-    val Success = Color(0xFF16A34A)
+    val Orange: Color
+        @Composable get() = MaterialTheme.colorScheme.primary
+    val OrangeSoft: Color
+        @Composable get() = MaterialTheme.colorScheme.primaryContainer
+    val Ink: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurface
+    val Muted: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    val Line: Color
+        @Composable get() = MaterialTheme.colorScheme.outlineVariant
+    val Card: Color
+        @Composable get() = MaterialTheme.colorScheme.surface
+    val Page: Color
+        @Composable get() = MaterialTheme.colorScheme.background
+    val Danger: Color
+        @Composable get() = MaterialTheme.colorScheme.error
+    val Success: Color
+        @Composable get() = Color(0xFF16A34A)
 }
 
 @Composable
@@ -75,7 +84,7 @@ fun ModernPillButton(
     val background = when {
         filled -> accent
         selected -> accent.copy(alpha = 0.12f)
-        else -> Color.White
+        else -> ModernWorkbenchTokens.Card
     }
     val textColor = when {
         filled -> Color.White
@@ -86,7 +95,7 @@ fun ModernPillButton(
     Surface(
         modifier = modifier.clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(13.dp),
-        color = if (enabled) background else Color(0xFFF4F4F5),
+        color = if (enabled) background else MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(
             1.dp,
             when {
@@ -117,7 +126,7 @@ fun ModernSegmentedRow(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
+        color = ModernWorkbenchTokens.Card,
         border = BorderStroke(1.dp, ModernWorkbenchTokens.Line)
     ) {
         Row(

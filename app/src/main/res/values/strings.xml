@@ -40,7 +40,9 @@
     <string name="cloud_logout_confirm_title">Log out?</string>
     <string name="cloud_logout_confirm_message">This will disconnect the current Bambu Cloud account on this device.</string>
     <string name="cloud_login_title">Log in to Bambu Cloud</string>
-    <string name="cloud_account">Account or email</string>
+    <string name="cloud_login_region_cn_badge">CN</string>
+    <string name="cloud_account">Bambu Cloud account (MakerWorld)</string>
+    <string name="cloud_login_security_hint">M0 RFID does not store or collect your account or password.</string>
     <string name="cloud_password">Password</string>
     <string name="cloud_verification_code">Verification code</string>
     <string name="cloud_login_password">Log in</string>
@@ -55,6 +57,8 @@
     <string name="cloud_status_logging_in">Logging in...</string>
     <string name="cloud_status_verify_required">Verification code required</string>
     <string name="cloud_status_login_failed">Login failed: %1$s</string>
+    <string name="cloud_status_account_password_incorrect">Incorrect account or password</string>
+    <string name="cloud_status_verification_code_incorrect">Incorrect verification code</string>
     <string name="cloud_status_missing_credentials">Enter account and password</string>
     <string name="cloud_status_missing_code">Enter account and verification code</string>
     <string name="cloud_printers_title">Cloud printers</string>

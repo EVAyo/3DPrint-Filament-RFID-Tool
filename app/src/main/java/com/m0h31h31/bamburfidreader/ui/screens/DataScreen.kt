@@ -546,7 +546,7 @@ private fun ModernDataHeader(
                     .weight(1f)
                     .height(48.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = Color.White,
+                color = ModernWorkbenchTokens.Card,
                 border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
             ) {
                 Row(
@@ -669,7 +669,7 @@ private fun ModernSwatchCell(
         Surface(
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(10.dp),
-            color = Color.White,
+            color = ModernWorkbenchTokens.Card,
             border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
         ) {
             Column {
@@ -694,7 +694,7 @@ private fun ModernSwatchCell(
                 ) {
                     Text(
                         text = title,
-                        color = Color.Black,
+                        color = ModernWorkbenchTokens.Ink,
                         fontSize = 11.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Bold,

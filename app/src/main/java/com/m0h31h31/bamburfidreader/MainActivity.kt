@@ -163,7 +163,8 @@ private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
 private const val KEY_NOTICE_GUIDE_SHOWN = "notice_guide_shown"
 private const val KEY_LAST_WRITTEN_SOURCE_UID = "last_written_source_uid"
 private const val KEY_LAST_DICT_SYNC_VERSION_CODE = "last_dict_sync_version_code"
-private const val SHARE_TAG_CLEAR_VERSION_META_PREFIX = "share_tags_cleared_for_version_"
+private const val KEY_UI_STYLE_FORCED_VERSION_CODE = "ui_style_forced_version_code"
+private const val FORCE_MINIMAL_UI_STYLE_VERSION_CODE = 318
 
 private enum class PendingNfcCompatibilityTest {
     READ_ONLY,
@@ -1042,6 +1043,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val uiPrefs = getSharedPreferences(UI_PREFS_NAME, Context.MODE_PRIVATE)
+        if (BuildConfig.VERSION_CODE == FORCE_MINIMAL_UI_STYLE_VERSION_CODE &&
+            uiPrefs.getInt(KEY_UI_STYLE_FORCED_VERSION_CODE, 0) != FORCE_MINIMAL_UI_STYLE_VERSION_CODE
+        ) {
+            uiPrefs.edit()
+                .putString(KEY_UI_STYLE, AppUiStyle.MODERN_WORKBENCH.name)
+                .putInt(KEY_UI_STYLE_FORCED_VERSION_CODE, FORCE_MINIMAL_UI_STYLE_VERSION_CODE)
+                .apply()
+        }
         voiceEnabled = uiPrefs.getBoolean(KEY_VOICE_ENABLED, false)
         bambuTagEnabled = uiPrefs.getBoolean(KEY_BAMBU_TAG_ENABLED, true)
         crealityEnabled = uiPrefs.getBoolean(KEY_CREALITY_ENABLED, false)
@@ -2992,20 +3001,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun clearShareTagDatabaseOnceForThisVersion(dbHelper: FilamentDbHelper) {
-        val db = dbHelper.writableDatabase
-        val metaKey = "$SHARE_TAG_CLEAR_VERSION_META_PREFIX${BuildConfig.VERSION_CODE}"
-        if (dbHelper.getMetaValue(db, metaKey) != null) return
-        val bambuDeleted = dbHelper.clearShareTagsTable(db)
-        val snapmakerDeleted = dbHelper.clearSnapmakerShareTagsTable(db)
-        dbHelper.setMetaValue(db, "share_disk_migration_v1", "done")
-        dbHelper.setMetaValue(db, metaKey, "done")
-        logDebug(
-            "Share tag database cleared for version ${BuildConfig.VERSION_CODE}: " +
-                "bambu=$bambuDeleted snapmaker=$snapmakerDeleted"
-        )
-    }
-
     private fun ensureDirectoryWritable(dir: File): Boolean {
         return try {
             if (dir.exists()) {
@@ -3288,7 +3283,6 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                filamentDbHelper?.let { clearShareTagDatabaseOnceForThisVersion(it) }
                 ensureBundledShareDataExtracted()
                 migrateDiskFilesToDb()
                 val loadedItems = loadShareTagItems()

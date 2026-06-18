@@ -150,10 +150,12 @@ class BambuCloudApiClient(
             )
         )
         val json = response.toJson()
-        if (response.statusCode !in 200..299) {
+        if (response.statusCode != 200) {
+            val message = response.failureMessage()
             return BambuCloudApiResult.Failure(
-                message = json.optString("message").ifBlank { "HTTP ${response.statusCode}" },
-                statusCode = response.statusCode.takeIf { it > 0 }
+                message = message,
+                statusCode = response.statusCode.takeIf { it > 0 },
+                loginFailureReason = message.toLoginFailureReason()
             )
         }
         val loginType = json.optString("loginType")
@@ -188,11 +190,28 @@ class BambuCloudApiClient(
         val json = response.toJson()
         if (response.statusCode !in 200..299) {
             return BambuCloudApiResult.Failure(
-                message = json.optString("message").ifBlank { "HTTP ${response.statusCode}" },
+                message = response.failureMessage(),
                 statusCode = response.statusCode.takeIf { it > 0 }
             )
         }
         return BambuCloudApiResult.Success(parser(json))
+    }
+
+    private fun BambuCloudHttpResponse.failureMessage(): String {
+        val json = toJson()
+        val rawBody = body.trim()
+        return json.optString("message")
+            .ifBlank { json.optString("error") }
+            .ifBlank { rawBody }
+            .ifBlank { "HTTP $statusCode" }
+    }
+
+    private fun String.toLoginFailureReason(): BambuCloudLoginFailureReason? {
+        return when (trim()) {
+            "Incorrect account or password." -> BambuCloudLoginFailureReason.ACCOUNT_OR_PASSWORD_INCORRECT
+            "Incorrect code" -> BambuCloudLoginFailureReason.VERIFICATION_CODE_INCORRECT
+            else -> null
+        }
     }
 
     private fun BambuCloudHttpResponse.toJson(): JSONObject {

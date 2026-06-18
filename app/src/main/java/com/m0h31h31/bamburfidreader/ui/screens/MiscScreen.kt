@@ -1299,7 +1299,7 @@ private fun ModernSegmented(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(11.dp),
-        color = Color(0xFFF1F2F4)
+        color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
             modifier = Modifier.padding(3.dp),
@@ -1340,7 +1340,7 @@ private fun ModernActionCard(
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = Color.White,
+        color = ModernWorkbenchTokens.Card,
         border = androidx.compose.foundation.BorderStroke(1.dp, ModernWorkbenchTokens.Line)
     ) {
         Row(
