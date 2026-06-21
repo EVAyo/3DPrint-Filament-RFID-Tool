@@ -126,6 +126,7 @@ fun CloudConnectScreen(
     var verificationRequired by remember { mutableStateOf(false) }
     var loginInProgress by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showWebLogin by remember { mutableStateOf(false) }
 
     fun syncFilamentRemainingToLocal() {
         controller.syncFilamentRemainingToLocal(context) { list ->
@@ -166,6 +167,12 @@ fun CloudConnectScreen(
             BambuCloudRepositoryResult.VerificationCodeRequired -> {
                 verificationRequired = true
                 statusMessage = context.getString(R.string.cloud_status_verify_required)
+            }
+            is BambuCloudRepositoryResult.CaptchaRequired -> {
+                // 触发人机验证：打开网页登录完成验证
+                showLoginDialog = false
+                statusMessage = context.getString(R.string.cloud_status_captcha_required)
+                showWebLogin = true
             }
             is BambuCloudRepositoryResult.Failure -> {
                 val loginFailureMessage = when (result.loginFailureReason) {
@@ -429,6 +436,20 @@ fun CloudConnectScreen(
                 TextButton(onClick = { showLogoutConfirm = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
+            }
+        )
+    }
+
+    if (showWebLogin) {
+        BambuCloudWebLoginDialog(
+            onDismiss = { showWebLogin = false },
+            onVerified = {
+                // 网页登录成功（已通过人机验证）→ 引导用户返回 App 重新登录
+                showWebLogin = false
+                verificationRequired = false
+                verificationCode = ""
+                statusMessage = context.getString(R.string.cloud_status_relogin_after_verify)
+                showLoginDialog = true
             }
         )
     }

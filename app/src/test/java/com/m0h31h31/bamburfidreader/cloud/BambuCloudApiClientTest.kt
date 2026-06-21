@@ -58,6 +58,30 @@ class BambuCloudApiClientTest {
     }
 
     @Test
+    fun loginReturnsCaptchaRequiredWhenApiRequestsHumanVerification() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 400,
+                body = """
+                    {
+                      "captchaId": "78120903a6338320170d5a4fa1c8e113",
+                      "captchaScene": "verify_code",
+                      "error": "We need to confirm that you are not a robot."
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithPassword("user@example.com", "secret")
+
+        assertTrue(result is BambuCloudApiResult.CaptchaRequired)
+        val captcha = result as BambuCloudApiResult.CaptchaRequired
+        assertEquals("78120903a6338320170d5a4fa1c8e113", captcha.captchaId)
+        assertEquals("verify_code", captcha.scene)
+    }
+
+    @Test
     fun loginWithCodePostsAccountPasswordAndCode() = runBlocking {
         val transport = RecordingTransport(
             BambuCloudHttpResponse(

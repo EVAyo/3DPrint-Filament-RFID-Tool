@@ -67,6 +67,12 @@ enum class BambuCloudLoginFailureReason {
 sealed class BambuCloudApiResult<out T> {
     data class Success<T>(val value: T) : BambuCloudApiResult<T>()
     data object VerificationCodeRequired : BambuCloudApiResult<Nothing>()
+    /** 登录触发了人机验证（captcha），需要在网页中完成验证。 */
+    data class CaptchaRequired(
+        val captchaId: String,
+        val scene: String,
+        val message: String
+    ) : BambuCloudApiResult<Nothing>()
     data class Failure(
         val message: String,
         val statusCode: Int? = null,
@@ -122,6 +128,12 @@ interface BambuCloudSessionStore {
 sealed class BambuCloudRepositoryResult {
     data class Success(val session: BambuCloudSession) : BambuCloudRepositoryResult()
     data object VerificationCodeRequired : BambuCloudRepositoryResult()
+    /** 需要人机验证：调用方应打开网页登录完成验证。 */
+    data class CaptchaRequired(
+        val captchaId: String,
+        val scene: String,
+        val message: String
+    ) : BambuCloudRepositoryResult()
     data class Failure(
         val message: String,
         val loginFailureReason: BambuCloudLoginFailureReason? = null

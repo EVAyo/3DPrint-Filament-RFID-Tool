@@ -33,6 +33,12 @@
     <string name="label_unknown">未知</string>
     <string name="cloud_connect_title">Bambu 云</string>
     <string name="cloud_login">登录</string>
+    <string name="cloud_web_login_title">完成人机验证</string>
+    <string name="cloud_web_login_hint">请在下方网页完成一次登录以通过人机验证，成功后关闭本页并返回 App 重新登录。</string>
+    <string name="cloud_web_login_done">我已完成网页登录，返回重新登录</string>
+    <string name="cloud_status_relogin_after_verify">网页验证成功，请在 App 内重新登录。</string>
+    <string name="cloud_web_login">网页登录（人机验证）</string>
+    <string name="cloud_status_captcha_required">需要人机验证，请在网页中完成登录</string>
     <string name="cloud_logout">退出登录</string>
     <string name="cloud_logout_confirm_title">确认退出登录？</string>
     <string name="cloud_logout_confirm_message">将断开当前设备上的 Bambu 云账号连接。</string>

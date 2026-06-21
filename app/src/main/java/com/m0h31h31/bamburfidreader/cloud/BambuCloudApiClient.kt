@@ -150,6 +150,15 @@ class BambuCloudApiClient(
             )
         )
         val json = response.toJson()
+        // 人机验证：响应里带 captchaId（可能伴随非 200 状态码与机器人提示）
+        val captchaId = json.optCleanString("captchaId")
+        if (captchaId.isNotBlank()) {
+            return BambuCloudApiResult.CaptchaRequired(
+                captchaId = captchaId,
+                scene = json.optCleanString("captchaScene"),
+                message = json.optString("error").ifBlank { json.optString("message") }
+            )
+        }
         if (response.statusCode != 200) {
             val message = response.failureMessage()
             return BambuCloudApiResult.Failure(

@@ -36,6 +36,12 @@
     <string name="label_unknown">Unknown</string>
     <string name="cloud_connect_title">Bambu Cloud</string>
     <string name="cloud_login">Log in</string>
+    <string name="cloud_web_login_title">Complete verification</string>
+    <string name="cloud_web_login_hint">Please sign in once on the web page below to pass the human verification, then close this page and sign in again inside the app.</string>
+    <string name="cloud_web_login_done">I have finished — back to sign in</string>
+    <string name="cloud_status_relogin_after_verify">Web verification passed. Please sign in again in the app.</string>
+    <string name="cloud_web_login">Web sign-in (captcha)</string>
+    <string name="cloud_status_captcha_required">Human verification required — please sign in on the web page</string>
     <string name="cloud_logout">Log out</string>
     <string name="cloud_logout_confirm_title">Log out?</string>
     <string name="cloud_logout_confirm_message">This will disconnect the current Bambu Cloud account on this device.</string>

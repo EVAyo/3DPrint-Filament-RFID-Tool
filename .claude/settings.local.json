@@ -51,7 +51,8 @@
       "PowerShell($env:JAVA_HOME='D:\\\\Program\\\\Android\\\\Android Studio\\\\jbr'; .\\\\gradlew.bat compileDebugKotlin -q 2>&1 | Select-Object -Last 40)",
       "Bash(git check-ignore *)",
       "Bash(JAVA_HOME=\"D:/Program/Android/Android Studio/jbr\" ./gradlew :app:compileDebugKotlin -q)",
-      "Bash(JAVA_HOME=\"D:/Program/Android/Android Studio/jbr\" ./gradlew :app:testDebugUnitTest --tests \"*Localization*\" -q)"
+      "Bash(JAVA_HOME=\"D:/Program/Android/Android Studio/jbr\" ./gradlew :app:testDebugUnitTest --tests \"*Localization*\" -q)",
+      "Bash(JAVA_HOME=\"D:/Program/Android/Android Studio/jbr\" ./gradlew :app:testDebugUnitTest --tests \"*BambuCloudApiClient*\" -q)"
     ]
   }
 }

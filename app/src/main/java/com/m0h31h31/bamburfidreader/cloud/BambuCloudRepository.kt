@@ -26,6 +26,9 @@ class BambuCloudRepository(
             BambuCloudApiResult.VerificationCodeRequired -> {
                 return BambuCloudRepositoryResult.VerificationCodeRequired
             }
+            is BambuCloudApiResult.CaptchaRequired -> {
+                return BambuCloudRepositoryResult.CaptchaRequired(accountResult.captchaId, accountResult.scene, accountResult.message)
+            }
             is BambuCloudApiResult.Failure -> {
                 return BambuCloudRepositoryResult.Failure(accountResult.message)
             }
@@ -43,6 +46,7 @@ class BambuCloudRepository(
             BambuCloudApiResult.VerificationCodeRequired -> {
                 BambuCloudPrinterResult.Failure("Verification code required")
             }
+            is BambuCloudApiResult.CaptchaRequired -> BambuCloudPrinterResult.Failure(result.message)
             is BambuCloudApiResult.Failure -> BambuCloudPrinterResult.Failure(result.message)
         }
     }
@@ -58,6 +62,7 @@ class BambuCloudRepository(
             BambuCloudApiResult.VerificationCodeRequired -> {
                 BambuCloudFilamentResult.Failure("Verification code required")
             }
+            is BambuCloudApiResult.CaptchaRequired -> BambuCloudFilamentResult.Failure(result.message)
             is BambuCloudApiResult.Failure -> BambuCloudFilamentResult.Failure(result.message)
         }
     }
@@ -77,6 +82,11 @@ class BambuCloudRepository(
         return completeLogin(service.loginWithCode(account, password, code))
     }
 
+    /** 网页（人机验证）登录成功后，用拿到的 token 直接建立会话。 */
+    suspend fun completeWebLogin(tokens: BambuCloudTokens): BambuCloudRepositoryResult {
+        return completeLogin(BambuCloudApiResult.Success(tokens))
+    }
+
     private suspend fun completeLogin(
         tokenResult: BambuCloudApiResult<BambuCloudTokens>
     ): BambuCloudRepositoryResult {
@@ -84,6 +94,9 @@ class BambuCloudRepository(
             is BambuCloudApiResult.Success -> tokenResult.value
             BambuCloudApiResult.VerificationCodeRequired -> {
                 return BambuCloudRepositoryResult.VerificationCodeRequired
+            }
+            is BambuCloudApiResult.CaptchaRequired -> {
+                return BambuCloudRepositoryResult.CaptchaRequired(tokenResult.captchaId, tokenResult.scene, tokenResult.message)
             }
             is BambuCloudApiResult.Failure -> {
                 return BambuCloudRepositoryResult.Failure(
@@ -99,6 +112,9 @@ class BambuCloudRepository(
             is BambuCloudApiResult.Success -> accountResult.value
             BambuCloudApiResult.VerificationCodeRequired -> {
                 return BambuCloudRepositoryResult.VerificationCodeRequired
+            }
+            is BambuCloudApiResult.CaptchaRequired -> {
+                return BambuCloudRepositoryResult.CaptchaRequired(accountResult.captchaId, accountResult.scene, accountResult.message)
             }
             is BambuCloudApiResult.Failure -> {
                 return BambuCloudRepositoryResult.Failure(accountResult.message)
