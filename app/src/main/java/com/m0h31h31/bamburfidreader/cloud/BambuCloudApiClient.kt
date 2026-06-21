@@ -1,6 +1,7 @@
 package com.m0h31h31.bamburfidreader.cloud
 
 import org.json.JSONObject
+import java.util.Base64
 
 class BambuCloudApiClient(
     private val transport: BambuCloudTransport,
@@ -26,6 +27,32 @@ class BambuCloudApiClient(
             .put("password", password)
             .put("code", code.trim())
         return login(body)
+    }
+
+    override suspend fun loginWithCaptcha(
+        account: String,
+        password: String,
+        captcha: BambuCloudCaptchaResult
+    ): BambuCloudApiResult<BambuCloudTokens> {
+        val body = JSONObject()
+            .put("account", account.trim())
+            .put("password", password)
+        // 验证结果通过请求头 x-bbl-captcha-result 回提（Base64 编码的 JSON），body 不变。
+        return login(body, mapOf(CAPTCHA_RESULT_HEADER to encodeCaptchaResult(captcha)))
+    }
+
+    /**
+     * 按拓竹约定编码极验 v4 结果：snake_case JSON → Base64，放入 x-bbl-captcha-result 头。
+     * 抓包确认的字段：captcha_id / lot_number / pass_token / gen_time / captcha_output。
+     */
+    private fun encodeCaptchaResult(captcha: BambuCloudCaptchaResult): String {
+        val json = JSONObject()
+            .put("captcha_id", captcha.captchaId)
+            .put("lot_number", captcha.lotNumber)
+            .put("pass_token", captcha.passToken)
+            .put("gen_time", captcha.genTime)
+            .put("captcha_output", captcha.captchaOutput)
+        return Base64.getEncoder().encodeToString(json.toString().toByteArray(Charsets.UTF_8))
     }
 
     override suspend fun fetchAccount(accessToken: String): BambuCloudApiResult<BambuCloudAccount> {
@@ -137,15 +164,93 @@ class BambuCloudApiClient(
         }
     }
 
-    private suspend fun login(body: JSONObject): BambuCloudApiResult<BambuCloudTokens> {
+    override suspend fun fetchTasks(
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+        status: Int
+    ): BambuCloudApiResult<BambuCloudTaskPage> {
+        val response = executeSafely(
+            BambuCloudHttpRequest(
+                method = "GET",
+                url = "$baseUrl/v1/user-service/my/tasks?limit=$limit&offset=$offset&status=$status",
+                headers = mapOf(
+                    "Accept" to "application/json",
+                    "Authorization" to "Bearer $accessToken"
+                )
+            )
+        )
+        return parseSuccessResponse(response) { json ->
+            val hits = json.optJSONArray("hits")
+            val tasks = buildList {
+                if (hits == null) return@buildList
+                for (index in 0 until hits.length()) {
+                    val item = hits.optJSONObject(index) ?: continue
+                    add(
+                        BambuCloudTask(
+                            id = item.optLong("id", 0L),
+                            title = item.optCleanString("title"),
+                            coverUrl = item.optCleanString("cover"),
+                            status = item.optInt("status", 0),
+                            failedType = item.optInt("failedType", 0),
+                            startTimeMillis = parseIsoMillis(item.optCleanString("startTime")),
+                            endTimeMillis = parseIsoMillis(item.optCleanString("endTime")),
+                            weightGrams = item.optDouble("weight", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                            costTimeSeconds = item.optInt("costTime", 0),
+                            deviceModel = item.optCleanString("deviceModel"),
+                            deviceName = item.optCleanString("deviceName"),
+                            repetitions = item.optInt("repetitions", 1).coerceAtLeast(1),
+                            plateIndex = item.optInt("plateIndex", 0),
+                            materials = parseTaskMaterials(item.optJSONArray("amsDetailMapping"))
+                        )
+                    )
+                }
+            }
+            BambuCloudTaskPage(total = json.optInt("total", tasks.size), tasks = tasks)
+        }
+    }
+
+    private fun parseTaskMaterials(array: org.json.JSONArray?): List<BambuCloudTaskMaterial> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                add(
+                    BambuCloudTaskMaterial(
+                        filamentId = item.optCleanString("filamentId"),
+                        filamentType = item.optCleanString("filamentType"),
+                        color = item.optCleanString("targetColor").ifBlank { item.optCleanString("sourceColor") },
+                        weightGrams = item.optDouble("weight", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                        nozzleId = item.optInt("nozzleId", 0)
+                    )
+                )
+            }
+        }
+    }
+
+    /** 解析 ISO-8601 时间（如 2026-06-21T02:00:45Z）为毫秒；失败返回 0。 */
+    private fun parseIsoMillis(value: String): Long {
+        if (value.isBlank()) return 0L
+        return try {
+            java.time.Instant.parse(value).toEpochMilli()
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    private suspend fun login(
+        body: JSONObject,
+        extraHeaders: Map<String, String> = emptyMap()
+    ): BambuCloudApiResult<BambuCloudTokens> {
         val response = executeSafely(
             BambuCloudHttpRequest(
                 method = "POST",
                 url = "$baseUrl/v1/user-service/user/login",
-                headers = mapOf(
-                    "Accept" to "application/json",
-                    "Content-Type" to "application/json; charset=UTF-8"
-                ),
+                headers = buildMap {
+                    put("Accept", "application/json")
+                    put("Content-Type", "application/json; charset=UTF-8")
+                    putAll(extraHeaders)
+                },
                 body = body.toString()
             )
         )
@@ -258,5 +363,7 @@ class BambuCloudApiClient(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.bambulab.cn"
+        /** 人机验证结果回提头：值为 Base64 编码的极验结果 JSON。 */
+        const val CAPTCHA_RESULT_HEADER = "x-bbl-captcha-result"
     }
 }

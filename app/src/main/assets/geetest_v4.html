@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; height: 100%; }
+  #wrap { display: flex; align-items: center; justify-content: center; min-height: 100%; box-sizing: border-box; padding: 12px; }
+  #tip { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #9aa0a6; font-size: 14px; text-align: center; }
+</style>
+<script src="https://static.geetest.com/v4/gt4.js"></script>
+</head>
+<body>
+<div id="wrap"><div id="tip">加载验证 / Loading…</div></div>
+<script>
+  function post(name, payload) {
+    try { if (window.BrrCaptcha && typeof BrrCaptcha[name] === 'function') BrrCaptcha[name](payload || ''); } catch (e) {}
+  }
+  // 由原生侧在页面加载完成后调用：startCaptcha("<captchaId>")
+  window.startCaptcha = function (captchaId) {
+    try {
+      if (typeof initGeetest4 !== 'function') { post('onError', 'sdk_not_loaded'); return; }
+      initGeetest4(
+        { captchaId: captchaId, product: 'bind', language: 'zho' },
+        function (captcha) {
+          captcha.onReady(function () {
+            var tip = document.getElementById('tip');
+            if (tip) tip.style.display = 'none';
+            captcha.showCaptcha();
+          });
+          captcha.onSuccess(function () {
+            var r = captcha.getValidate();
+            if (!r) { post('onError', 'empty_validate'); return; }
+            post('onResult', JSON.stringify({
+              captcha_id: captchaId,
+              lot_number: r.lot_number || '',
+              captcha_output: r.captcha_output || '',
+              pass_token: r.pass_token || '',
+              gen_time: r.gen_time || ''
+            }));
+          });
+          captcha.onError(function (e) { post('onError', (e && e.msg) ? e.msg : 'geetest_error'); });
+          captcha.onClose(function () { post('onClose', ''); });
+        }
+      );
+    } catch (e) { post('onError', '' + e); }
+  };
+</script>
+</body>
+</html>

@@ -67,6 +67,21 @@ class BambuCloudRepository(
         }
     }
 
+    suspend fun fetchTasks(
+        offset: Int = 0,
+        limit: Int = 50,
+        status: Int = 0
+    ): BambuCloudTaskResult {
+        val currentSession = sessionStore.loadSession()
+            ?: return BambuCloudTaskResult.Failure("Not logged in")
+        return when (val result = service.fetchTasks(currentSession.tokens.accessToken, offset, limit, status)) {
+            is BambuCloudApiResult.Success -> BambuCloudTaskResult.Success(result.value)
+            BambuCloudApiResult.VerificationCodeRequired -> BambuCloudTaskResult.Failure("Verification code required")
+            is BambuCloudApiResult.CaptchaRequired -> BambuCloudTaskResult.Failure(result.message)
+            is BambuCloudApiResult.Failure -> BambuCloudTaskResult.Failure(result.message)
+        }
+    }
+
     suspend fun loginWithPassword(
         account: String,
         password: String
@@ -82,9 +97,13 @@ class BambuCloudRepository(
         return completeLogin(service.loginWithCode(account, password, code))
     }
 
-    /** 网页（人机验证）登录成功后，用拿到的 token 直接建立会话。 */
-    suspend fun completeWebLogin(tokens: BambuCloudTokens): BambuCloudRepositoryResult {
-        return completeLogin(BambuCloudApiResult.Success(tokens))
+    /** 携带极验 v4 验证结果重新登录（在 App 内完成人机验证后调用）。 */
+    suspend fun loginWithPasswordAndCaptcha(
+        account: String,
+        password: String,
+        captcha: BambuCloudCaptchaResult
+    ): BambuCloudRepositoryResult {
+        return completeLogin(service.loginWithCaptcha(account, password, captcha))
     }
 
     private suspend fun completeLogin(

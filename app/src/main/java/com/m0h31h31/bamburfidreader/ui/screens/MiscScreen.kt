@@ -191,6 +191,8 @@ private fun ModernMiscScreen(
     onSnapmakerTagEnabledChange: (Boolean) -> Unit,
     cloudConnectEnabled: Boolean,
     onCloudConnectEnabledChange: (Boolean) -> Unit,
+    costEnabled: Boolean,
+    onCostEnabledChange: (Boolean) -> Unit,
     inventoryEnabled: Boolean,
     onInventoryEnabledChange: (Boolean) -> Unit,
     autoDetectBrand: Boolean,
@@ -481,6 +483,11 @@ private fun ModernMiscScreen(
                     title = stringResource(R.string.config_cloud_connect_feature),
                     subtitle = stringResource(R.string.config_cloud_connect_feature_desc)
                 ) { AppSwitch(checked = cloudConnectEnabled, onCheckedChange = onCloudConnectEnabledChange) }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_cost_feature),
+                    subtitle = stringResource(R.string.config_cost_feature_desc)
+                ) { AppSwitch(checked = costEnabled, onCheckedChange = onCostEnabledChange) }
                 ModernDivider()
                 ModernSettingRow(
                     title = stringResource(R.string.config_inventory_feature),
@@ -1420,6 +1427,8 @@ fun MiscScreen(
     onSnapmakerTagEnabledChange: (Boolean) -> Unit = {},
     cloudConnectEnabled: Boolean = true,
     onCloudConnectEnabledChange: (Boolean) -> Unit = {},
+    costEnabled: Boolean = false,
+    onCostEnabledChange: (Boolean) -> Unit = {},
     selfTagCount: Int = 0,
     appConfigMessage: String = "",
     appConfigAdMessage: String = "",
@@ -1646,6 +1655,8 @@ fun MiscScreen(
             onSnapmakerTagEnabledChange = onSnapmakerTagEnabledChange,
             cloudConnectEnabled = cloudConnectEnabled,
             onCloudConnectEnabledChange = onCloudConnectEnabledChange,
+            costEnabled = costEnabled,
+            onCostEnabledChange = onCostEnabledChange,
             inventoryEnabled = inventoryEnabled,
             onInventoryEnabledChange = onInventoryEnabledChange,
             autoDetectBrand = autoDetectBrand,
@@ -2228,6 +2239,28 @@ fun MiscScreen(
                             AppSwitch(
                                 checked = cloudConnectEnabled,
                                 onCheckedChange = { onCloudConnectEnabledChange(it) }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(text = stringResource(R.string.config_cost_feature))
+                                Text(
+                                    text = stringResource(R.string.config_cost_feature_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            AppSwitch(
+                                checked = costEnabled,
+                                onCheckedChange = { onCostEnabledChange(it) }
                             )
                         }
 

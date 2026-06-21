@@ -109,6 +109,50 @@ class BambuCloudApiClientTest {
     }
 
     @Test
+    fun loginWithCaptchaPostsCredentialsAndGeetestResult() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "accessToken": "access-cap",
+                      "refreshToken": "refresh-cap",
+                      "loginType": "",
+                      "expiresIn": 7776000
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.loginWithCaptcha(
+            "user@example.com",
+            "secret",
+            BambuCloudCaptchaResult(
+                captchaId = "cap-id",
+                lotNumber = "lot-1",
+                captchaOutput = "out-1",
+                passToken = "pass-1",
+                genTime = "1700000000"
+            )
+        )
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        assertEquals("https://api.bambulab.cn/v1/user-service/user/login", transport.lastRequest.url)
+        // 凭证仍在 body，验证结果在 x-bbl-captcha-result 头（Base64 编码的 snake_case JSON）
+        assertTrue(transport.lastRequest.body.contains("\"account\":\"user@example.com\""))
+        assertFalse(transport.lastRequest.body.contains("captcha"))
+        val header = transport.lastRequest.headers["x-bbl-captcha-result"]
+        assertTrue(header != null && header.isNotBlank())
+        val decoded = String(java.util.Base64.getDecoder().decode(header))
+        assertTrue(decoded.contains("\"captcha_id\":\"cap-id\""))
+        assertTrue(decoded.contains("\"lot_number\":\"lot-1\""))
+        assertTrue(decoded.contains("\"pass_token\":\"pass-1\""))
+        assertTrue(decoded.contains("\"gen_time\":\"1700000000\""))
+        assertTrue(decoded.contains("\"captcha_output\":\"out-1\""))
+    }
+
+    @Test
     fun loginFailureUsesAccountPasswordMessageForIncorrectAccountOrPassword() = runBlocking {
         val transport = RecordingTransport(
             BambuCloudHttpResponse(
@@ -371,6 +415,73 @@ class BambuCloudApiClientTest {
         assertEquals("GET", transport.lastRequest.method)
         assertEquals(
             "https://api.bambulab.cn/v1/design-user-service/my/filament/v2?offset=0&limit=20",
+            transport.lastRequest.url
+        )
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+    }
+
+    @Test
+    fun fetchTasksParsesHistoryHitsAndMaterials() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(
+                statusCode = 200,
+                body = """
+                    {
+                      "total": 352,
+                      "hits": [
+                        {
+                          "id": 215964042,
+                          "title": "recoil block spd_plate_1",
+                          "cover": "https://oss/cover.png?sig=1",
+                          "status": 2,
+                          "failedType": 0,
+                          "startTime": "2026-06-21T02:00:45Z",
+                          "endTime": "2026-06-21T05:37:26Z",
+                          "weight": 50.47,
+                          "costTime": 13254,
+                          "deviceModel": "A1",
+                          "deviceName": "m0h31h31_A1",
+                          "repetitions": 1,
+                          "plateIndex": 1,
+                          "amsDetailMapping": [
+                            {
+                              "sourceColor": "FFFFFFFF",
+                              "targetColor": "FFFFFFFF",
+                              "filamentId": "GFU01",
+                              "filamentType": "TPU",
+                              "weight": 50.47,
+                              "nozzleId": 1
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                """.trimIndent()
+            )
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.fetchTasks("access-123", offset = 50, limit = 50, status = 0)
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val page = (result as BambuCloudApiResult.Success).value
+        assertEquals(352, page.total)
+        assertEquals(1, page.tasks.size)
+        val task = page.tasks.first()
+        assertEquals(215964042L, task.id)
+        assertEquals("recoil block spd_plate_1", task.title)
+        assertEquals(2, task.status)
+        assertEquals(50.47, task.weightGrams, 0.001)
+        assertEquals(13254, task.costTimeSeconds)
+        assertEquals("A1", task.deviceModel)
+        assertEquals(1, task.materials.size)
+        assertEquals("GFU01", task.materials.first().filamentId)
+        assertEquals("TPU", task.materials.first().filamentType)
+        assertEquals(50.47, task.materials.first().weightGrams, 0.001)
+        assertTrue(task.startTimeMillis > 0L)
+        assertEquals("GET", transport.lastRequest.method)
+        assertEquals(
+            "https://api.bambulab.cn/v1/user-service/my/tasks?limit=50&offset=50&status=0",
             transport.lastRequest.url
         )
         assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])

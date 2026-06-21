@@ -10,7 +10,7 @@ import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 30
+private const val FILAMENT_DB_VERSION = 31
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -20,6 +20,12 @@ internal const val TRAY_UID_TABLE = "filament_inventory"
 internal const val SHARE_TAGS_TABLE = "share_tags"
 internal const val SNAPMAKER_SHARE_TAGS_TABLE = "snapmaker_share_tags"
 private const val ANOMALY_UIDS_TABLE = "anomaly_uids"
+
+// 费用模块（打印报价 / 成本利润）
+internal const val PRINT_TASK_TABLE = "print_task"
+internal const val PRINT_ORDER_TABLE = "print_order"
+internal const val MATERIAL_PRICE_TABLE = "material_price"
+internal const val COST_CONFIG_TABLE = "cost_config"
 
 class FilamentDbHelper(val context: Context) :
     SQLiteOpenHelper(context, FILAMENT_DB_NAME, null, FILAMENT_DB_VERSION) {
@@ -151,6 +157,62 @@ class FilamentDbHelper(val context: Context) :
                 uid TEXT PRIMARY KEY NOT NULL,
                 report_count INTEGER NOT NULL DEFAULT 1,
                 synced_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        createCostTables(db)
+    }
+
+    /** 费用模块的 4 张表（onCreate / onUpgrade 共用）。 */
+    private fun createCostTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $PRINT_TASK_TABLE (
+                id INTEGER PRIMARY KEY NOT NULL,
+                title TEXT,
+                cover_path TEXT,
+                device_model TEXT,
+                device_name TEXT,
+                weight REAL NOT NULL DEFAULT 0,
+                cost_time INTEGER NOT NULL DEFAULT 0,
+                start_time INTEGER NOT NULL DEFAULT 0,
+                status INTEGER NOT NULL DEFAULT 0,
+                failed_type INTEGER NOT NULL DEFAULT 0,
+                repetitions INTEGER NOT NULL DEFAULT 1,
+                materials_json TEXT,
+                computed_cost_cents INTEGER NOT NULL DEFAULT 0,
+                order_id INTEGER,
+                synced_at INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $PRINT_ORDER_TABLE (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                actual_charge_cents INTEGER NOT NULL DEFAULT 0,
+                note TEXT,
+                created_at INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $MATERIAL_PRICE_TABLE (
+                fila_id TEXT PRIMARY KEY NOT NULL,
+                fila_type TEXT,
+                base_type TEXT,
+                price_per_g_cents INTEGER NOT NULL DEFAULT 0,
+                updated_at INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $COST_CONFIG_TABLE (
+                key TEXT PRIMARY KEY NOT NULL,
+                value TEXT
             )
             """.trimIndent()
         )
@@ -419,6 +481,9 @@ class FilamentDbHelper(val context: Context) :
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS idx_filaments_fila_id_fila_color_code ON $FILAMENT_TABLE (fila_id, fila_color_code)"
             )
+        }
+        if (oldVersion < 31) {
+            createCostTables(db)
         }
     }
 

@@ -209,6 +209,12 @@ class BambuCloudRepositoryTest {
             code: String
         ): BambuCloudApiResult<BambuCloudTokens> = loginResult
 
+        override suspend fun loginWithCaptcha(
+            account: String,
+            password: String,
+            captcha: BambuCloudCaptchaResult
+        ): BambuCloudApiResult<BambuCloudTokens> = loginResult
+
         override suspend fun fetchAccount(accessToken: String): BambuCloudApiResult<BambuCloudAccount> {
             profileAccessToken = accessToken
             return accountResult
@@ -226,6 +232,15 @@ class BambuCloudRepositoryTest {
         ): BambuCloudApiResult<List<BambuCloudFilament>> {
             filamentAccessToken = accessToken
             return filamentResult
+        }
+
+        override suspend fun fetchTasks(
+            accessToken: String,
+            offset: Int,
+            limit: Int,
+            status: Int
+        ): BambuCloudApiResult<BambuCloudTaskPage> {
+            return BambuCloudApiResult.Success(BambuCloudTaskPage(0, emptyList()))
         }
     }
 

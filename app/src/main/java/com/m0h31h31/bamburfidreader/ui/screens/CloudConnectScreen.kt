@@ -126,7 +126,10 @@ fun CloudConnectScreen(
     var verificationRequired by remember { mutableStateOf(false) }
     var loginInProgress by remember { mutableStateOf(false) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
-    var showWebLogin by remember { mutableStateOf(false) }
+    var showGeetest by remember { mutableStateOf(false) }
+    var captchaId by remember { mutableStateOf("") }
+    // 是否已带验证结果回提过一次：用于防止"解题→服务器又要验证"的死循环
+    var captchaAttempted by remember { mutableStateOf(false) }
 
     fun syncFilamentRemainingToLocal() {
         controller.syncFilamentRemainingToLocal(context) { list ->
@@ -156,6 +159,8 @@ fun CloudConnectScreen(
             is BambuCloudRepositoryResult.Success -> {
                 session = result.session
                 showLoginDialog = false
+                showGeetest = false
+                captchaAttempted = false
                 password = ""
                 verificationCode = ""
                 verificationRequired = false
@@ -165,14 +170,33 @@ fun CloudConnectScreen(
                 }
             }
             BambuCloudRepositoryResult.VerificationCodeRequired -> {
+                // 人机验证已通过、服务器已下发短信/邮箱验证码：重新打开登录框显示验证码输入。
+                captchaAttempted = false
+                showGeetest = false
                 verificationRequired = true
+                showLoginDialog = true
                 statusMessage = context.getString(R.string.cloud_status_verify_required)
             }
             is BambuCloudRepositoryResult.CaptchaRequired -> {
-                // 触发人机验证：打开网页登录完成验证
                 showLoginDialog = false
-                statusMessage = context.getString(R.string.cloud_status_captcha_required)
-                showWebLogin = true
+                captchaId = result.captchaId
+                when {
+                    captchaAttempted -> {
+                        // 已带验证结果回提过一次仍要求验证 → 停止避免死循环。
+                        captchaAttempted = false
+                        showGeetest = false
+                        statusMessage = context.getString(R.string.cloud_status_captcha_loop)
+                    }
+                    captchaId.isNotBlank() -> {
+                        // 触发人机验证：在 App 内弹出原生极验 v4 控件完成验证
+                        statusMessage = context.getString(R.string.cloud_status_captcha_required)
+                        showGeetest = true
+                    }
+                    else -> {
+                        // 需要人机验证但缺 captchaId，无法弹控件
+                        statusMessage = context.getString(R.string.cloud_status_captcha_required)
+                    }
+                }
             }
             is BambuCloudRepositoryResult.Failure -> {
                 val loginFailureMessage = when (result.loginFailureReason) {
@@ -194,6 +218,7 @@ fun CloudConnectScreen(
             statusMessage = context.getString(R.string.cloud_status_missing_credentials)
             return
         }
+        captchaAttempted = false
         loginInProgress = true
         coroutineScope.launch {
             handleLoginResult(repository.loginWithPassword(account, password))
@@ -205,6 +230,7 @@ fun CloudConnectScreen(
             statusMessage = context.getString(R.string.cloud_status_missing_code)
             return
         }
+        captchaAttempted = false
         loginInProgress = true
         coroutineScope.launch {
             handleLoginResult(repository.loginWithCode(account, password, verificationCode))
@@ -440,17 +466,24 @@ fun CloudConnectScreen(
         )
     }
 
-    if (showWebLogin) {
-        BambuCloudWebLoginDialog(
-            onDismiss = { showWebLogin = false },
-            onVerified = {
-                // 网页登录成功（已通过人机验证）→ 引导用户返回 App 重新登录
-                showWebLogin = false
-                verificationRequired = false
-                verificationCode = ""
-                statusMessage = context.getString(R.string.cloud_status_relogin_after_verify)
-                showLoginDialog = true
-            }
+    if (showGeetest && captchaId.isNotBlank()) {
+        BambuGeetestCaptchaDialog(
+            captchaId = captchaId,
+            onResult = { captcha ->
+                // 极验解题成功 → 携带验证结果在 App 内重新登录（仅回提一次，防循环）
+                showGeetest = false
+                captchaAttempted = true
+                loginInProgress = true
+                statusMessage = context.getString(R.string.cloud_status_captcha_verifying)
+                coroutineScope.launch {
+                    handleLoginResult(repository.loginWithPasswordAndCaptcha(account, password, captcha))
+                }
+            },
+            onError = { msg ->
+                showGeetest = false
+                statusMessage = context.getString(R.string.cloud_status_captcha_failed, msg)
+            },
+            onDismiss = { showGeetest = false }
         )
     }
 }

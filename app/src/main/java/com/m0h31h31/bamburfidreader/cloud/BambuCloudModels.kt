@@ -59,6 +59,52 @@ data class BambuCloudSession(
     val expiresAtMillis: Long
 )
 
+/** 打印历史任务中单条耗材用量（来自 amsDetailMapping）。 */
+data class BambuCloudTaskMaterial(
+    val filamentId: String,
+    val filamentType: String,
+    val color: String,
+    val weightGrams: Double,
+    val nozzleId: Int
+)
+
+/** 打印历史任务（/v1/user-service/my/tasks 的一条 hit）。 */
+data class BambuCloudTask(
+    val id: Long,
+    val title: String,
+    val coverUrl: String,
+    val status: Int,
+    val failedType: Int,
+    val startTimeMillis: Long,
+    val endTimeMillis: Long,
+    val weightGrams: Double,
+    val costTimeSeconds: Int,
+    val deviceModel: String,
+    val deviceName: String,
+    val repetitions: Int,
+    val plateIndex: Int,
+    val materials: List<BambuCloudTaskMaterial>
+)
+
+/** 打印历史分页结果。 */
+data class BambuCloudTaskPage(
+    val total: Int,
+    val tasks: List<BambuCloudTask>
+)
+
+/**
+ * 极验 v4（GeeTest v4）解题结果。
+ * captchaId 即拓竹登录接口返回的 captchaId（= geetest captcha_id），
+ * 其余四项来自极验 getValidate()。携带这些字段重新请求登录即可通过人机验证。
+ */
+data class BambuCloudCaptchaResult(
+    val captchaId: String,
+    val lotNumber: String,
+    val captchaOutput: String,
+    val passToken: String,
+    val genTime: String
+)
+
 enum class BambuCloudLoginFailureReason {
     ACCOUNT_OR_PASSWORD_INCORRECT,
     VERIFICATION_CODE_INCORRECT
@@ -108,6 +154,13 @@ interface BambuCloudService {
         code: String
     ): BambuCloudApiResult<BambuCloudTokens>
 
+    /** 携带极验 v4 验证结果重新登录（通过人机验证）。 */
+    suspend fun loginWithCaptcha(
+        account: String,
+        password: String,
+        captcha: BambuCloudCaptchaResult
+    ): BambuCloudApiResult<BambuCloudTokens>
+
     suspend fun fetchAccount(accessToken: String): BambuCloudApiResult<BambuCloudAccount>
 
     suspend fun fetchPrinters(accessToken: String): BambuCloudApiResult<List<BambuCloudPrinter>>
@@ -117,6 +170,13 @@ interface BambuCloudService {
         offset: Int,
         limit: Int
     ): BambuCloudApiResult<List<BambuCloudFilament>>
+
+    suspend fun fetchTasks(
+        accessToken: String,
+        offset: Int,
+        limit: Int,
+        status: Int
+    ): BambuCloudApiResult<BambuCloudTaskPage>
 }
 
 interface BambuCloudSessionStore {
@@ -148,4 +208,9 @@ sealed class BambuCloudPrinterResult {
 sealed class BambuCloudFilamentResult {
     data class Success(val filaments: List<BambuCloudFilament>) : BambuCloudFilamentResult()
     data class Failure(val message: String) : BambuCloudFilamentResult()
+}
+
+sealed class BambuCloudTaskResult {
+    data class Success(val page: BambuCloudTaskPage) : BambuCloudTaskResult()
+    data class Failure(val message: String) : BambuCloudTaskResult()
 }

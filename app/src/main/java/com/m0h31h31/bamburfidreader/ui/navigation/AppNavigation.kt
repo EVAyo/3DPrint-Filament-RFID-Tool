@@ -56,6 +56,7 @@ import com.m0h31h31.bamburfidreader.ui.screens.InventoryScreen
 import com.m0h31h31.bamburfidreader.ui.screens.ReaderScreen
 import com.m0h31h31.bamburfidreader.ui.screens.TagScreen
 import com.m0h31h31.bamburfidreader.ui.screens.CloudConnectScreen
+import com.m0h31h31.bamburfidreader.ui.screens.CostScreen
 import com.m0h31h31.bamburfidreader.ui.screens.MiscScreen
 import com.m0h31h31.bamburfidreader.ui.screens.DataScreen
 import com.m0h31h31.bamburfidreader.ui.screens.NdefWriteRequest
@@ -90,6 +91,7 @@ private val topDestinations = listOf(
     TopDestination("snapmaker", R.string.tab_snapmaker, R.drawable.snapmaker),
     TopDestination("creality", R.string.tab_creality, R.drawable.chuangxiang),
     TopDestination("connect", R.string.tab_connect, R.drawable.lianjie),
+    TopDestination("cost", R.string.tab_cost, R.drawable.shuju),
     TopDestination("misc", R.string.tab_misc, R.drawable.zaxiang)
 )
 
@@ -169,6 +171,8 @@ fun AppNavigation(
     onSnapmakerTagEnabledChange: (Boolean) -> Unit = {},
     cloudConnectEnabled: Boolean = true,
     onCloudConnectEnabledChange: (Boolean) -> Unit = {},
+    costEnabled: Boolean = false,
+    onCostEnabledChange: (Boolean) -> Unit = {},
     snapmakerShareTagItems: List<SnapmakerShareTagItem> = emptyList(),
     snapmakerShareLoading: Boolean = false,
     snapmakerWriteStatusMessage: String = "",
@@ -224,7 +228,7 @@ fun AppNavigation(
     LaunchedEffect(currentRoute) {
         onActiveRouteChange(currentRoute ?: "reader")
     }
-    val visibleDestinations = remember(inventoryEnabled, crealityEnabled, snapmakerTagEnabled, bambuTagEnabled, cloudConnectEnabled) {
+    val visibleDestinations = remember(inventoryEnabled, crealityEnabled, snapmakerTagEnabled, bambuTagEnabled, cloudConnectEnabled, costEnabled) {
         topDestinations.filter { dest ->
             when (dest.route) {
                 "inventory", "data" -> inventoryEnabled
@@ -232,6 +236,7 @@ fun AppNavigation(
                 "creality" -> crealityEnabled
                 "snapmaker" -> snapmakerTagEnabled
                 "connect" -> cloudConnectEnabled
+                "cost" -> costEnabled
                 else -> true
             }
         }
@@ -263,6 +268,14 @@ fun AppNavigation(
     }
     LaunchedEffect(snapmakerTagEnabled) {
         if (!snapmakerTagEnabled && currentRoute == "snapmaker") {
+            navController.navigate("reader") {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = false }
+                launchSingleTop = true
+            }
+        }
+    }
+    LaunchedEffect(costEnabled) {
+        if (!costEnabled && currentRoute == "cost") {
             navController.navigate("reader") {
                 popUpTo(navController.graph.findStartDestination().id) { saveState = false }
                 launchSingleTop = true
@@ -622,6 +635,9 @@ fun AppNavigation(
             composable("connect") {
                 CloudConnectScreen()
             }
+            composable("cost") {
+                CostScreen()
+            }
             composable("misc") {
                             val context = LocalContext.current
                             val appConfigMessage = ConfigManager.getAppConfigMessage(context)
@@ -667,6 +683,8 @@ fun AppNavigation(
                             onSnapmakerTagEnabledChange = onSnapmakerTagEnabledChange,
                             cloudConnectEnabled = cloudConnectEnabled,
                             onCloudConnectEnabledChange = onCloudConnectEnabledChange,
+                            costEnabled = costEnabled,
+                            onCostEnabledChange = onCostEnabledChange,
                                 appConfigMessage = appConfigMessage,
                                 appConfigAdMessage = appConfigAdMessage,
                                 boostLink = appConfigBoostLink,
