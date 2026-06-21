@@ -908,7 +908,8 @@
     <string name="cost_stat_profit">Profit</string>
     <string name="cost_stat_margin">Margin</string>
     <string name="cost_stat_avg">Avg order</string>
-    <string name="cost_include_failed">Incl. failed</string>
+    <string name="cost_stat_revenue">Revenue</string>
+    <string name="cost_state_printing">Printing</string>
     <string name="cost_sync">Sync</string>
     <string name="cost_quote">Quote</string>
     <string name="cost_config">Fees</string>

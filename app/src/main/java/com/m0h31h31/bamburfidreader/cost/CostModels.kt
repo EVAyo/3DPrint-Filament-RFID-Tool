@@ -5,6 +5,9 @@ import com.m0h31h31.bamburfidreader.cloud.BambuCloudTaskMaterial
 /** 附加费用的计费单位。 */
 enum class FeeUnit { ORDER, PLATE, SECOND }
 
+/** 任务状态:成功 / 打印中 / 失败。 */
+enum class TaskState { SUCCESS, PRINTING, FAILED }
+
 /** 其他附加费用项。 */
 data class OtherFee(
     val name: String,
@@ -93,12 +96,19 @@ data class PrintTaskRow(
     val computedCostCents: Long,
     val orderId: Long?
 ) {
-    /** 是否失败/未成功(用于统计默认排除)。 */
-    val isFailed: Boolean get() = failedType != 0 || status !in SUCCESS_STATUSES
+    /** status: 2=成功,4=打印中,其余视为失败(failedType!=0 也算失败)。 */
+    val state: TaskState
+        get() = when {
+            status == STATUS_PRINTING -> TaskState.PRINTING
+            status == STATUS_SUCCESS && failedType == 0 -> TaskState.SUCCESS
+            else -> TaskState.FAILED
+        }
+
+    val isFailed: Boolean get() = state == TaskState.FAILED
 
     companion object {
-        /** 已知的成功状态码(保守:以观察到的 2=成功为准,可后续补充)。 */
-        val SUCCESS_STATUSES = setOf(2)
+        const val STATUS_SUCCESS = 2
+        const val STATUS_PRINTING = 4
     }
 }
 
@@ -130,6 +140,7 @@ data class OrderView(
 ) {
     val costCents: Long get() = tasks.sumOf { it.computedCostCents }
     val anyFailed: Boolean get() = tasks.any { it.isFailed }
+    val anyPrinting: Boolean get() = tasks.any { it.state == TaskState.PRINTING }
     val profitCents: Long get() = actualChargeCents - costCents
     val marginPercent: Double
         get() = if (actualChargeCents > 0) profitCents.toDouble() / actualChargeCents * 100.0 else 0.0

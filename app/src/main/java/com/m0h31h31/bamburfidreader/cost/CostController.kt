@@ -44,7 +44,6 @@ class CostController private constructor(appContext: Context) {
     val pricesState = mutableStateOf<List<MaterialPrice>>(emptyList())
     val tasksState = mutableStateOf<List<PrintTaskRow>>(emptyList())
     val ordersState = mutableStateOf<List<PrintOrder>>(emptyList())
-    val includeFailedState = mutableStateOf(false)
     val syncingState = mutableStateOf(false)
     val statusMessageState = mutableStateOf("")
 
@@ -79,7 +78,7 @@ class CostController private constructor(appContext: Context) {
 
     fun orderViews(): List<OrderView> = buildOrderViews(tasksState.value, ordersState.value)
 
-    fun stats(): CostStats = CostCalculator.computeStats(orderViews(), includeFailedState.value)
+    fun stats(): CostStats = CostCalculator.computeStats(orderViews(), includeFailed = false)
 
     private fun priceOf(filaId: String): Long =
         priceMap[filaId] ?: configState.value.defaultPricePerGCents
@@ -215,10 +214,6 @@ class CostController private constructor(appContext: Context) {
             reloadFromDb()
             recomputeAllCosts()
         }
-    }
-
-    fun toggleIncludeFailed() {
-        includeFailedState.value = !includeFailedState.value
     }
 
     /** 把多条任务合并为一单。 */

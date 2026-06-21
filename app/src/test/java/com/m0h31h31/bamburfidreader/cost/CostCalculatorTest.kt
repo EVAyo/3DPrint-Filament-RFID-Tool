@@ -134,7 +134,7 @@ class CostCalculatorTest {
     @Test
     fun statsCountOnlyPricedOrdersAndExcludeFailedByDefault() {
         val ok = task(id = 1, cost = 1000, status = 2)
-        val failed = task(id = 2, cost = 2000, status = 4, failedType = 1)
+        val failed = task(id = 2, cost = 2000, status = 3, failedType = 1)
         val unpriced = task(id = 3, cost = 5000, status = 2)
         val orders = listOf(
             OrderView(null, "ok", listOf(ok), actualChargeCents = 3000),
@@ -154,6 +154,15 @@ class CostCalculatorTest {
         assertEquals(3000L, incl.totalCostCents)      // 1000 + 2000
         assertEquals(3500L, incl.totalRevenueCents)   // 3000 + 500
         assertEquals(500L, incl.totalProfitCents)
+    }
+
+    @Test
+    fun taskStateMapsStatusCodes() {
+        assertEquals(TaskState.SUCCESS, task(1, 0, status = 2).state)
+        assertEquals(TaskState.PRINTING, task(2, 0, status = 4).state)
+        assertEquals(TaskState.PRINTING, task(3, 0, status = 4, failedType = 1).state) // 打印中优先
+        assertEquals(TaskState.FAILED, task(4, 0, status = 3).state)
+        assertEquals(TaskState.FAILED, task(5, 0, status = 2, failedType = 2).state)
     }
 
     private fun task(id: Long, cost: Long, status: Int, failedType: Int = 0) = PrintTaskRow(

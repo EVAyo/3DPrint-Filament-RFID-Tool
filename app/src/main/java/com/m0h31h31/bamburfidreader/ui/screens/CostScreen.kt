@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudTaskMaterial
 import com.m0h31h31.bamburfidreader.cost.CostCalculator
@@ -63,6 +66,7 @@ import com.m0h31h31.bamburfidreader.cost.Money
 import com.m0h31h31.bamburfidreader.cost.OrderView
 import com.m0h31h31.bamburfidreader.cost.OtherFee
 import com.m0h31h31.bamburfidreader.cost.QuoteInput
+import com.m0h31h31.bamburfidreader.cost.TaskState
 import com.m0h31h31.bamburfidreader.cost.buildOrderViews
 import com.m0h31h31.bamburfidreader.ui.components.AppIcons
 import com.m0h31h31.bamburfidreader.ui.components.NeuButton
@@ -88,15 +92,12 @@ fun CostScreen(modifier: Modifier = Modifier) {
     val orders by controller.ordersState
     val config by controller.configState
     val prices by controller.pricesState
-    val includeFailed by controller.includeFailedState
     val syncing by controller.syncingState
     val statusMessage by controller.statusMessageState
     val session by cloud.sessionState
 
     val orderViews = remember(tasks, orders) { buildOrderViews(tasks, orders) }
-    val stats = remember(orderViews, includeFailed) {
-        CostCalculator.computeStats(orderViews, includeFailed)
-    }
+    val stats = remember(orderViews) { CostCalculator.computeStats(orderViews, includeFailed = false) }
 
     val selected = remember { mutableStateListOf<Long>() }
     var showQuote by remember { mutableStateOf(false) }
@@ -104,137 +105,87 @@ fun CostScreen(modifier: Modifier = Modifier) {
     var showPrices by remember { mutableStateOf(false) }
     var chargeTarget by remember { mutableStateOf<OrderView?>(null) }
 
-    LazyColumn(
+    // 固定头部 + 仅列表滚动
+    Column(
         modifier = modifier
             .fillMaxSize()
             .neuBackground()
-            .statusBarsPadding(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item {
-            CostStatsCard(
-                orders = stats.orderCount,
-                costCents = stats.totalCostCents,
-                profitCents = stats.totalProfitCents,
-                marginPercent = stats.marginPercent,
-                avgCents = stats.avgOrderValueCents,
-                includeFailed = includeFailed,
-                onToggleIncludeFailed = { controller.toggleIncludeFailed() }
-            )
-        }
-        item {
-            CostToolbar(
-                syncing = syncing,
-                statusMessage = statusMessage,
-                onSync = { controller.sync() },
-                onQuote = { showQuote = true },
-                onConfig = { showConfig = true },
-                onPrices = { showPrices = true }
-            )
-        }
-        if (session == null) {
-            item { CostLoginHint() }
-        }
-        if (selected.isNotEmpty()) {
-            item {
-                CostMergeBar(
+        Spacer(Modifier.size(4.dp))
+        CostStatsCard(stats.orderCount, stats.totalCostCents, stats.totalRevenueCents, stats.totalProfitCents, stats.marginPercent, stats.avgOrderValueCents)
+        CostToolbar(
+            syncing = syncing,
+            statusMessage = statusMessage,
+            onSync = { controller.sync() },
+            onQuote = { showQuote = true },
+            onConfig = { showConfig = true },
+            onPrices = { showPrices = true }
+        )
+        if (session == null) CostLoginHint()
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (orderViews.isEmpty()) {
+                CostEmpty()
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 2.dp, bottom = if (selected.isNotEmpty()) 72.dp else 12.dp)
+                ) {
+                    items(orderViews, key = { it.orderId ?: -it.tasks.first().id }) { ov ->
+                        OrderCard(
+                            ov = ov,
+                            selectable = ov.orderId == null,
+                            selected = ov.orderId == null && selected.contains(ov.tasks.first().id),
+                            onToggleSelect = {
+                                val id = ov.tasks.first().id
+                                if (selected.contains(id)) selected.remove(id) else selected.add(id)
+                            },
+                            onSetCharge = { chargeTarget = ov },
+                            onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } }
+                        )
+                    }
+                }
+            }
+            // 浮动合并条:无需上滑回顶
+            if (selected.isNotEmpty()) {
+                MergeFloatingBar(
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
                     count = selected.size,
                     onMerge = {
-                        controller.aggregateIntoOrder(
-                            selected.toList(),
-                            context.getString(R.string.cost_default_order_name)
-                        )
+                        controller.aggregateIntoOrder(selected.toList(), context.getString(R.string.cost_default_order_name))
                         selected.clear()
                     },
                     onCancel = { selected.clear() }
                 )
             }
         }
-        if (orderViews.isEmpty()) {
-            item { CostEmpty() }
-        }
-        items(orderViews, key = { it.orderId ?: -it.tasks.first().id }) { ov ->
-            OrderCard(
-                ov = ov,
-                config = config,
-                selectable = ov.orderId == null,
-                selected = ov.orderId == null && selected.contains(ov.tasks.first().id),
-                onToggleSelect = {
-                    val id = ov.tasks.first().id
-                    if (selected.contains(id)) selected.remove(id) else selected.add(id)
-                },
-                onSetCharge = { chargeTarget = ov },
-                onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } }
-            )
-        }
     }
 
-    if (showQuote) {
-        QuoteDialog(config = config, prices = prices, onDismiss = { showQuote = false })
-    }
-    if (showConfig) {
-        ConfigDialog(
-            config = config,
-            onSave = { controller.saveConfig(it); showConfig = false },
-            onDismiss = { showConfig = false }
-        )
-    }
-    if (showPrices) {
-        PricesDialog(
-            prices = prices,
-            onSet = { filaId, cents -> controller.setMaterialPrice(filaId, cents) },
-            onDismiss = { showPrices = false }
-        )
-    }
+    if (showQuote) QuoteDialog(config = config, prices = prices, onDismiss = { showQuote = false })
+    if (showConfig) ConfigDialog(config = config, onSave = { controller.saveConfig(it); showConfig = false }, onDismiss = { showConfig = false })
+    if (showPrices) PricesDialog(prices = prices, onSet = { id, c -> controller.setMaterialPrice(id, c) }, onDismiss = { showPrices = false })
     chargeTarget?.let { ov ->
-        ChargeDialog(
-            ov = ov,
-            onSave = { cents -> controller.setActualCharge(ov, cents); chargeTarget = null },
-            onDismiss = { chargeTarget = null }
-        )
+        ChargeDialog(ov = ov, onSave = { c -> controller.setActualCharge(ov, c); chargeTarget = null }, onDismiss = { chargeTarget = null })
     }
 }
 
 @Composable
-private fun CostStatsCard(
-    orders: Int,
-    costCents: Long,
-    profitCents: Long,
-    marginPercent: Double,
-    avgCents: Long,
-    includeFailed: Boolean,
-    onToggleIncludeFailed: () -> Unit
-) {
+private fun CostStatsCard(orders: Int, costCents: Long, revenueCents: Long, profitCents: Long, marginPercent: Double, avgCents: Long) {
     NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatItem(stringResource(R.string.cost_stat_orders), orders.toString(), Modifier.weight(1f))
                 StatItem(stringResource(R.string.cost_stat_cost), Money.format(costCents), Modifier.weight(1f))
-                StatItem(
-                    stringResource(R.string.cost_stat_profit),
-                    Money.format(profitCents),
-                    Modifier.weight(1f),
-                    valueColor = profitColor(profitCents)
-                )
+                StatItem(stringResource(R.string.cost_stat_revenue), Money.format(revenueCents), Modifier.weight(1f))
             }
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                StatItem(
-                    stringResource(R.string.cost_stat_margin),
-                    String.format(Locale.getDefault(), "%.1f%%", marginPercent),
-                    Modifier.weight(1f)
-                )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                StatItem(stringResource(R.string.cost_stat_profit), Money.format(profitCents), Modifier.weight(1f), profitColor(profitCents))
+                StatItem(stringResource(R.string.cost_stat_margin), String.format(Locale.getDefault(), "%.1f%%", marginPercent), Modifier.weight(1f))
                 StatItem(stringResource(R.string.cost_stat_avg), Money.format(avgCents), Modifier.weight(1f))
-                Row(
-                    modifier = Modifier.weight(1f).clickable(onClick = onToggleIncludeFailed),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(checked = includeFailed, onCheckedChange = { onToggleIncludeFailed() })
-                    Text(
-                        stringResource(R.string.cost_include_failed),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
             }
         }
     }
@@ -246,7 +197,7 @@ private fun StatItem(label: String, value: String, modifier: Modifier = Modifier
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
             value,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = valueColor ?: MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -256,43 +207,19 @@ private fun StatItem(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun CostToolbar(
-    syncing: Boolean,
-    statusMessage: String,
-    onSync: () -> Unit,
-    onQuote: () -> Unit,
-    onConfig: () -> Unit,
-    onPrices: () -> Unit
-) {
+private fun CostToolbar(syncing: Boolean, statusMessage: String, onSync: () -> Unit, onQuote: () -> Unit, onConfig: () -> Unit, onPrices: () -> Unit) {
     NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                NeuButton(
-                    text = if (syncing) stringResource(R.string.cost_syncing) else stringResource(R.string.cost_sync),
-                    onClick = onSync,
-                    enabled = !syncing,
-                    modifier = Modifier.weight(1f)
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NeuButton(text = if (syncing) stringResource(R.string.cost_syncing) else stringResource(R.string.cost_sync), onClick = onSync, enabled = !syncing, modifier = Modifier.weight(1f))
                 NeuButton(text = stringResource(R.string.cost_quote), onClick = onQuote, modifier = Modifier.weight(1f))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NeuButton(text = stringResource(R.string.cost_config), onClick = onConfig, modifier = Modifier.weight(1f))
                 NeuButton(text = stringResource(R.string.cost_prices), onClick = onPrices, modifier = Modifier.weight(1f))
             }
             if (statusMessage.isNotBlank()) {
-                Text(
-                    statusMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(statusMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -301,61 +228,48 @@ private fun CostToolbar(
 @Composable
 private fun CostLoginHint() {
     NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(R.string.cost_login_hint),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(stringResource(R.string.cost_login_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun CostEmpty() {
-    NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            stringResource(R.string.cost_no_data),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(stringResource(R.string.cost_no_data), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun CostMergeBar(count: Int, onMerge: () -> Unit, onCancel: () -> Unit) {
-    NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.cost_merge_selected, count),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium
-            )
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
-            Spacer(Modifier.width(4.dp))
-            NeuButton(text = stringResource(R.string.cost_merge), onClick = onMerge)
+private fun MergeFloatingBar(modifier: Modifier, count: Int, onMerge: () -> Unit, onCancel: () -> Unit) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.cost_merge_selected, count), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            SmallButton(stringResource(R.string.action_cancel), onCancel)
+            Spacer(Modifier.width(8.dp))
+            SmallButton(stringResource(R.string.cost_merge), onMerge, primary = true)
         }
     }
 }
 
 @Composable
-private fun OrderCard(
-    ov: OrderView,
-    config: CostConfig,
-    selectable: Boolean,
-    selected: Boolean,
-    onToggleSelect: () -> Unit,
-    onSetCharge: () -> Unit,
-    onDissolve: () -> Unit
-) {
+private fun OrderCard(ov: OrderView, selectable: Boolean, selected: Boolean, onToggleSelect: () -> Unit, onSetCharge: () -> Unit, onDissolve: () -> Unit) {
     var expanded by remember(ov) { mutableStateOf(false) }
     val isOrder = ov.orderId != null
     val first = ov.tasks.first()
-    NeuPanel(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    NeuPanel(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (selectable) {
-                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
+                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(6.dp))
                 }
-                CoverImage(first.coverPath, 52.dp)
+                CoverImage(first.coverPath, 44.dp)
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -365,22 +279,14 @@ private fun OrderCard(
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                        if (ov.anyFailed) {
-                            FailedBadge()
-                        }
+                        StateBadge(if (ov.anyFailed) TaskState.FAILED else if (ov.anyPrinting) TaskState.PRINTING else TaskState.SUCCESS)
                     }
+                    Text(materialsSummary(first.materials, first.weightGrams), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        text = materialsSummary(first.materials, first.weightGrams),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${formatDate(first.startTimeMillis)} · ${formatDuration(first.costTimeSeconds)} · ${stringResource(R.string.cost_cost_label)} ${Money.format(ov.costCents)}",
-                        style = MaterialTheme.typography.bodySmall,
+                        "${formatDate(first.startTimeMillis)} · ${formatDuration(first.costTimeSeconds)} · ${stringResource(R.string.cost_cost_label)} ${Money.format(ov.costCents)}",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -390,8 +296,8 @@ private fun OrderCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (ov.actualChargeCents > 0) {
                     Text(
-                        text = "${stringResource(R.string.cost_profit_label)} ${Money.format(ov.profitCents)} (${String.format(Locale.getDefault(), "%.0f%%", ov.marginPercent)})",
-                        style = MaterialTheme.typography.bodySmall,
+                        "${stringResource(R.string.cost_profit_label)} ${Money.format(ov.profitCents)} (${String.format(Locale.getDefault(), "%.0f%%", ov.marginPercent)})",
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = profitColor(ov.profitCents),
                         modifier = Modifier.weight(1f)
@@ -400,19 +306,19 @@ private fun OrderCard(
                     Spacer(Modifier.weight(1f))
                 }
                 if (isOrder) {
-                    TextButton(onClick = onDissolve) { Text(stringResource(R.string.cost_dissolve)) }
+                    SmallButton(stringResource(R.string.cost_dissolve), onDissolve)
+                    Spacer(Modifier.width(6.dp))
                     if (ov.tasks.size > 1) {
-                        TextButton(onClick = { expanded = !expanded }) {
-                            Text(if (expanded) stringResource(R.string.cost_collapse) else stringResource(R.string.cost_expand))
-                        }
+                        SmallButton(if (expanded) stringResource(R.string.cost_collapse) else stringResource(R.string.cost_expand), { expanded = !expanded })
+                        Spacer(Modifier.width(6.dp))
                     }
                 }
-                NeuButton(text = stringResource(R.string.cost_set_charge), onClick = onSetCharge)
+                SmallButton(stringResource(R.string.cost_set_charge), onSetCharge, primary = true)
             }
             if (expanded && ov.tasks.size > 1) {
                 ov.tasks.forEach { t ->
                     Text(
-                        text = "· ${t.title} — ${materialsSummary(t.materials, t.weightGrams)} — ${Money.format(t.computedCostCents)}",
+                        "· ${t.title} — ${materialsSummary(t.materials, t.weightGrams)} — ${Money.format(t.computedCostCents)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -425,41 +331,37 @@ private fun OrderCard(
 }
 
 @Composable
-private fun FailedBadge() {
-    Box(
-        modifier = Modifier
-            .padding(start = 4.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(MaterialTheme.colorScheme.errorContainer)
-            .padding(horizontal = 5.dp, vertical = 1.dp)
+private fun StateBadge(state: TaskState) {
+    if (state == TaskState.SUCCESS) return
+    val (bg, fg, label) = when (state) {
+        TaskState.PRINTING -> Triple(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer, stringResource(R.string.cost_state_printing))
+        else -> Triple(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer, stringResource(R.string.cost_failed_badge))
+    }
+    Box(modifier = Modifier.padding(start = 4.dp).clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp, vertical = 1.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = fg)
+    }
+}
+
+@Composable
+private fun SmallButton(text: String, onClick: () -> Unit, primary: Boolean = false) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = if (primary) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        contentColor = if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
-        Text(
-            stringResource(R.string.cost_failed_badge),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onErrorContainer
-        )
+        Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun CoverImage(path: String, size: Dp) {
     val image = remember(path) {
-        if (path.isNotBlank() && File(path).exists()) {
-            runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
-        } else null
+        if (path.isNotBlank() && File(path).exists()) runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull() else null
     }
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        if (image != null) {
-            Image(bitmap = image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else {
-            Text("3D", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    Box(modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+        if (image != null) Image(bitmap = image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Text("3D", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -476,20 +378,8 @@ private fun ChargeDialog(ov: OrderView, onSave: (Long) -> Unit, onDismiss: () ->
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${stringResource(R.string.cost_cost_label)}: ${Money.format(ov.costCents)}", style = MaterialTheme.typography.bodySmall)
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(stringResource(R.string.cost_actual_charge)) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "${stringResource(R.string.cost_profit_label)}: ${Money.format(profit)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = profitColor(profit)
-                )
+                OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text(stringResource(R.string.cost_actual_charge)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                Text("${stringResource(R.string.cost_profit_label)}: ${Money.format(profit)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = profitColor(profit))
             }
         },
         confirmButton = { TextButton(onClick = { onSave(Money.parse(text) ?: 0L) }) { Text(stringResource(R.string.action_confirm)) } },
@@ -503,8 +393,8 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
     var timeMin by remember { mutableStateOf("") }
     var colors by remember { mutableStateOf("1") }
     var plates by remember { mutableStateOf("1") }
-    var selectedPrice by remember { mutableStateOf(prices.firstOrNull()) }
-    var pricePerG by remember { mutableStateOf(selectedPrice?.let { Money.toPlain(it.pricePerGCents) } ?: Money.toPlain(config.defaultPricePerGCents)) }
+    var selectedPrice by remember { mutableStateOf<MaterialPrice?>(null) }
+    var pricePerG by remember { mutableStateOf(Money.toPlain(config.defaultPricePerGCents)) }
 
     val input = QuoteInput(
         weightGrams = weight.toDoubleOrNull() ?: 0.0,
@@ -520,70 +410,58 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cost_quote_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                MaterialPicker(
-                    prices = prices,
-                    selected = selectedPrice,
-                    onSelect = {
-                        selectedPrice = it
-                        pricePerG = Money.toPlain(it.pricePerGCents)
-                    }
-                )
-                NumberField(weight, { weight = it }, stringResource(R.string.cost_quote_weight))
-                NumberField(pricePerG, { pricePerG = it }, stringResource(R.string.cost_price_per_g))
-                NumberField(timeMin, { timeMin = it }, stringResource(R.string.cost_quote_time_min))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumberField(colors, { colors = it }, stringResource(R.string.cost_quote_colors), Modifier.weight(1f))
-                    NumberField(plates, { plates = it }, stringResource(R.string.cost_quote_plates), Modifier.weight(1f))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                MaterialSearchField(prices = prices, selected = selectedPrice, onSelect = {
+                    selectedPrice = it
+                    pricePerG = Money.toPlain(it.pricePerGCents)
+                })
+                LabeledField(stringResource(R.string.cost_quote_weight), weight) { weight = it }
+                LabeledField(stringResource(R.string.cost_price_per_g), pricePerG) { pricePerG = it }
+                LabeledField(stringResource(R.string.cost_quote_time_min), timeMin) { timeMin = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LabeledField(stringResource(R.string.cost_quote_colors), colors, Modifier.weight(1f)) { colors = it }
+                    LabeledField(stringResource(R.string.cost_quote_plates), plates, Modifier.weight(1f)) { plates = it }
                 }
-                Text(
-                    "${stringResource(R.string.cost_quote_breakdown)}: ${Money.format(q.productionCents)} ×${config.quoteMarkup} +${Money.format(q.serviceCents + q.shippingCents + q.otherCents)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "${stringResource(R.string.cost_quote_total)}: ${Money.format(q.totalCents)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text("${stringResource(R.string.cost_quote_breakdown)}: ${Money.format(q.productionCents)} ×${config.quoteMarkup} +${Money.format(q.serviceCents + q.shippingCents + q.otherCents)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${stringResource(R.string.cost_quote_total)}: ${Money.format(q.totalCents)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } }
     )
 }
 
+/** 输入框带搜索下拉的耗材选择(combobox)。 */
 @Composable
-private fun MaterialPicker(prices: List<MaterialPrice>, selected: MaterialPrice?, onSelect: (MaterialPrice) -> Unit) {
+private fun MaterialSearchField(prices: List<MaterialPrice>, selected: MaterialPrice?, onSelect: (MaterialPrice) -> Unit) {
+    var query by remember { mutableStateOf(selected?.filaType ?: "") }
     var expanded by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    Column {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .clickable { expanded = true }
-                .padding(horizontal = 12.dp, vertical = 12.dp)
+    val filtered = remember(query, prices, expanded) {
+        if (!expanded) emptyList()
+        else if (query.isBlank()) prices.take(30)
+        else prices.filter { it.filaType.contains(query, true) || it.filaId.contains(query, true) }.take(30)
+    }
+    Box {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it; expanded = true },
+            label = { Text(stringResource(R.string.cost_quote_material)) },
+            singleLine = true,
+            trailingIcon = {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(AppIcons.ArrowDownward, contentDescription = null)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        DropdownMenu(
+            expanded = expanded && filtered.isNotEmpty(),
+            onDismissRequest = { expanded = false },
+            properties = PopupProperties(focusable = false)
         ) {
-            Text(selected?.let { "${it.filaType} (${it.filaId})" } ?: stringResource(R.string.cost_quote_material))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                singleLine = true,
-                label = { Text(stringResource(R.string.cost_prices_search)) },
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-            val filtered = remember(query, prices) {
-                if (query.isBlank()) prices.take(50)
-                else prices.filter { it.filaType.contains(query, true) || it.filaId.contains(query, true) }.take(50)
-            }
             filtered.forEach { p ->
                 DropdownMenuItem(
-                    text = { Text("${p.filaType} (${p.filaId}) ${Money.format(p.pricePerGCents)}/g") },
-                    onClick = { onSelect(p); expanded = false }
+                    text = { Text("${p.filaType} (${p.filaId})  ${Money.format(p.pricePerGCents)}/g") },
+                    onClick = { onSelect(p); query = p.filaType; expanded = false }
                 )
             }
         }
@@ -609,34 +487,23 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cost_config_title)) },
         text = {
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 420.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item { NumberField(electricity, { electricity = it }, stringResource(R.string.cost_cfg_electricity)) }
-                item { NumberField(defaultPrice, { defaultPrice = it }, stringResource(R.string.cost_cfg_default_price)) }
-                item { NumberField(service, { service = it }, stringResource(R.string.cost_cfg_service)) }
-                item { NumberField(shipping, { shipping = it }, stringResource(R.string.cost_cfg_shipping)) }
-                item { NumberField(waste, { waste = it }, stringResource(R.string.cost_cfg_waste)) }
-                item { NumberField(surcharge, { surcharge = it }, stringResource(R.string.cost_cfg_surcharge)) }
-                item { NumberField(markup, { markup = it }, stringResource(R.string.cost_cfg_markup)) }
-                item { NumberField(minOrder, { minOrder = it }, stringResource(R.string.cost_cfg_min)) }
-                item { NumberField(rounding, { rounding = it }, stringResource(R.string.cost_cfg_rounding)) }
-                item { NumberField(power, { power = it }, stringResource(R.string.cost_cfg_power)) }
-                item { NumberField(deprec, { deprec = it }, stringResource(R.string.cost_cfg_deprec)) }
-                item {
-                    Text(stringResource(R.string.cost_cfg_other_fees), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                }
+            LazyColumn(modifier = Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { ConfigRow(stringResource(R.string.cost_cfg_electricity), electricity) { electricity = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_default_price), defaultPrice) { defaultPrice = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_service), service) { service = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_shipping), shipping) { shipping = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_waste), waste) { waste = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_surcharge), surcharge) { surcharge = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_markup), markup) { markup = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_min), minOrder) { minOrder = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_rounding), rounding) { rounding = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_power), power) { power = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_deprec), deprec) { deprec = it } }
+                item { Text(stringResource(R.string.cost_cfg_other_fees), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) }
                 items(otherFees) { fee ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "${fee.name} ${Money.format(fee.amountCents)}/${feeUnitLabel(fee.unit)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { otherFees.remove(fee) }) {
-                            Icon(AppIcons.DeleteOutline, contentDescription = null)
-                        }
+                        Text("${fee.name} ${Money.format(fee.amountCents)}/${feeUnitLabel(fee.unit)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { otherFees.remove(fee) }, modifier = Modifier.size(32.dp)) { Icon(AppIcons.DeleteOutline, contentDescription = null) }
                     }
                 }
                 item { AddFeeRow(onAdd = { otherFees.add(it) }) }
@@ -667,31 +534,40 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
 }
 
 @Composable
+private fun ConfigRow(label: String, value: String, onValueChange: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        CompactField(value, onValueChange, Modifier.width(110.dp))
+    }
+}
+
+@Composable
+private fun LabeledField(label: String, value: String, modifier: Modifier = Modifier, onValueChange: (String) -> Unit) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        CompactField(value, onValueChange, Modifier.width(120.dp))
+    }
+}
+
+@Composable
 private fun AddFeeRow(onAdd: (OtherFee) -> Unit) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf(FeeUnit.ORDER) }
     var menu by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text(stringResource(R.string.cost_fee_name)) }, modifier = Modifier.weight(1f))
-        OutlinedTextField(value = amount, onValueChange = { amount = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), label = { Text("¥") }, modifier = Modifier.width(70.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        CompactField(name, { name = it }, Modifier.weight(1f), placeholder = stringResource(R.string.cost_fee_name), number = false)
+        CompactField(amount, { amount = it }, Modifier.width(64.dp), placeholder = "¥")
         Box {
-            TextButton(onClick = { menu = true }) { Text(feeUnitLabel(unit)) }
+            SmallButton("${feeUnitLabel(unit)} ▾", { menu = true })
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                FeeUnit.values().forEach { u ->
-                    DropdownMenuItem(text = { Text(feeUnitLabel(u)) }, onClick = { unit = u; menu = false })
-                }
+                FeeUnit.values().forEach { u -> DropdownMenuItem(text = { Text(feeUnitLabel(u)) }, onClick = { unit = u; menu = false }) }
             }
         }
-        TextButton(onClick = {
+        SmallButton(stringResource(R.string.cost_fee_add), {
             val cents = Money.parse(amount)
-            if (name.isNotBlank() && cents != null) {
-                onAdd(OtherFee(name.trim(), unit, cents))
-                name = ""; amount = ""
-            }
-        }) {
-            Text(stringResource(R.string.cost_fee_add))
-        }
+            if (name.isNotBlank() && cents != null) { onAdd(OtherFee(name.trim(), unit, cents)); name = ""; amount = "" }
+        }, primary = true)
     }
 }
 
@@ -699,26 +575,17 @@ private fun AddFeeRow(onAdd: (OtherFee) -> Unit) {
 private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> Unit, onDismiss: () -> Unit) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(query, prices) {
-        if (query.isBlank()) prices
-        else prices.filter { it.filaType.contains(query, true) || it.filaId.contains(query, true) || it.baseType.contains(query, true) }
+        if (query.isBlank()) prices else prices.filter { it.filaType.contains(query, true) || it.filaId.contains(query, true) || it.baseType.contains(query, true) }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cost_prices_title)) },
         text = {
             Column {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.cost_prices_search)) },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, label = { Text(stringResource(R.string.cost_prices_search)) }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.size(8.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(filtered, key = { it.filaId }) { p ->
-                        PriceRow(p, onSet)
-                    }
+                LazyColumn(modifier = Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(filtered, key = { it.filaId }) { p -> PriceRow(p, onSet) }
                 }
             }
         },
@@ -734,29 +601,34 @@ private fun PriceRow(p: MaterialPrice, onSet: (String, Long) -> Unit) {
             Text(p.filaType.ifBlank { p.filaId }, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${p.baseType} · ${p.filaId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.width(96.dp)
-        )
-        TextButton(onClick = { Money.parse(text)?.let { onSet(p.filaId, it) } }) {
-            Text(stringResource(R.string.action_confirm))
+        CompactField(text, { text = it }, Modifier.width(72.dp))
+        Spacer(Modifier.width(6.dp))
+        IconButton(onClick = { Money.parse(text)?.let { onSet(p.filaId, it) } }, modifier = Modifier.size(32.dp)) {
+            Icon(AppIcons.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
 
+/** 小高度输入框(BasicTextField),让列表更紧凑。 */
 @Composable
-private fun NumberField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
-    OutlinedTextField(
+private fun CompactField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, placeholder: String = "", number: Boolean = true) {
+    BasicTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = modifier.fillMaxWidth()
-    )
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+        keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) { inner ->
+        if (value.isEmpty() && placeholder.isNotEmpty()) {
+            Text(placeholder, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        inner()
+    }
 }
 
 @Composable
@@ -767,14 +639,14 @@ private fun feeUnitLabel(unit: FeeUnit): String = when (unit) {
 }
 
 @Composable
-private fun profitColor(cents: Long): Color =
-    if (cents >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+private fun profitColor(cents: Long): Color = if (cents >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
 
 private fun materialsSummary(materials: List<BambuCloudTaskMaterial>, fallbackWeight: Double): String {
-    if (materials.isEmpty()) return "${"%.1f".format(fallbackWeight)}g"
-    val types = materials.map { it.filamentType.ifBlank { it.filamentId } }.filter { it.isNotBlank() }.distinct().joinToString("+")
-    val weight = materials.sumOf { it.weightGrams }.takeIf { it > 0 } ?: fallbackWeight
-    return "$types ${"%.1f".format(weight)}g"
+    if (materials.isEmpty()) return "%.1fg".format(fallbackWeight)
+    return materials.joinToString(" · ") { m ->
+        val t = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
+        "$t ${"%.1f".format(m.weightGrams)}g"
+    }
 }
 
 private fun formatDuration(seconds: Int): String {

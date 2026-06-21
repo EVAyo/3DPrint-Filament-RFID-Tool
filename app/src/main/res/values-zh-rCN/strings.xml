@@ -844,7 +844,8 @@
     <string name="cost_stat_profit">总利润</string>
     <string name="cost_stat_margin">毛利率</string>
     <string name="cost_stat_avg">平均客单</string>
-    <string name="cost_include_failed">含失败单</string>
+    <string name="cost_stat_revenue">总营收</string>
+    <string name="cost_state_printing">打印中</string>
     <string name="cost_sync">同步</string>
     <string name="cost_quote">报价器</string>
     <string name="cost_config">基础费用</string>
