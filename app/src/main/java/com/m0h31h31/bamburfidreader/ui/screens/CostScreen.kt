@@ -1,6 +1,7 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -95,6 +97,9 @@ fun CostScreen(modifier: Modifier = Modifier) {
     val statusMessage by controller.statusMessageState
     val showHidden by controller.showHiddenState
     val session by cloud.sessionState
+    val materialTypesByFilaId = remember(prices) {
+        prices.associate { normalizeFilaId(it.filaId) to it.filaType.trim() }
+    }
 
     val orderViews = remember(tasks, orders, showHidden) {
         buildOrderViews(if (showHidden) tasks else tasks.filter { !it.hidden }, orders)
@@ -163,7 +168,8 @@ fun CostScreen(modifier: Modifier = Modifier) {
                             },
                             onSetCharge = { chargeTarget = ov },
                             onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } },
-                            onRestore = { controller.restoreTasks(listOf(ov.tasks.first().id)) }
+                            onRestore = { controller.restoreTasks(listOf(ov.tasks.first().id)) },
+                            materialTypesByFilaId = materialTypesByFilaId
                         )
                     }
                 }
@@ -290,13 +296,19 @@ private fun OrderCard(
     onToggleSelect: () -> Unit,
     onSetCharge: () -> Unit,
     onDissolve: () -> Unit,
-    onRestore: () -> Unit
+    onRestore: () -> Unit,
+    materialTypesByFilaId: Map<String, String>
 ) {
     var expanded by remember(ov) { mutableStateOf(false) }
     val isOrder = ov.orderId != null
     val first = ov.tasks.first()
     // 合并订单主条目显示所有耗材合计;单任务显示自身各耗材
-    val materialLine = if (isOrder) aggregateMaterials(ov.tasks) else materialsSummary(first.materials, first.weightGrams)
+    val materialLine = if (isOrder) {
+        aggregateMaterials(ov.tasks, materialTypesByFilaId)
+    } else {
+        materialsSummary(first.materials, first.weightGrams, materialTypesByFilaId)
+    }
+    val durationSeconds = if (isOrder) ov.tasks.sumOf { it.costTimeSeconds } else first.costTimeSeconds
     NeuPanel(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -321,7 +333,7 @@ private fun OrderCard(
                     }
                     Text(materialLine, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "${formatDate(first.startTimeMillis)} · ${formatDuration(first.costTimeSeconds)} · ${stringResource(R.string.cost_cost_label)} ${Money.format(ov.costCents)}",
+                        "${formatDate(first.startTimeMillis)} · ${formatDuration(durationSeconds)} · ${stringResource(R.string.cost_cost_label)} ${Money.format(ov.costCents)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -357,7 +369,7 @@ private fun OrderCard(
             }
             if (expanded && ov.tasks.size > 1) {
                 Spacer(Modifier.size(2.dp))
-                ov.tasks.forEach { t -> SubTaskRow(t) }
+                ov.tasks.forEach { t -> SubTaskRow(t, materialTypesByFilaId) }
             }
         }
     }
@@ -365,14 +377,14 @@ private fun OrderCard(
 
 /** 合并订单展开后的子条目:左图 + 右两行。 */
 @Composable
-private fun SubTaskRow(t: PrintTaskRow) {
+private fun SubTaskRow(t: PrintTaskRow, materialTypesByFilaId: Map<String, String>) {
     Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         CoverImage(t.coverPath, 36.dp)
         Spacer(Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(t.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                "${materialsSummary(t.materials, t.weightGrams)} · ${formatDuration(t.costTimeSeconds)} · ${Money.format(t.computedCostCents)}",
+                "${materialsSummary(t.materials, t.weightGrams, materialTypesByFilaId)} · ${formatDuration(t.costTimeSeconds)} · ${Money.format(t.computedCostCents)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -467,9 +479,20 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.cost_quote_title)) },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                text = stringResource(R.string.cost_quote_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 MaterialSearchField(prices = prices, selected = selectedPrice, onSelect = {
                     selectedPrice = it
                     pricePerG = Money.toPlain(it.pricePerGCents)
@@ -510,11 +533,20 @@ private fun MaterialSearchField(prices: List<MaterialPrice>, selected: MaterialP
                     Icon(AppIcons.ArrowDownward, contentDescription = null)
                 }
             },
+            shape = RoundedCornerShape(18.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                cursorColor = MaterialTheme.colorScheme.primary
+            ),
             modifier = Modifier.fillMaxWidth()
         )
         DropdownMenu(
             expanded = expanded && filtered.isNotEmpty(),
             onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 320.dp),
             properties = PopupProperties(focusable = false)
         ) {
             filtered.forEach { p ->
@@ -544,11 +576,33 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.cost_config_title)) },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = stringResource(R.string.cost_config_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.cost_config_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
         text = {
-            LazyColumn(modifier = Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_consumption)) }
                 item { ConfigRow(stringResource(R.string.cost_cfg_electricity), electricity) { electricity = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_default_price), defaultPrice) { defaultPrice = it } }
+                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_pricing)) }
                 item { ConfigRow(stringResource(R.string.cost_cfg_service), service) { service = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_shipping), shipping) { shipping = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_waste), waste) { waste = it } }
@@ -556,13 +610,30 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
                 item { ConfigRow(stringResource(R.string.cost_cfg_markup), markup) { markup = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_min), minOrder) { minOrder = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_rounding), rounding) { rounding = it } }
+                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_defaults)) }
                 item { ConfigRow(stringResource(R.string.cost_cfg_power), power) { power = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_deprec), deprec) { deprec = it } }
-                item { Text(stringResource(R.string.cost_cfg_other_fees), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) }
+                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_other_fees)) }
                 items(otherFees) { fee ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${fee.name} ${Money.format(fee.amountCents)}/${feeUnitLabel(fee.unit)}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { otherFees.remove(fee) }, modifier = Modifier.size(32.dp)) { Icon(AppIcons.DeleteOutline, contentDescription = null) }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${fee.name} ${Money.format(fee.amountCents)}/${feeUnitLabel(fee.unit)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { otherFees.remove(fee) }, modifier = Modifier.size(36.dp)) {
+                                Icon(AppIcons.DeleteOutline, contentDescription = null)
+                            }
+                        }
                     }
                 }
                 item { AddFeeRow(onAdd = { otherFees.add(it) }) }
@@ -593,19 +664,54 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
 }
 
 @Composable
+private fun ConfigSectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 4.dp, start = 2.dp)
+    )
+}
+
+@Composable
 private fun ConfigRow(label: String, value: String, onValueChange: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-        CompactField(value, onValueChange, Modifier.width(110.dp))
-    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            cursorColor = MaterialTheme.colorScheme.primary
+        )
+    )
 }
 
 @Composable
 private fun LabeledField(label: String, value: String, modifier: Modifier = Modifier, onValueChange: (String) -> Unit) {
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-        CompactField(value, onValueChange, Modifier.width(120.dp))
-    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            cursorColor = MaterialTheme.colorScheme.primary
+        )
+    )
 }
 
 @Composable
@@ -638,12 +744,41 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.cost_prices_title)) },
+        shape = RoundedCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = {
+            Text(
+                text = stringResource(R.string.cost_prices_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column {
-                OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, label = { Text(stringResource(R.string.cost_prices_search)) }, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.size(8.dp))
-                LazyColumn(modifier = Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.cost_prices_search)) },
+                    shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 500.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     items(filtered, key = { it.filaId }) { p -> PriceRow(p, onSet) }
                 }
             }
@@ -655,18 +790,34 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
 @Composable
 private fun PriceRow(p: MaterialPrice, onSet: (String, Long) -> Unit) {
     var text by remember(p.filaId, p.pricePerGCents) { mutableStateOf(Money.toPlain(p.pricePerGCents)) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(p.filaType.ifBlank { p.filaId }, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = p.filaType.ifBlank { p.filaId },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             Text("${p.baseType} · ${p.filaId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        CompactField(text, { text = it }, Modifier.width(72.dp))
-        Spacer(Modifier.width(6.dp))
-        IconButton(onClick = { Money.parse(text)?.let { onSet(p.filaId, it) } }, modifier = Modifier.size(32.dp)) {
-            Icon(AppIcons.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            CompactField(text, { text = it }, Modifier.width(96.dp))
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = { Money.parse(text)?.let { onSet(p.filaId, it) } }, modifier = Modifier.size(36.dp)) {
+                Icon(AppIcons.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        }
+            }
         }
     }
-}
 
 @Composable
 private fun CompactField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, placeholder: String = "", number: Boolean = true) {
@@ -676,6 +827,14 @@ private fun CompactField(value: String, onValueChange: (String) -> Unit, modifie
         singleLine = true,
         placeholder = if (placeholder.isNotEmpty()) ({ Text(placeholder) }) else null,
         keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            cursorColor = MaterialTheme.colorScheme.primary
+        ),
         modifier = modifier
     )
 }
@@ -690,25 +849,39 @@ private fun feeUnitLabel(unit: FeeUnit): String = when (unit) {
 @Composable
 private fun profitColor(cents: Long): Color = if (cents >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
 
-private fun materialsSummary(materials: List<BambuCloudTaskMaterial>, fallbackWeight: Double): String {
+private fun materialsSummary(
+    materials: List<BambuCloudTaskMaterial>,
+    fallbackWeight: Double,
+    materialTypesByFilaId: Map<String, String>
+): String {
     if (materials.isEmpty()) return "%.1fg".format(fallbackWeight)
     return materials.joinToString(" · ") { m ->
-        val t = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
+        val t = displayMaterialType(m, materialTypesByFilaId)
         "$t ${"%.1f".format(m.weightGrams)}g"
     }
 }
 
 /** 合并订单主条目:跨所有任务按耗材类型合计克重。 */
-private fun aggregateMaterials(tasks: List<PrintTaskRow>): String {
+private fun aggregateMaterials(tasks: List<PrintTaskRow>, materialTypesByFilaId: Map<String, String>): String {
     val all = tasks.flatMap { it.materials }
     if (all.isEmpty()) return "%.1fg".format(tasks.sumOf { it.weightGrams })
     val byType = LinkedHashMap<String, Double>()
     all.forEach { m ->
-        val t = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
+        val t = displayMaterialType(m, materialTypesByFilaId)
         byType[t] = (byType[t] ?: 0.0) + m.weightGrams
     }
     return byType.entries.joinToString(" · ") { "${it.key} ${"%.1f".format(it.value)}g" }
 }
+
+private fun displayMaterialType(
+    material: BambuCloudTaskMaterial,
+    materialTypesByFilaId: Map<String, String>
+): String =
+    materialTypesByFilaId[normalizeFilaId(material.filamentId)]
+        ?.ifBlank { null }
+        ?: material.filamentType.ifBlank { material.filamentId }.ifBlank { "?" }
+
+private fun normalizeFilaId(value: String): String = value.trim().uppercase(Locale.US)
 
 private fun formatDuration(seconds: Int): String {
     val h = seconds / 3600

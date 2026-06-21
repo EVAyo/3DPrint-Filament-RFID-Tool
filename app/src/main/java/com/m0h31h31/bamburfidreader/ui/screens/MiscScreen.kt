@@ -197,6 +197,8 @@ private fun ModernMiscScreen(
     onInventoryEnabledChange: (Boolean) -> Unit,
     autoDetectBrand: Boolean,
     onAutoDetectBrandChange: (Boolean) -> Unit,
+    globalNfcListenerEnabled: Boolean,
+    onGlobalNfcListenerEnabledChange: (Boolean) -> Unit,
     autoShareTag: Boolean,
     onAutoShareTagChange: (Boolean) -> Unit,
     onCheckDownloadPermission: suspend () -> String?,
@@ -416,6 +418,16 @@ private fun ModernMiscScreen(
                     subtitle = stringResource(R.string.misc_save_keys_desc)
                 ) {
                     AppSwitch(checked = saveKeysToFile, onCheckedChange = onSaveKeysToFileChange)
+                }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_global_nfc_listener),
+                    subtitle = stringResource(R.string.config_global_nfc_listener_desc)
+                ) {
+                    AppSwitch(
+                        checked = globalNfcListenerEnabled,
+                        onCheckedChange = onGlobalNfcListenerEnabledChange
+                    )
                 }
                 ModernDivider()
                 ModernSettingRow(
@@ -1467,6 +1479,8 @@ fun MiscScreen(
     onInventoryEnabledChange: (Boolean) -> Unit = {},
     autoDetectBrand: Boolean = false,
     onAutoDetectBrandChange: (Boolean) -> Unit = {},
+    globalNfcListenerEnabled: Boolean = true,
+    onGlobalNfcListenerEnabledChange: (Boolean) -> Unit = {},
     autoShareTag: Boolean = true,
     onAutoShareTagChange: (Boolean) -> Unit = {},
     onCheckDownloadPermission: suspend () -> String? = { null },
@@ -1661,6 +1675,8 @@ fun MiscScreen(
             onInventoryEnabledChange = onInventoryEnabledChange,
             autoDetectBrand = autoDetectBrand,
             onAutoDetectBrandChange = onAutoDetectBrandChange,
+            globalNfcListenerEnabled = globalNfcListenerEnabled,
+            onGlobalNfcListenerEnabledChange = onGlobalNfcListenerEnabledChange,
             autoShareTag = autoShareTag,
             onAutoShareTagChange = onAutoShareTagChange,
             onCheckDownloadPermission = onCheckDownloadPermission,
@@ -2068,6 +2084,28 @@ fun MiscScreen(
                             AppSwitch(
                                 checked = readAllSectors,
                                 onCheckedChange = ::handleReadAllSectorsChange
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(text = stringResource(R.string.config_global_nfc_listener))
+                                Text(
+                                    text = stringResource(R.string.config_global_nfc_listener_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            AppSwitch(
+                                checked = globalNfcListenerEnabled,
+                                onCheckedChange = { onGlobalNfcListenerEnabledChange(it) }
                             )
                         }
 

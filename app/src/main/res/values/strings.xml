@@ -306,6 +306,8 @@
     <string name="misc_force_overwrite_import">Force overwrite imported tags</string>
     <string name="config_auto_detect_brand">Auto Detect RFID</string>
     <string name="config_auto_detect_brand_desc">Auto-detect brand on tap and navigate to the matching reader (Bambu / Creality / Snapmaker)</string>
+    <string name="config_global_nfc_listener">Global NFC Listener</string>
+    <string name="config_global_nfc_listener_desc">When off, normal tag reads only run on the Reader page; manual write, format, and test tasks still work.</string>
     <string name="config_inventory_feature">Inventory &amp; Data</string>
     <string name="config_inventory_feature_desc">Enable to show inventory and data pages</string>
     <string name="config_auto_share_tag_desc">Automatically upload to shared server after reading full Bambu/Creality data</string>
@@ -942,6 +944,10 @@
     <string name="cost_quote_breakdown">Production</string>
     <string name="cost_quote_total">Quote</string>
     <string name="cost_config_title">Base fees</string>
+    <string name="cost_config_desc">Tune default prices, quote rules, and machine assumptions.</string>
+    <string name="cost_cfg_section_consumption">Print consumption</string>
+    <string name="cost_cfg_section_pricing">Quote rules</string>
+    <string name="cost_cfg_section_defaults">Machine defaults</string>
     <string name="cost_cfg_electricity">Electricity (¥/kWh)</string>
     <string name="cost_cfg_default_price">Default price (¥/g)</string>
     <string name="cost_cfg_service">Service fee (¥/order)</string>

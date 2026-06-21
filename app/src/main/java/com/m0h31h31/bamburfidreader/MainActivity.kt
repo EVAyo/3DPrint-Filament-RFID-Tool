@@ -98,6 +98,7 @@ import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityConfig
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityMode
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityPreferences
 import com.m0h31h31.bamburfidreader.nfc.NfcCompatibilityTestResult
+import com.m0h31h31.bamburfidreader.nfc.shouldHandlePassiveNfcRead
 import com.m0h31h31.bamburfidreader.utils.AnalyticsReporter
 import com.m0h31h31.bamburfidreader.utils.UpdateInfo
 import com.m0h31h31.bamburfidreader.utils.ConfigManager
@@ -161,6 +162,7 @@ private const val KEY_CLOUD_CONNECT_ENABLED = "cloud_connect_enabled"
 private const val KEY_COST_ENABLED = "cost_enabled"
 private const val KEY_AUTO_SHARE_TAG = "auto_share_tag"
 private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
+private const val KEY_GLOBAL_NFC_LISTENER = "global_nfc_listener"
 private const val KEY_NOTICE_GUIDE_SHOWN = "notice_guide_shown"
 private const val KEY_LAST_WRITTEN_SOURCE_UID = "last_written_source_uid"
 private const val KEY_LAST_DICT_SYNC_VERSION_CODE = "last_dict_sync_version_code"
@@ -508,6 +510,7 @@ class MainActivity : ComponentActivity() {
     private var formatTagDebugEnabled by mutableStateOf(false) // 控制格式化标签调试弹窗
     private var inventoryEnabled by mutableStateOf(false) // 控制库存和数据页面显示
     private var autoDetectBrand by mutableStateOf(false)  // 自动识别RFID品牌并跳转
+    private var globalNfcListenerEnabled by mutableStateOf(true) // 控制非识别页普通贴卡是否触发读卡
     private var autoShareTag by mutableStateOf(true)     // 读取完整数据后自动上传到共享服务器
     private var hideCopiedTags by mutableStateOf(true)   // 隐藏已复制标签
     private var dualTagMode by mutableStateOf(false)      // 双标签模式：复制2次才隐藏
@@ -908,6 +911,9 @@ class MainActivity : ComponentActivity() {
                         playFeedbackTone(FeedbackTone.FAILURE)
                     }
                 }
+            } else if (!shouldHandlePassiveNfcRead(globalNfcListenerEnabled, currentActiveRoute)) {
+                logEvent("普通NFC读卡被忽略：全局监听关闭，当前页面=$currentActiveRoute")
+                return@ReaderCallback
             } else if (crealityEnabled && currentActiveRoute == "creality") {
                 // On the Creality screen: only attempt Creality read, stay on current screen
                 val crealityResult = readCrealityTag(tag)
@@ -1061,6 +1067,7 @@ class MainActivity : ComponentActivity() {
         costEnabled = uiPrefs.getBoolean(KEY_COST_ENABLED, false)
         inventoryEnabled = uiPrefs.getBoolean(KEY_INVENTORY_ENABLED, true)
         autoDetectBrand = uiPrefs.getBoolean(KEY_AUTO_DETECT_BRAND, false)
+        globalNfcListenerEnabled = uiPrefs.getBoolean(KEY_GLOBAL_NFC_LISTENER, true)
         autoShareTag = uiPrefs.getBoolean(KEY_AUTO_SHARE_TAG, true)
         hideCopiedTags = uiPrefs.getBoolean(KEY_HIDE_COPIED_TAGS, true)
         dualTagMode = uiPrefs.getBoolean(KEY_DUAL_TAG_MODE, false)
@@ -1269,6 +1276,11 @@ class MainActivity : ComponentActivity() {
                     onAutoDetectBrandChange = { enabled ->
                         autoDetectBrand = enabled
                         uiPrefs.edit().putBoolean(KEY_AUTO_DETECT_BRAND, enabled).apply()
+                    },
+                    globalNfcListenerEnabled = globalNfcListenerEnabled,
+                    onGlobalNfcListenerEnabledChange = { enabled ->
+                        globalNfcListenerEnabled = enabled
+                        uiPrefs.edit().putBoolean(KEY_GLOBAL_NFC_LISTENER, enabled).apply()
                     },
                     autoShareTag = autoShareTag,
                     onAutoShareTagChange = { enabled ->
