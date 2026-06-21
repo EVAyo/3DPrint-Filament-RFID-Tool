@@ -94,7 +94,8 @@ data class PrintTaskRow(
     val repetitions: Int,
     val materials: List<BambuCloudTaskMaterial>,
     val computedCostCents: Long,
-    val orderId: Long?
+    val orderId: Long?,
+    val hidden: Boolean = false
 ) {
     /** status: 2=成功,4=打印中,其余视为失败(failedType!=0 也算失败)。 */
     val state: TaskState

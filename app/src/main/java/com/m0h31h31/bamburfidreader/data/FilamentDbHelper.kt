@@ -10,7 +10,7 @@ import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 31
+private const val FILAMENT_DB_VERSION = 32
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -182,6 +182,7 @@ class FilamentDbHelper(val context: Context) :
                 materials_json TEXT,
                 computed_cost_cents INTEGER NOT NULL DEFAULT 0,
                 order_id INTEGER,
+                hidden INTEGER NOT NULL DEFAULT 0,
                 synced_at INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
@@ -484,6 +485,11 @@ class FilamentDbHelper(val context: Context) :
         }
         if (oldVersion < 31) {
             createCostTables(db)
+        }
+        if (oldVersion < 32) {
+            try {
+                db.execSQL("ALTER TABLE $PRINT_TASK_TABLE ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+            } catch (_: Exception) {}
         }
     }
 

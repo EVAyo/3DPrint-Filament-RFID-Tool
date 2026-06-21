@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -44,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +63,7 @@ import com.m0h31h31.bamburfidreader.cost.MaterialPrice
 import com.m0h31h31.bamburfidreader.cost.Money
 import com.m0h31h31.bamburfidreader.cost.OrderView
 import com.m0h31h31.bamburfidreader.cost.OtherFee
+import com.m0h31h31.bamburfidreader.cost.PrintTaskRow
 import com.m0h31h31.bamburfidreader.cost.QuoteInput
 import com.m0h31h31.bamburfidreader.cost.TaskState
 import com.m0h31h31.bamburfidreader.cost.buildOrderViews
@@ -94,10 +93,16 @@ fun CostScreen(modifier: Modifier = Modifier) {
     val prices by controller.pricesState
     val syncing by controller.syncingState
     val statusMessage by controller.statusMessageState
+    val showHidden by controller.showHiddenState
     val session by cloud.sessionState
 
-    val orderViews = remember(tasks, orders) { buildOrderViews(tasks, orders) }
-    val stats = remember(orderViews) { CostCalculator.computeStats(orderViews, includeFailed = false) }
+    val orderViews = remember(tasks, orders, showHidden) {
+        buildOrderViews(if (showHidden) tasks else tasks.filter { !it.hidden }, orders)
+    }
+    val stats = remember(tasks, orders) {
+        CostCalculator.computeStats(buildOrderViews(tasks.filter { !it.hidden }, orders), includeFailed = false)
+    }
+    val hiddenCount = remember(tasks) { tasks.count { it.hidden } }
 
     val selected = remember { mutableStateListOf<Long>() }
     var showQuote by remember { mutableStateOf(false) }
@@ -126,6 +131,16 @@ fun CostScreen(modifier: Modifier = Modifier) {
         )
         if (session == null) CostLoginHint()
 
+        if (hiddenCount > 0 || showHidden) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                SmallButton(
+                    if (showHidden) stringResource(R.string.cost_hide_hidden) else stringResource(R.string.cost_show_hidden, hiddenCount),
+                    { controller.toggleShowHidden() },
+                    primary = showHidden
+                )
+            }
+        }
+
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (orderViews.isEmpty()) {
                 CostEmpty()
@@ -136,16 +151,19 @@ fun CostScreen(modifier: Modifier = Modifier) {
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 2.dp, bottom = if (selected.isNotEmpty()) 72.dp else 12.dp)
                 ) {
                     items(orderViews, key = { it.orderId ?: -it.tasks.first().id }) { ov ->
+                        val hiddenView = ov.orderId == null && ov.tasks.first().hidden
                         OrderCard(
                             ov = ov,
-                            selectable = ov.orderId == null,
+                            selectable = ov.orderId == null && !hiddenView,
                             selected = ov.orderId == null && selected.contains(ov.tasks.first().id),
+                            hidden = hiddenView,
                             onToggleSelect = {
                                 val id = ov.tasks.first().id
                                 if (selected.contains(id)) selected.remove(id) else selected.add(id)
                             },
                             onSetCharge = { chargeTarget = ov },
-                            onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } }
+                            onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } },
+                            onRestore = { controller.restoreTasks(listOf(ov.tasks.first().id)) }
                         )
                     }
                 }
@@ -157,6 +175,10 @@ fun CostScreen(modifier: Modifier = Modifier) {
                     count = selected.size,
                     onMerge = {
                         controller.aggregateIntoOrder(selected.toList(), context.getString(R.string.cost_default_order_name))
+                        selected.clear()
+                    },
+                    onHide = {
+                        controller.hideTasks(selected.toList())
                         selected.clear()
                     },
                     onCancel = { selected.clear() }
@@ -240,7 +262,7 @@ private fun CostEmpty() {
 }
 
 @Composable
-private fun MergeFloatingBar(modifier: Modifier, count: Int, onMerge: () -> Unit, onCancel: () -> Unit) {
+private fun MergeFloatingBar(modifier: Modifier, count: Int, onMerge: () -> Unit, onHide: () -> Unit, onCancel: () -> Unit) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -248,20 +270,33 @@ private fun MergeFloatingBar(modifier: Modifier, count: Int, onMerge: () -> Unit
         shadowElevation = 8.dp,
         color = MaterialTheme.colorScheme.surface
     ) {
-        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.cost_merge_selected, count), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             SmallButton(stringResource(R.string.action_cancel), onCancel)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
+            SmallButton(stringResource(R.string.cost_hide), onHide)
+            Spacer(Modifier.width(6.dp))
             SmallButton(stringResource(R.string.cost_merge), onMerge, primary = true)
         }
     }
 }
 
 @Composable
-private fun OrderCard(ov: OrderView, selectable: Boolean, selected: Boolean, onToggleSelect: () -> Unit, onSetCharge: () -> Unit, onDissolve: () -> Unit) {
+private fun OrderCard(
+    ov: OrderView,
+    selectable: Boolean,
+    selected: Boolean,
+    hidden: Boolean,
+    onToggleSelect: () -> Unit,
+    onSetCharge: () -> Unit,
+    onDissolve: () -> Unit,
+    onRestore: () -> Unit
+) {
     var expanded by remember(ov) { mutableStateOf(false) }
     val isOrder = ov.orderId != null
     val first = ov.tasks.first()
+    // 合并订单主条目显示所有耗材合计;单任务显示自身各耗材
+    val materialLine = if (isOrder) aggregateMaterials(ov.tasks) else materialsSummary(first.materials, first.weightGrams)
     NeuPanel(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -281,9 +316,10 @@ private fun OrderCard(ov: OrderView, selectable: Boolean, selected: Boolean, onT
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        StateBadge(if (ov.anyFailed) TaskState.FAILED else if (ov.anyPrinting) TaskState.PRINTING else TaskState.SUCCESS)
+                        if (hidden) HiddenBadge()
+                        else StateBadge(if (ov.anyFailed) TaskState.FAILED else if (ov.anyPrinting) TaskState.PRINTING else TaskState.SUCCESS)
                     }
-                    Text(materialsSummary(first.materials, first.weightGrams), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(materialLine, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         "${formatDate(first.startTimeMillis)} · ${formatDuration(first.costTimeSeconds)} · ${stringResource(R.string.cost_cost_label)} ${Money.format(ov.costCents)}",
                         style = MaterialTheme.typography.labelSmall,
@@ -305,28 +341,51 @@ private fun OrderCard(ov: OrderView, selectable: Boolean, selected: Boolean, onT
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
-                if (isOrder) {
-                    SmallButton(stringResource(R.string.cost_dissolve), onDissolve)
-                    Spacer(Modifier.width(6.dp))
-                    if (ov.tasks.size > 1) {
-                        SmallButton(if (expanded) stringResource(R.string.cost_collapse) else stringResource(R.string.cost_expand), { expanded = !expanded })
+                if (hidden) {
+                    SmallButton(stringResource(R.string.cost_restore), onRestore, primary = true)
+                } else {
+                    if (isOrder) {
+                        SmallButton(stringResource(R.string.cost_dissolve), onDissolve)
                         Spacer(Modifier.width(6.dp))
+                        if (ov.tasks.size > 1) {
+                            SmallButton(if (expanded) stringResource(R.string.cost_collapse) else stringResource(R.string.cost_expand), { expanded = !expanded })
+                            Spacer(Modifier.width(6.dp))
+                        }
                     }
+                    SmallButton(stringResource(R.string.cost_set_charge), onSetCharge, primary = true)
                 }
-                SmallButton(stringResource(R.string.cost_set_charge), onSetCharge, primary = true)
             }
             if (expanded && ov.tasks.size > 1) {
-                ov.tasks.forEach { t ->
-                    Text(
-                        "· ${t.title} — ${materialsSummary(t.materials, t.weightGrams)} — ${Money.format(t.computedCostCents)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Spacer(Modifier.size(2.dp))
+                ov.tasks.forEach { t -> SubTaskRow(t) }
             }
         }
+    }
+}
+
+/** 合并订单展开后的子条目:左图 + 右两行。 */
+@Composable
+private fun SubTaskRow(t: PrintTaskRow) {
+    Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        CoverImage(t.coverPath, 36.dp)
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(t.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${materialsSummary(t.materials, t.weightGrams)} · ${formatDuration(t.costTimeSeconds)} · ${Money.format(t.computedCostCents)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HiddenBadge() {
+    Box(modifier = Modifier.padding(start = 4.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = 5.dp, vertical = 1.dp)) {
+        Text(stringResource(R.string.cost_hidden_badge), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -609,26 +668,16 @@ private fun PriceRow(p: MaterialPrice, onSet: (String, Long) -> Unit) {
     }
 }
 
-/** 小高度输入框(BasicTextField),让列表更紧凑。 */
 @Composable
 private fun CompactField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, placeholder: String = "", number: Boolean = true) {
-    BasicTextField(
+    OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+        placeholder = if (placeholder.isNotEmpty()) ({ Text(placeholder) }) else null,
         keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Decimal) else KeyboardOptions.Default,
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    ) { inner ->
-        if (value.isEmpty() && placeholder.isNotEmpty()) {
-            Text(placeholder, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        inner()
-    }
+    )
 }
 
 @Composable
@@ -647,6 +696,18 @@ private fun materialsSummary(materials: List<BambuCloudTaskMaterial>, fallbackWe
         val t = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
         "$t ${"%.1f".format(m.weightGrams)}g"
     }
+}
+
+/** 合并订单主条目:跨所有任务按耗材类型合计克重。 */
+private fun aggregateMaterials(tasks: List<PrintTaskRow>): String {
+    val all = tasks.flatMap { it.materials }
+    if (all.isEmpty()) return "%.1fg".format(tasks.sumOf { it.weightGrams })
+    val byType = LinkedHashMap<String, Double>()
+    all.forEach { m ->
+        val t = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
+        byType[t] = (byType[t] ?: 0.0) + m.weightGrams
+    }
+    return byType.entries.joinToString(" · ") { "${it.key} ${"%.1f".format(it.value)}g" }
 }
 
 private fun formatDuration(seconds: Int): String {

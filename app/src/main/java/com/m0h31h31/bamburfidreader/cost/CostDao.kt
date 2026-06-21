@@ -144,6 +144,15 @@ class CostDao(private val dbHelper: FilamentDbHelper) {
         return out
     }
 
+    fun setTasksHidden(taskIds: List<Long>, hidden: Boolean) {
+        if (taskIds.isEmpty()) return
+        val cv = ContentValues().apply { put("hidden", if (hidden) 1 else 0) }
+        val placeholders = taskIds.joinToString(",") { "?" }
+        dbHelper.writableDatabase.update(
+            PRINT_TASK_TABLE, cv, "id IN ($placeholders)", taskIds.map { it.toString() }.toTypedArray()
+        )
+    }
+
     fun loadTasks(): List<PrintTaskRow> {
         val out = ArrayList<PrintTaskRow>()
         dbHelper.readableDatabase.query(
@@ -151,6 +160,7 @@ class CostDao(private val dbHelper: FilamentDbHelper) {
         ).use { c ->
             val idx = { name: String -> c.getColumnIndexOrThrow(name) }
             val orderIdCol = c.getColumnIndex("order_id")
+            val hiddenCol = c.getColumnIndex("hidden")
             while (c.moveToNext()) {
                 out.add(
                     PrintTaskRow(
@@ -167,7 +177,8 @@ class CostDao(private val dbHelper: FilamentDbHelper) {
                         repetitions = c.getInt(idx("repetitions")),
                         materials = materialsFromJson(c.getString(idx("materials_json"))),
                         computedCostCents = c.getLong(idx("computed_cost_cents")),
-                        orderId = if (orderIdCol >= 0 && !c.isNull(orderIdCol)) c.getLong(orderIdCol) else null
+                        orderId = if (orderIdCol >= 0 && !c.isNull(orderIdCol)) c.getLong(orderIdCol) else null,
+                        hidden = hiddenCol >= 0 && c.getInt(hiddenCol) != 0
                     )
                 )
             }

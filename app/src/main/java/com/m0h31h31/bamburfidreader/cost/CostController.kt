@@ -44,6 +44,7 @@ class CostController private constructor(appContext: Context) {
     val pricesState = mutableStateOf<List<MaterialPrice>>(emptyList())
     val tasksState = mutableStateOf<List<PrintTaskRow>>(emptyList())
     val ordersState = mutableStateOf<List<PrintOrder>>(emptyList())
+    val showHiddenState = mutableStateOf(false)
     val syncingState = mutableStateOf(false)
     val statusMessageState = mutableStateOf("")
 
@@ -76,9 +77,29 @@ class CostController private constructor(appContext: Context) {
         ordersState.value = orders
     }
 
-    fun orderViews(): List<OrderView> = buildOrderViews(tasksState.value, ordersState.value)
+    /** 列表视图:默认排除隐藏任务;showHidden 时全部显示。 */
+    fun orderViews(): List<OrderView> {
+        val src = if (showHiddenState.value) tasksState.value else tasksState.value.filter { !it.hidden }
+        return buildOrderViews(src, ordersState.value)
+    }
 
-    fun stats(): CostStats = CostCalculator.computeStats(orderViews(), includeFailed = false)
+    /** 统计始终排除隐藏任务。 */
+    fun stats(): CostStats =
+        CostCalculator.computeStats(buildOrderViews(tasksState.value.filter { !it.hidden }, ordersState.value), includeFailed = false)
+
+    fun hiddenCount(): Int = tasksState.value.count { it.hidden }
+
+    fun toggleShowHidden() {
+        showHiddenState.value = !showHiddenState.value
+    }
+
+    fun restoreTasks(taskIds: List<Long>) {
+        if (taskIds.isEmpty()) return
+        scope.launch {
+            withContext(Dispatchers.IO) { dao.setTasksHidden(taskIds, false) }
+            reloadFromDb()
+        }
+    }
 
     private fun priceOf(filaId: String): Long =
         priceMap[filaId] ?: configState.value.defaultPricePerGCents
@@ -213,6 +234,15 @@ class CostController private constructor(appContext: Context) {
             withContext(Dispatchers.IO) { dao.setMaterialPrice(filaId, cents) }
             reloadFromDb()
             recomputeAllCosts()
+        }
+    }
+
+    /** 隐藏选中的任务(从列表与统计中移除,可重新同步不会恢复)。 */
+    fun hideTasks(taskIds: List<Long>) {
+        if (taskIds.isEmpty()) return
+        scope.launch {
+            withContext(Dispatchers.IO) { dao.setTasksHidden(taskIds, true) }
+            reloadFromDb()
         }
     }
 

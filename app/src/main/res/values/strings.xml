@@ -917,6 +917,11 @@
     <string name="cost_login_hint">Sign in on the Connect page to sync print history. Cached data is shown below.</string>
     <string name="cost_merge_selected">%1$d selected</string>
     <string name="cost_merge">Merge into one order</string>
+    <string name="cost_hide">Hide</string>
+    <string name="cost_show_hidden">Hidden (%1$d)</string>
+    <string name="cost_hide_hidden">Back</string>
+    <string name="cost_hidden_badge">Hidden</string>
+    <string name="cost_restore">Restore</string>
     <string name="cost_no_data">No print history yet. Tap Sync.</string>
     <string name="cost_order_items">%1$d items</string>
     <string name="cost_cost_label">Cost</string>

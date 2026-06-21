@@ -853,6 +853,11 @@
     <string name="cost_login_hint">在连接页登录后可同步打印历史。下方为已缓存数据。</string>
     <string name="cost_merge_selected">已选 %1$d 项</string>
     <string name="cost_merge">合并为一单</string>
+    <string name="cost_hide">隐藏</string>
+    <string name="cost_show_hidden">已隐藏 (%1$d)</string>
+    <string name="cost_hide_hidden">返回</string>
+    <string name="cost_hidden_badge">已隐藏</string>
+    <string name="cost_restore">恢复</string>
     <string name="cost_no_data">暂无打印历史，点击同步。</string>
     <string name="cost_order_items">%1$d 项</string>
     <string name="cost_cost_label">成本</string>
