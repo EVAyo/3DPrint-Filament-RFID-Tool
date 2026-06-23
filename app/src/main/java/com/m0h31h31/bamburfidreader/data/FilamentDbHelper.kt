@@ -8,9 +8,10 @@ import com.m0h31h31.bamburfidreader.model.CrealityMaterial
 import com.m0h31h31.bamburfidreader.model.InventoryItem
 import com.m0h31h31.bamburfidreader.model.ShareTagDbMeta
 import com.m0h31h31.bamburfidreader.model.ShareTagDbRow
+import org.json.JSONObject
 
 internal const val FILAMENT_DB_NAME = "filaments.db"
-private const val FILAMENT_DB_VERSION = 32
+private const val FILAMENT_DB_VERSION = 33
 internal const val CREALITY_MATERIAL_TABLE = "creality_materials"
 internal const val FILAMENT_TABLE = "filaments"
 internal const val FILAMENT_TYPE_MAPPING_TABLE = "filament_type_mapping"
@@ -490,6 +491,113 @@ class FilamentDbHelper(val context: Context) :
             try {
                 db.execSQL("ALTER TABLE $PRINT_TASK_TABLE ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
             } catch (_: Exception) {}
+        }
+        if (oldVersion < 33) {
+            migrateCostPerGramPriceScale(db)
+        }
+    }
+
+    private fun migrateCostPerGramPriceScale(db: SQLiteDatabase) {
+        try {
+            db.execSQL("UPDATE $MATERIAL_PRICE_TABLE SET price_per_g_cents = price_per_g_cents * 10")
+            refreshSeededMaterialPrices(db)
+        } catch (_: Exception) {}
+
+        try {
+            db.query(
+                COST_CONFIG_TABLE,
+                arrayOf("value"),
+                "key=?",
+                arrayOf("config"),
+                null,
+                null,
+                null
+            ).use { c ->
+                if (!c.moveToFirst()) return
+                val json = JSONObject(c.getString(0).orEmpty())
+                if (!json.has("defaultPricePerGCents")) return
+                val oldDefault = json.optLong("defaultPricePerGCents")
+                json.put(
+                    "defaultPricePerGCents",
+                    if (oldDefault == 12L) 67L else oldDefault * 10L
+                )
+                val cv = ContentValues().apply {
+                    put("key", "config")
+                    put("value", json.toString())
+                }
+                db.insertWithOnConflict(
+                    COST_CONFIG_TABLE,
+                    null,
+                    cv,
+                    SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun refreshSeededMaterialPrices(db: SQLiteDatabase) {
+        val oldScaledDefaults = arrayOf("120", "150", "130", "180", "300", "400", "350", "600", "800", "500")
+        val oldDefaultClause = oldScaledDefaults.joinToString(",", prefix = "(", postfix = ")")
+        val newDefaults = mapOf(
+            "abs" to 67L,
+            "abs-gf" to 102L,
+            "asa" to 84L,
+            "asa-aero" to 205L,
+            "asa-cf" to 152L,
+            "pa-cf" to 425L,
+            "pa6-cf" to 326L,
+            "pa6-gf" to 212L,
+            "paht-cf" to 473L,
+            "pc" to 173L,
+            "pc fr" to 220L,
+            "pet-cf" to 127L,
+            "petg basic" to 52L,
+            "petg hf" to 64L,
+            "petg translucent" to 76L,
+            "petg-cf" to 127L,
+            "pla aero" to 189L,
+            "pla basic" to 67L,
+            "pla dynamic" to 85L,
+            "pla galaxy" to 110L,
+            "pla glow" to 110L,
+            "pla impact" to 85L,
+            "pla lite" to 55L,
+            "pla marble" to 110L,
+            "pla matte" to 67L,
+            "pla metal" to 110L,
+            "pla silk" to 76L,
+            "pla silk+" to 67L,
+            "pla sparkle" to 110L,
+            "pla tough" to 169L,
+            "pla tough+" to 72L,
+            "pla translucent" to 76L,
+            "pla wood" to 93L,
+            "pla-cf" to 144L,
+            "pla pure" to 72L,
+            "ppa-cf" to 683L,
+            "ppa-gf" to 850L,
+            "pps-cf" to 630L,
+            "pva" to 315L,
+            "support for abs" to 124L,
+            "support for pa pet" to 204L,
+            "support for pla" to 124L,
+            "support for pla-petg" to 172L,
+            "support g" to 85L,
+            "support w" to 85L,
+            "tpu 85a" to 162L,
+            "tpu 90a" to 149L,
+            "tpu 95a" to 140L,
+            "tpu 95a hf" to 140L,
+            "tpu for ams" to 124L
+        )
+        newDefaults.forEach { (type, price) ->
+            val cv = ContentValues().apply { put("price_per_g_cents", price) }
+            db.update(
+                MATERIAL_PRICE_TABLE,
+                cv,
+                "LOWER(TRIM(fila_type))=? AND price_per_g_cents IN $oldDefaultClause",
+                arrayOf(type)
+            )
         }
     }
 

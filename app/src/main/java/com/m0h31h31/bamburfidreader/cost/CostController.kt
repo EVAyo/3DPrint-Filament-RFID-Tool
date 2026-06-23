@@ -29,6 +29,8 @@ fun buildOrderViews(tasks: List<PrintTaskRow>, orders: List<PrintOrder>): List<O
     return orderViews + standalone
 }
 
+fun isFirstCostSync(lastSyncAt: String?): Boolean = lastSyncAt.isNullOrBlank()
+
 /**
  * 费用模块进程级单例:持有配置/耗材价/任务/订单状态,负责从云端同步打印历史并落库。
  * 复用 [BambuCloudController] 的 repository 拉取数据。
@@ -136,7 +138,13 @@ class CostController private constructor(appContext: Context) {
             return
         }
         syncingState.value = true
-        statusMessageState.value = app.getString(com.m0h31h31.bamburfidreader.R.string.cost_syncing)
+        statusMessageState.value = app.getString(
+            if (isFirstCostSync(dao.getMeta(CostDao.KEY_LAST_SYNC))) {
+                com.m0h31h31.bamburfidreader.R.string.cost_syncing_first_time
+            } else {
+                com.m0h31h31.bamburfidreader.R.string.cost_syncing
+            }
+        )
         scope.launch {
             val result = runCatching { syncAllPages() }
             result.onSuccess { count ->

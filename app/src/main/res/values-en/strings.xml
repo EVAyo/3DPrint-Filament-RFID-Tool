@@ -902,6 +902,7 @@
     <string name="config_cost_feature_desc">Quote jobs and analyze cost/profit from print history</string>
     <string name="cost_need_login">Please sign in on the Connect page first</string>
     <string name="cost_syncing">Syncing…</string>
+    <string name="cost_syncing_first_time">First sync may take a while. Please wait patiently…</string>
     <string name="cost_sync_done">Synced %1$d records</string>
     <string name="cost_sync_failed">Sync failed: %1$s</string>
     <string name="cost_default_order_name">Merged order</string>
@@ -945,6 +946,10 @@
     <string name="cost_quote_total">Quote</string>
     <string name="cost_config_title">Base fees</string>
     <string name="cost_config_desc">Tune default prices, quote rules, and machine assumptions.</string>
+    <string name="cost_cfg_section_cost_impact">Affects Cost &amp; Quote</string>
+    <string name="cost_cfg_section_cost_impact_desc">Used for print history cost and as the quote calculator production cost.</string>
+    <string name="cost_cfg_section_quote_only">Quote Only</string>
+    <string name="cost_cfg_section_quote_only_desc">Only changes quote calculator output; cached print history costs are not recalculated from these fees.</string>
     <string name="cost_cfg_section_consumption">Print consumption</string>
     <string name="cost_cfg_section_pricing">Quote rules</string>
     <string name="cost_cfg_section_defaults">Machine defaults</string>
@@ -966,5 +971,7 @@
     <string name="cost_fee_unit_plate">plate</string>
     <string name="cost_fee_unit_second">sec</string>
     <string name="cost_prices_title">Material prices</string>
+    <string name="cost_prices_subtitle">Material price per gram, yuan/g</string>
     <string name="cost_prices_search">Search</string>
+    <string name="cost_price_save">Save</string>
 </resources>

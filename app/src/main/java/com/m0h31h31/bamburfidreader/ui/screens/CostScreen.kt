@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,6 +66,7 @@ import com.m0h31h31.bamburfidreader.cost.MaterialPrice
 import com.m0h31h31.bamburfidreader.cost.Money
 import com.m0h31h31.bamburfidreader.cost.OrderView
 import com.m0h31h31.bamburfidreader.cost.OtherFee
+import com.m0h31h31.bamburfidreader.cost.PerGramPrice
 import com.m0h31h31.bamburfidreader.cost.PrintTaskRow
 import com.m0h31h31.bamburfidreader.cost.QuoteInput
 import com.m0h31h31.bamburfidreader.cost.TaskState
@@ -465,11 +467,11 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
     var colors by remember { mutableStateOf("1") }
     var plates by remember { mutableStateOf("1") }
     var selectedPrice by remember { mutableStateOf<MaterialPrice?>(null) }
-    var pricePerG by remember { mutableStateOf(Money.toPlain(config.defaultPricePerGCents)) }
+    var pricePerG by remember { mutableStateOf(PerGramPrice.toPlain(config.defaultPricePerGCents)) }
 
     val input = QuoteInput(
         weightGrams = weight.toDoubleOrNull() ?: 0.0,
-        pricePerGCents = Money.parse(pricePerG) ?: config.defaultPricePerGCents,
+        pricePerGCents = PerGramPrice.parse(pricePerG) ?: config.defaultPricePerGCents,
         estTimeSeconds = ((timeMin.toDoubleOrNull() ?: 0.0) * 60).toInt(),
         deviceModel = "",
         colorCount = colors.toIntOrNull() ?: 1,
@@ -495,7 +497,7 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
             ) {
                 MaterialSearchField(prices = prices, selected = selectedPrice, onSelect = {
                     selectedPrice = it
-                    pricePerG = Money.toPlain(it.pricePerGCents)
+                    pricePerG = PerGramPrice.toPlain(it.pricePerGCents)
                 })
                 LabeledField(stringResource(R.string.cost_quote_weight), weight) { weight = it }
                 LabeledField(stringResource(R.string.cost_price_per_g), pricePerG) { pricePerG = it }
@@ -551,7 +553,7 @@ private fun MaterialSearchField(prices: List<MaterialPrice>, selected: MaterialP
         ) {
             filtered.forEach { p ->
                 DropdownMenuItem(
-                    text = { Text("${p.filaType} (${p.filaId})  ${Money.format(p.pricePerGCents)}/g") },
+                    text = { Text("${p.filaType} (${p.filaId})  ¥${PerGramPrice.toPlain(p.pricePerGCents)}/g") },
                     onClick = { onSelect(p); query = p.filaType; expanded = false }
                 )
             }
@@ -569,7 +571,7 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
     var markup by remember { mutableStateOf(config.quoteMarkup.toString()) }
     var minOrder by remember { mutableStateOf(Money.toPlain(config.minOrderCents)) }
     var rounding by remember { mutableStateOf(Money.toPlain(config.roundingCents)) }
-    var defaultPrice by remember { mutableStateOf(Money.toPlain(config.defaultPricePerGCents)) }
+    var defaultPrice by remember { mutableStateOf(PerGramPrice.toPlain(config.defaultPricePerGCents)) }
     var power by remember { mutableStateOf(config.defaultPowerWatts.toString()) }
     var deprec by remember { mutableStateOf(Money.toPlain(config.defaultDepreciationPerHourCents)) }
     val otherFees = remember { config.otherFees.toMutableStateList() }
@@ -599,20 +601,29 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
                     .heightIn(max = 500.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_consumption)) }
+                item {
+                    ConfigSectionHeader(
+                        title = stringResource(R.string.cost_cfg_section_cost_impact),
+                        subtitle = stringResource(R.string.cost_cfg_section_cost_impact_desc)
+                    )
+                }
                 item { ConfigRow(stringResource(R.string.cost_cfg_electricity), electricity) { electricity = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_default_price), defaultPrice) { defaultPrice = it } }
-                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_pricing)) }
-                item { ConfigRow(stringResource(R.string.cost_cfg_service), service) { service = it } }
-                item { ConfigRow(stringResource(R.string.cost_cfg_shipping), shipping) { shipping = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_waste), waste) { waste = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_surcharge), surcharge) { surcharge = it } }
-                item { ConfigRow(stringResource(R.string.cost_cfg_markup), markup) { markup = it } }
-                item { ConfigRow(stringResource(R.string.cost_cfg_min), minOrder) { minOrder = it } }
-                item { ConfigRow(stringResource(R.string.cost_cfg_rounding), rounding) { rounding = it } }
-                item { ConfigSectionTitle(stringResource(R.string.cost_cfg_section_defaults)) }
                 item { ConfigRow(stringResource(R.string.cost_cfg_power), power) { power = it } }
                 item { ConfigRow(stringResource(R.string.cost_cfg_deprec), deprec) { deprec = it } }
+                item {
+                    ConfigSectionHeader(
+                        title = stringResource(R.string.cost_cfg_section_quote_only),
+                        subtitle = stringResource(R.string.cost_cfg_section_quote_only_desc)
+                    )
+                }
+                item { ConfigRow(stringResource(R.string.cost_cfg_markup), markup) { markup = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_service), service) { service = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_shipping), shipping) { shipping = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_min), minOrder) { minOrder = it } }
+                item { ConfigRow(stringResource(R.string.cost_cfg_rounding), rounding) { rounding = it } }
                 item { ConfigSectionTitle(stringResource(R.string.cost_cfg_other_fees)) }
                 items(otherFees) { fee ->
                     Surface(
@@ -651,7 +662,7 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
                         quoteMarkup = markup.toDoubleOrNull() ?: config.quoteMarkup,
                         minOrderCents = Money.parse(minOrder) ?: config.minOrderCents,
                         roundingCents = Money.parse(rounding) ?: config.roundingCents,
-                        defaultPricePerGCents = Money.parse(defaultPrice) ?: config.defaultPricePerGCents,
+                        defaultPricePerGCents = PerGramPrice.parse(defaultPrice) ?: config.defaultPricePerGCents,
                         defaultPowerWatts = power.toIntOrNull() ?: config.defaultPowerWatts,
                         defaultDepreciationPerHourCents = Money.parse(deprec) ?: config.defaultDepreciationPerHourCents,
                         otherFees = otherFees.toList()
@@ -661,6 +672,26 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } }
     )
+}
+
+@Composable
+private fun ConfigSectionHeader(title: String, subtitle: String) {
+    Column(
+        modifier = Modifier.padding(top = 4.dp, start = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
@@ -747,16 +778,23 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         title = {
-            Text(
-                text = stringResource(R.string.cost_prices_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.cost_prices_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.cost_prices_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(
                     value = query,
@@ -771,13 +809,16 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                         cursorColor = MaterialTheme.colorScheme.primary
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
                 )
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 500.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .heightIn(max = 430.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(filtered, key = { it.filaId }) { p -> PriceRow(p, onSet) }
                 }
@@ -789,15 +830,15 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
 
 @Composable
 private fun PriceRow(p: MaterialPrice, onSet: (String, Long) -> Unit) {
-    var text by remember(p.filaId, p.pricePerGCents) { mutableStateOf(Money.toPlain(p.pricePerGCents)) }
+    var text by remember(p.filaId, p.pricePerGCents) { mutableStateOf(PerGramPrice.toPlain(p.pricePerGCents)) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -810,11 +851,13 @@ private fun PriceRow(p: MaterialPrice, onSet: (String, Long) -> Unit) {
                 )
             Text("${p.baseType} · ${p.filaId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-            CompactField(text, { text = it }, Modifier.width(96.dp))
-            Spacer(Modifier.width(8.dp))
-            IconButton(onClick = { Money.parse(text)?.let { onSet(p.filaId, it) } }, modifier = Modifier.size(36.dp)) {
-                Icon(AppIcons.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
+            CompactField(text, { text = it }, Modifier.width(82.dp).height(52.dp))
+            Spacer(Modifier.width(6.dp))
+            SmallButton(
+                text = stringResource(R.string.cost_price_save),
+                onClick = { PerGramPrice.parse(text)?.let { onSet(p.filaId, it) } },
+                primary = true
+            )
             }
         }
     }
@@ -835,6 +878,7 @@ private fun CompactField(value: String, onValueChange: (String) -> Unit, modifie
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
             cursorColor = MaterialTheme.colorScheme.primary
         ),
+        textStyle = MaterialTheme.typography.bodySmall,
         modifier = modifier
     )
 }

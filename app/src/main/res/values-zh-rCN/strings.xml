@@ -838,6 +838,7 @@
     <string name="config_cost_feature_desc">报价并基于打印历史核算成本与利润</string>
     <string name="cost_need_login">请先在连接页登录</string>
     <string name="cost_syncing">同步中…</string>
+    <string name="cost_syncing_first_time">首次同步可能需要较长时间，请耐心等待…</string>
     <string name="cost_sync_done">已同步 %1$d 条记录</string>
     <string name="cost_sync_failed">同步失败：%1$s</string>
     <string name="cost_default_order_name">合并订单</string>
@@ -881,6 +882,10 @@
     <string name="cost_quote_total">报价</string>
     <string name="cost_config_title">基础费用配置</string>
     <string name="cost_config_desc">调整默认单价、报价规则和设备参数。</string>
+    <string name="cost_cfg_section_cost_impact">影响成本与报价</string>
+    <string name="cost_cfg_section_cost_impact_desc">用于核算打印历史成本，也作为报价器的生产成本基础。</string>
+    <string name="cost_cfg_section_quote_only">仅影响报价</string>
+    <string name="cost_cfg_section_quote_only_desc">只改变报价器输出，不回写或重算已缓存的打印历史成本。</string>
     <string name="cost_cfg_section_consumption">打印消耗</string>
     <string name="cost_cfg_section_pricing">报价规则</string>
     <string name="cost_cfg_section_defaults">设备默认值</string>
@@ -902,5 +907,7 @@
     <string name="cost_fee_unit_plate">盘</string>
     <string name="cost_fee_unit_second">秒</string>
     <string name="cost_prices_title">耗材定价</string>
+    <string name="cost_prices_subtitle">耗材克价，元每克</string>
     <string name="cost_prices_search">搜索</string>
+    <string name="cost_price_save">保存</string>
 </resources>

@@ -31,9 +31,9 @@ object CostCalculator {
     ): CostBreakdown {
         val reps = repetitions.coerceAtLeast(1)
         val materialCents: Double = if (materials.isNotEmpty()) {
-            materials.sumOf { it.weightGrams * priceOf(it.filamentId) }
+            materials.sumOf { PerGramPrice.materialCents(it.weightGrams, priceOf(it.filamentId)) }
         } else {
-            fallbackWeightGrams * config.defaultPricePerGCents
+            PerGramPrice.materialCents(fallbackWeightGrams, config.defaultPricePerGCents)
         }
         val hours = costTimeSeconds / 3600.0
         val electricity = config.powerWattsFor(deviceModel) / 1000.0 * hours * config.electricityPerKwhCents
@@ -54,7 +54,7 @@ object CostCalculator {
 
     /** 新单报价。 */
     fun computeQuote(input: QuoteInput, config: CostConfig): QuoteBreakdown {
-        val materialCents = input.weightGrams * input.pricePerGCents
+        val materialCents = PerGramPrice.materialCents(input.weightGrams, input.pricePerGCents)
         val hours = input.estTimeSeconds / 3600.0
         val timeFactor = input.nozzleMultiplier * input.timeMultiplier
         val electricity = config.powerWattsFor(input.deviceModel) / 1000.0 * hours * config.electricityPerKwhCents * timeFactor

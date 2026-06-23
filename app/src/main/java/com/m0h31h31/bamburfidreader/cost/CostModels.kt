@@ -52,7 +52,7 @@ data class CostConfig(
             quoteMarkup = 2.0,                   // 2 倍报价
             minOrderCents = 0,
             roundingCents = 0,                   // 不取整
-            defaultPricePerGCents = 12,          // ¥0.12 / g 兜底
+            defaultPricePerGCents = 67,          // ¥0.067 / g fallback
             otherFees = emptyList(),
             devicePowerWatts = mapOf(
                 "A1" to 100,

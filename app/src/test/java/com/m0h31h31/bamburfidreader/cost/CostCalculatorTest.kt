@@ -8,7 +8,7 @@ class CostCalculatorTest {
 
     private val config = CostConfig.DEFAULT.copy(
         electricityPerKwhCents = 100,        // ¥1/kWh
-        defaultPricePerGCents = 10,          // ¥0.10/g
+        defaultPricePerGCents = 100,         // ¥0.10/g
         multicolorWasteFactor = 0.20,
         multicolorSurchargeCents = 0,
         defaultPowerWatts = 100,
@@ -31,7 +31,7 @@ class CostCalculatorTest {
             deviceModel = "A1",
             repetitions = 1,
             config = config,
-            priceOf = { 20L }
+            priceOf = { 200L }
         )
         assertEquals(2000L, cb.materialCents)
         assertEquals(10L, cb.electricityCents)
@@ -64,7 +64,7 @@ class CostCalculatorTest {
             deviceModel = "A1",
             repetitions = 1,
             config = config,
-            priceOf = { 10L }
+            priceOf = { 100L }
         )
         // material = 100g × 10 = 1000; 2 色 → waste 20% × 1000 = 200
         assertEquals(1000L, cb.materialCents)
@@ -80,7 +80,7 @@ class CostCalculatorTest {
             deviceModel = "A1",
             repetitions = 3,
             config = config,
-            priceOf = { 10L }
+            priceOf = { 100L }
         )
         assertEquals(300L, cb.materialCents)   // 10×10×3
         assertEquals(30L, cb.electricityCents) // 10×3
@@ -99,7 +99,7 @@ class CostCalculatorTest {
         val q = CostCalculator.computeQuote(
             QuoteInput(
                 weightGrams = 100.0,
-                pricePerGCents = 20L,
+                pricePerGCents = 200L,
                 estTimeSeconds = 3600,
                 deviceModel = "A1",
                 colorCount = 1,
@@ -118,7 +118,7 @@ class CostCalculatorTest {
     fun quoteRoundingRoundsUpToStep() {
         val cfg = config.copy(quoteMarkup = 1.0, serviceFeeCents = 0, baseShippingCents = 0, roundingCents = 100)
         val q = CostCalculator.computeQuote(
-            QuoteInput(10.0, 13L, 0, "A1", 1, 1), cfg
+            QuoteInput(10.0, 130L, 0, "A1", 1, 1), cfg
         )
         // material = 130 → round up to 200
         assertEquals(200L, q.totalCents)
@@ -127,7 +127,7 @@ class CostCalculatorTest {
     @Test
     fun minOrderEnforced() {
         val cfg = config.copy(quoteMarkup = 1.0, serviceFeeCents = 0, baseShippingCents = 0, minOrderCents = 1000, roundingCents = 0)
-        val q = CostCalculator.computeQuote(QuoteInput(1.0, 10L, 0, "A1", 1, 1), cfg)
+        val q = CostCalculator.computeQuote(QuoteInput(1.0, 100L, 0, "A1", 1, 1), cfg)
         assertEquals(1000L, q.totalCents)
     }
 
