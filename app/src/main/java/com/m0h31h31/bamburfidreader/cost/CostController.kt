@@ -25,8 +25,9 @@ fun buildOrderViews(tasks: List<PrintTaskRow>, orders: List<PrintOrder>): List<O
     }
     val standalone = tasks.filter { it.orderId == null }
         .map { OrderView(null, it.title, listOf(it), 0L) }
-    // 订单在前(按创建时间已 DESC),单任务按开始时间已 DESC
-    return orderViews + standalone
+    // 订单与单任务统一按时间(订单取其最新任务的开始时间)倒序排,合并订单不再单独置顶
+    return (orderViews + standalone)
+        .sortedByDescending { ov -> ov.tasks.maxOfOrNull { it.startTimeMillis } ?: 0L }
 }
 
 fun isFirstCostSync(lastSyncAt: String?): Boolean = lastSyncAt.isNullOrBlank()

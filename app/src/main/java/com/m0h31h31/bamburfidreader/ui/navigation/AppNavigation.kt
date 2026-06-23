@@ -91,7 +91,7 @@ private val topDestinations = listOf(
     TopDestination("snapmaker", R.string.tab_snapmaker, R.drawable.snapmaker),
     TopDestination("creality", R.string.tab_creality, R.drawable.chuangxiang),
     TopDestination("connect", R.string.tab_connect, R.drawable.lianjie),
-    TopDestination("cost", R.string.tab_cost, R.drawable.shuju),
+    TopDestination("cost", R.string.tab_cost, R.drawable.ic_coin),
     TopDestination("misc", R.string.tab_misc, R.drawable.zaxiang)
 )
 

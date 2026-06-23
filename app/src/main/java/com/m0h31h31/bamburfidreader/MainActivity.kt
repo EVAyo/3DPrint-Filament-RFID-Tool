@@ -496,7 +496,7 @@ class MainActivity : ComponentActivity() {
     private var crealityEnabled by mutableStateOf(false) // 控制创想三维RFID页面显示
     private var snapmakerTagEnabled by mutableStateOf(false) // 控制快造复制页面显示
     private var cloudConnectEnabled by mutableStateOf(true) // 控制拓竹云连接页面显示
-    private var costEnabled by mutableStateOf(false) // 控制费用/报价页面显示
+    private var costEnabled by mutableStateOf(true) // 控制费用/报价页面显示
     private var uiScale by mutableStateOf(1f) // 全局界面缩放比例
     private var snapmakerShareTagItems by mutableStateOf<List<SnapmakerShareTagItem>>(emptyList())
     private var snapmakerShareLoading by mutableStateOf(false)
@@ -516,7 +516,7 @@ class MainActivity : ComponentActivity() {
     private var autoShareTag by mutableStateOf(true)     // 读取完整数据后自动上传到共享服务器
     private var hideCopiedTags by mutableStateOf(true)   // 隐藏已复制标签
     private var dualTagMode by mutableStateOf(false)      // 双标签模式：复制2次才隐藏
-    private var tagViewMode by mutableStateOf("list")     // 复制页视图：list/category
+    private var tagViewMode by mutableStateOf("category")     // 复制页视图：list/category
     private var readerBrand by mutableStateOf(ReaderBrand.BAMBU)   // 识别页品牌选择
     private var readerSnapmakerTagData by mutableStateOf<SnapmakerTagData?>(null)
     private var readerCrealityTagData by mutableStateOf<CrealityTagData?>(null)
@@ -1066,7 +1066,7 @@ class MainActivity : ComponentActivity() {
         crealityEnabled = uiPrefs.getBoolean(KEY_CREALITY_ENABLED, false)
         snapmakerTagEnabled = uiPrefs.getBoolean(KEY_SNAPMAKER_TAG_ENABLED, false)
         cloudConnectEnabled = uiPrefs.getBoolean(KEY_CLOUD_CONNECT_ENABLED, true)
-        costEnabled = uiPrefs.getBoolean(KEY_COST_ENABLED, false)
+        costEnabled = uiPrefs.getBoolean(KEY_COST_ENABLED, true)
         uiScale = uiPrefs.getFloat(KEY_UI_SCALE, 1f)
         inventoryEnabled = uiPrefs.getBoolean(KEY_INVENTORY_ENABLED, true)
         autoDetectBrand = uiPrefs.getBoolean(KEY_AUTO_DETECT_BRAND, false)
@@ -1074,7 +1074,7 @@ class MainActivity : ComponentActivity() {
         autoShareTag = uiPrefs.getBoolean(KEY_AUTO_SHARE_TAG, true)
         hideCopiedTags = uiPrefs.getBoolean(KEY_HIDE_COPIED_TAGS, true)
         dualTagMode = uiPrefs.getBoolean(KEY_DUAL_TAG_MODE, false)
-        tagViewMode = uiPrefs.getString(KEY_TAG_VIEW_MODE, "list") ?: "list"
+        tagViewMode = uiPrefs.getString(KEY_TAG_VIEW_MODE, "category") ?: "category"
         nfcCompatibilityConfig = NfcCompatibilityPreferences.load(this)
         lastWrittenSourceUidHex = uiPrefs.getString(KEY_LAST_WRITTEN_SOURCE_UID, "").orEmpty()
         uiStyle = runCatching {

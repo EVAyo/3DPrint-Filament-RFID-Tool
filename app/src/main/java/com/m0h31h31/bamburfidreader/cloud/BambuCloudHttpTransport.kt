@@ -26,15 +26,6 @@ class BambuCloudHttpTransport(
             }
             try {
                 if (request.body.isNotBlank()) {
-                    // 诊断日志：登录接口的请求体（密码打码）+ 是否带上人机验证结果头。
-                    if (request.url.contains("user/login")) {
-                        val captchaNote = if (request.headers.keys.any { it.equals("x-bbl-captcha-result", ignoreCase = true) }) {
-                            " +captcha-header"
-                        } else {
-                            ""
-                        }
-                        logDebug("Bambu login req$captchaNote body=${redactPassword(request.body)}")
-                    }
                     connection.outputStream.use { output ->
                         output.write(request.body.toByteArray(Charsets.UTF_8))
                     }
@@ -49,20 +40,14 @@ class BambuCloudHttpTransport(
                 // 诊断日志：仅记录登录接口；含 token 时不打印 body，避免泄露凭证。
                 // 用于对齐"携带极验结果重新登录"的回提契约（captcha 字段名/响应结构）。
                 if (request.url.contains("user/login")) {
-                    if (body.contains("accessToken")) {
-                        logDebug("Bambu login I/O status=$statusCode (token received)")
-                    } else {
-                        logDebug("Bambu login I/O status=$statusCode body=${body.take(500)}")
-                    }
+                    val captchaNote = if (request.headers.keys.any { it.equals("x-bbl-captcha-result", ignoreCase = true) }) " +captcha" else ""
+                    val tokenNote = if (body.contains("accessToken")) " token" else ""
+                    logDebug("Bambu login$captchaNote status=$statusCode$tokenNote")
                 }
                 BambuCloudHttpResponse(statusCode = statusCode, body = body)
             } finally {
                 connection.disconnect()
             }
         }
-    }
-
-    private fun redactPassword(body: String): String {
-        return body.replace(Regex("\"password\"\\s*:\\s*\"[^\"]*\""), "\"password\":\"***\"")
     }
 }

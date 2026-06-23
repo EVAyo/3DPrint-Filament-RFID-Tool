@@ -886,7 +886,7 @@
     <string name="cost_detail_total_cost">成本合计</string>
     <string name="cost_cost_label">成本</string>
     <string name="cost_profit_label">利润</string>
-    <string name="cost_failed_badge">失败</string>
+    <string name="cost_failed_badge">已取消</string>
     <string name="cost_dissolve">解散</string>
     <string name="cost_collapse">收起</string>
     <string name="cost_expand">展开</string>

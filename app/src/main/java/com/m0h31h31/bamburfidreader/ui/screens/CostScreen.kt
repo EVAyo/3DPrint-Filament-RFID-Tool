@@ -339,9 +339,11 @@ private fun OrderCard(
                 Column(modifier = Modifier.weight(1f).clickable(onClick = onShowDetail)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (isOrder) {
+                            text = if (isOrder && ov.tasks.size > 1) {
                                 val rep = first.title.let { if (it.length > 8) it.take(8) + "…" else it }
                                 "${ov.name} $rep${stringResource(R.string.cost_order_items_more, ov.tasks.size)}"
+                            } else if (isOrder) {
+                                ov.name
                             } else first.title,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
@@ -493,7 +495,7 @@ private fun DetailDialog(ov: OrderView, controller: CostController, materialType
         title = {
             Text(
                 text = if (ov.orderId != null) ov.name else ov.tasks.first().title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -537,7 +539,7 @@ private fun DetailTaskSection(t: PrintTaskRow, bd: CostBreakdown, controller: Co
                 val price = controller.priceFor(m.filamentId)
                 val sub = Math.round(PerGramPrice.materialCents(m.weightGrams, price))
                 val name = m.filamentType.ifBlank { m.filamentId }.ifBlank { "?" }
-                BreakdownLine("$name ${"%.1f".format(m.weightGrams)}g × ¥${PerGramPrice.toPlain(price)}/g", sub)
+                BreakdownLine("$name ${"%.1f".format(m.weightGrams)}g × ${Money.symbol()}${PerGramPrice.toPlain(price)}/g", sub)
             }
             BreakdownLine(stringResource(R.string.cost_bd_material), bd.materialCents)
             BreakdownLine(stringResource(R.string.cost_bd_electricity), bd.electricityCents)
@@ -669,7 +671,7 @@ private fun MaterialSearchField(prices: List<MaterialPrice>, selected: MaterialP
         ) {
             filtered.forEach { p ->
                 DropdownMenuItem(
-                    text = { Text("${p.filaType} (${p.filaId})  ¥${PerGramPrice.toPlain(p.pricePerGCents)}/g") },
+                    text = { Text("${p.filaType} (${p.filaId})  ${Money.symbol()}${PerGramPrice.toPlain(p.pricePerGCents)}/g") },
                     onClick = { onSelect(p); query = p.filaType; expanded = false }
                 )
             }
@@ -873,7 +875,7 @@ private fun AddFeeRow(onAdd: (OtherFee) -> Unit) {
         // 第一行:名称 + 金额
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             CompactField(name, { name = it }, Modifier.weight(1f), placeholder = stringResource(R.string.cost_fee_name), number = false)
-            CompactField(amount, { amount = it }, Modifier.width(80.dp), placeholder = "¥")
+            CompactField(amount, { amount = it }, Modifier.width(80.dp), placeholder = Money.symbol())
         }
         // 第二行:单位 + 类别 + 添加
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
