@@ -44,11 +44,20 @@ object CostCalculator {
         } else {
             0.0
         }
+        // 计入成本类别的其他附加费(每单/每盘按一次,每秒按时长)
+        val otherCost = config.otherFees.filter { it.appliesToCost() }.sumOf { fee ->
+            when (fee.unit) {
+                FeeUnit.ORDER -> fee.amountCents.toDouble()
+                FeeUnit.PLATE -> fee.amountCents.toDouble()
+                FeeUnit.SECOND -> fee.amountCents.toDouble() * costTimeSeconds
+            }
+        }
         return CostBreakdown(
             materialCents = roundCents(materialCents * reps),
             electricityCents = roundCents(electricity * reps),
             depreciationCents = roundCents(depreciation * reps),
-            multicolorCents = roundCents(multicolor * reps)
+            multicolorCents = roundCents(multicolor * reps),
+            otherCents = roundCents(otherCost)
         )
     }
 
@@ -67,7 +76,7 @@ object CostCalculator {
         val production = materialCents + electricity + depreciation + multicolor
         val markedUp = production * config.quoteMarkup
         val plates = input.plateCount.coerceAtLeast(1)
-        val other = config.otherFees.sumOf { fee ->
+        val other = config.otherFees.filter { it.appliesToQuote() }.sumOf { fee ->
             when (fee.unit) {
                 FeeUnit.ORDER -> fee.amountCents.toDouble()
                 FeeUnit.PLATE -> fee.amountCents.toDouble() * plates

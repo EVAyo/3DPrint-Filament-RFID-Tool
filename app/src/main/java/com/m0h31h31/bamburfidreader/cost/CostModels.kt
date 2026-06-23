@@ -5,6 +5,9 @@ import com.m0h31h31.bamburfidreader.cloud.BambuCloudTaskMaterial
 /** 附加费用的计费单位。 */
 enum class FeeUnit { ORDER, PLATE, SECOND }
 
+/** 附加费用计入的类别:成本核算 / 报价 / 两者。 */
+enum class FeeTarget { COST, QUOTE, BOTH }
+
 /** 任务状态:成功 / 打印中 / 失败。 */
 enum class TaskState { SUCCESS, PRINTING, FAILED }
 
@@ -12,8 +15,12 @@ enum class TaskState { SUCCESS, PRINTING, FAILED }
 data class OtherFee(
     val name: String,
     val unit: FeeUnit,
-    val amountCents: Long
-)
+    val amountCents: Long,
+    val target: FeeTarget = FeeTarget.QUOTE
+) {
+    fun appliesToCost(): Boolean = target == FeeTarget.COST || target == FeeTarget.BOTH
+    fun appliesToQuote(): Boolean = target == FeeTarget.QUOTE || target == FeeTarget.BOTH
+}
 
 /**
  * 基础费用配置。所有金额单位为「分」(Long)。
@@ -127,9 +134,10 @@ data class CostBreakdown(
     val materialCents: Long,
     val electricityCents: Long,
     val depreciationCents: Long,
-    val multicolorCents: Long
+    val multicolorCents: Long,
+    val otherCents: Long = 0
 ) {
-    val totalCents: Long get() = materialCents + electricityCents + depreciationCents + multicolorCents
+    val totalCents: Long get() = materialCents + electricityCents + depreciationCents + multicolorCents + otherCents
 }
 
 /** 一笔订单的聚合视图(用于列表与统计)。 */

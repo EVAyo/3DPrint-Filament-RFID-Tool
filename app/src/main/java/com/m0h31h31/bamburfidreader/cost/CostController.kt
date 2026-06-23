@@ -79,9 +79,9 @@ class CostController private constructor(appContext: Context) {
         ordersState.value = orders
     }
 
-    /** 列表视图:默认排除隐藏任务;showHidden 时全部显示。 */
+    /** 列表视图:showHidden 时只显示隐藏任务,否则只显示未隐藏任务。 */
     fun orderViews(): List<OrderView> {
-        val src = if (showHiddenState.value) tasksState.value else tasksState.value.filter { !it.hidden }
+        val src = tasksState.value.filter { if (showHiddenState.value) it.hidden else !it.hidden }
         return buildOrderViews(src, ordersState.value)
     }
 
@@ -105,6 +105,20 @@ class CostController private constructor(appContext: Context) {
 
     private fun priceOf(filaId: String): Long =
         priceMap[filaId] ?: configState.value.defaultPricePerGCents
+
+    /** 公开:某耗材每克价(分),用于明细展示。 */
+    fun priceFor(filaId: String): Long = priceOf(filaId)
+
+    /** 公开:单条任务的成本拆解,用于明细弹窗。 */
+    fun breakdownOf(task: PrintTaskRow): CostBreakdown = CostCalculator.computeTaskCost(
+        materials = task.materials,
+        fallbackWeightGrams = task.weightGrams,
+        costTimeSeconds = task.costTimeSeconds,
+        deviceModel = task.deviceModel,
+        repetitions = task.repetitions,
+        config = configState.value,
+        priceOf = ::priceOf
+    )
 
     private fun costOf(task: BambuCloudTask): Long {
         return CostCalculator.computeTaskCost(

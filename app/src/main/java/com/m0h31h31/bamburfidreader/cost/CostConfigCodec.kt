@@ -18,6 +18,7 @@ object CostConfigCodec {
                     .put("name", fee.name)
                     .put("unit", fee.unit.name)
                     .put("amount", fee.amountCents)
+                    .put("target", fee.target.name)
             )
         }
         return JSONObject()
@@ -85,7 +86,8 @@ object CostConfigCodec {
             for (i in 0 until length()) {
                 val o = optJSONObject(i) ?: continue
                 val unit = runCatching { FeeUnit.valueOf(o.optString("unit", "ORDER")) }.getOrDefault(FeeUnit.ORDER)
-                add(OtherFee(o.optString("name").trim(), unit, o.optLong("amount", 0L)))
+                val target = runCatching { FeeTarget.valueOf(o.optString("target", "QUOTE")) }.getOrDefault(FeeTarget.QUOTE)
+                add(OtherFee(o.optString("name").trim(), unit, o.optLong("amount", 0L), target))
             }
         }
     }
