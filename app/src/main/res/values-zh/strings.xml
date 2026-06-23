@@ -895,6 +895,7 @@
     <string name="cost_sync_done">已同步 %1$d 条记录</string>
     <string name="cost_sync_failed">同步失败：%1$s</string>
     <string name="cost_default_order_name">合并订单</string>
+    <string name="cost_drag_merge_hint">长按拖拽合并到其它订单</string>
     <string name="cost_stat_orders">订单数</string>
     <string name="cost_stat_cost">总成本</string>
     <string name="cost_stat_profit">总利润</string>

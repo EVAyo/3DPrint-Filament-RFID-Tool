@@ -4,14 +4,27 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -124,6 +137,34 @@ fun CostScreen(modifier: Modifier = Modifier) {
     val shownViews = remember(orderViews, query) {
         if (query.isBlank()) orderViews else orderViews.filter { matchesQuery(it, query) }
     }
+    fun ovKey(ov: OrderView): Long = ov.orderId ?: -ov.tasks.first().id
+    val viewByKey = remember(shownViews) { shownViews.associateBy { ovKey(it) } }
+
+    // 拖拽合并状态(窗口坐标)
+    val dragDensity = androidx.compose.ui.platform.LocalDensity.current
+    // 预览悬浮在手指上方:命中检测点 = 手指上移(预览半高 + 间距),并把目标区域适当放大
+    val dragHitLiftPx = with(dragDensity) { (48 + 32).dp.toPx() }
+    val dragHitInflatePx = with(dragDensity) { 14.dp.toPx() }
+    val coverBounds = remember { mutableStateMapOf<Long, Rect>() }
+    var dragTaskId by remember { mutableStateOf<Long?>(null) }
+    var dragSourceKey by remember { mutableStateOf<Long?>(null) }
+    var dragCoverPath by remember { mutableStateOf("") }
+    var dragPointer by remember { mutableStateOf(Offset.Zero) }
+    var hoverKey by remember { mutableStateOf<Long?>(null) }
+    var listBoxOrigin by remember { mutableStateOf(Offset.Zero) }
+    val mergedOrderName = stringResource(R.string.cost_default_order_name)
+    fun computeHover(pointer: Offset): Long? {
+        val test = Offset(pointer.x, pointer.y - dragHitLiftPx)
+        return coverBounds.entries.firstOrNull { (k, r) ->
+            k != dragSourceKey && r.inflate(dragHitInflatePx).contains(test)
+        }?.key
+    }
+    fun resetDrag() {
+        dragTaskId = null
+        dragSourceKey = null
+        dragCoverPath = ""
+        hoverKey = null
+    }
 
     // 固定头部 + 仅列表滚动
     Column(
@@ -159,7 +200,12 @@ fun CostScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onGloballyPositioned { listBoxOrigin = it.boundsInWindow().topLeft }
+        ) {
             if (shownViews.isEmpty()) {
                 CostEmpty()
             } else {
@@ -169,23 +215,78 @@ fun CostScreen(modifier: Modifier = Modifier) {
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 2.dp, bottom = if (selected.isNotEmpty()) 72.dp else 12.dp)
                 ) {
                     items(shownViews, key = { it.orderId ?: -it.tasks.first().id }) { ov ->
-                        val hiddenView = ov.orderId == null && ov.tasks.first().hidden
+                        // 显示隐藏模式下,所有展示的条目(含合并单)都是隐藏的
+                        val hiddenView = showHidden
+                        val key = ovKey(ov)
                         OrderCard(
                             ov = ov,
                             selectable = ov.orderId == null && !hiddenView,
                             selected = ov.orderId == null && selected.contains(ov.tasks.first().id),
                             hidden = hiddenView,
+                            draggable = ov.orderId == null && !hiddenView,
+                            isDropTarget = dragTaskId != null && hoverKey == key && dragSourceKey != key,
+                            onCoverBounds = { rect -> coverBounds[key] = rect },
+                            onDragStart = { pointer ->
+                                dragTaskId = ov.tasks.first().id
+                                dragSourceKey = key
+                                dragCoverPath = ov.tasks.first().coverPath
+                                dragPointer = pointer
+                                hoverKey = null
+                            },
+                            onDragMove = { pointer ->
+                                dragPointer = pointer
+                                hoverKey = computeHover(pointer)
+                            },
+                            onDragStop = {
+                                val src = dragTaskId
+                                val tgtKey = hoverKey
+                                if (src != null && tgtKey != null && tgtKey != dragSourceKey) {
+                                    viewByKey[tgtKey]?.let { target ->
+                                        controller.mergeIntoTarget(listOf(src), target, mergedOrderName)
+                                    }
+                                }
+                                resetDrag()
+                            },
+                            onDragCancel = { resetDrag() },
                             onToggleSelect = {
                                 val id = ov.tasks.first().id
                                 if (selected.contains(id)) selected.remove(id) else selected.add(id)
                             },
                             onSetCharge = { chargeTarget = ov },
-                            onDissolve = { ov.orderId?.let { controller.dissolveOrder(it) } },
-                            onRestore = { controller.restoreTasks(listOf(ov.tasks.first().id)) },
+                            onHide = { controller.hideTasks(ov.tasks.map { it.id }) },
+                            onRestore = { controller.restoreTasks(ov.tasks.map { it.id }) },
                             onShowDetail = { detailTarget = ov },
+                            onRemoveTask = { taskId -> controller.detachTaskFromOrder(ov, taskId) },
                             materialTypesByFilaId = materialTypesByFilaId
                         )
                     }
+                }
+            }
+            // 拖拽浮动预览:悬浮在手指上方,避免被手指挡住
+            if (dragTaskId != null && dragCoverPath.isNotBlank()) {
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val previewSize = 96.dp
+                val previewPx = with(density) { previewSize.toPx() }
+                val gapPx = with(density) { 32.dp.toPx() }
+                val local = dragPointer - listBoxOrigin
+                // 进入有效目标时边框绿色代表"到位",否则无边框
+                val onTarget = hoverKey != null && hoverKey != dragSourceKey
+                val previewBorder = if (onTarget) Color(0xFF22C55E) else Color.Transparent
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (local.x - previewPx / 2f).toInt(),
+                                // 预览整体放到触点上方一段距离
+                                (local.y - previewPx - gapPx).toInt()
+                            )
+                        }
+                        .size(previewSize)
+                        .shadow(10.dp, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(3.dp, previewBorder, RoundedCornerShape(12.dp))
+                ) {
+                    CoverImage(dragCoverPath, previewSize, interactive = false)
                 }
             }
             // 浮动合并条:无需上滑回顶
@@ -310,15 +411,25 @@ private fun OrderCard(
     selectable: Boolean,
     selected: Boolean,
     hidden: Boolean,
+    draggable: Boolean = false,
+    isDropTarget: Boolean = false,
+    onCoverBounds: (Rect) -> Unit = {},
+    onDragStart: (Offset) -> Unit = {},
+    onDragMove: (Offset) -> Unit = {},
+    onDragStop: () -> Unit = {},
+    onDragCancel: () -> Unit = {},
     onToggleSelect: () -> Unit,
     onSetCharge: () -> Unit,
-    onDissolve: () -> Unit,
+    onHide: () -> Unit,
     onRestore: () -> Unit,
     onShowDetail: () -> Unit,
+    onRemoveTask: (Long) -> Unit = {},
     materialTypesByFilaId: Map<String, String>
 ) {
-    var expanded by remember(ov) { mutableStateOf(false) }
+    var expanded by remember(ov.orderId) { mutableStateOf(false) }
     val isOrder = ov.orderId != null
+    // 合并单或已设价的条目保留底部横排操作行;其余把按钮竖排到右侧,省一行空白
+    val hasBottomRow = isOrder || ov.actualChargeCents > 0
     val first = ov.tasks.first()
     // 合并订单主条目显示所有耗材合计;单任务显示自身各耗材
     val materialLine = if (isOrder) {
@@ -327,14 +438,47 @@ private fun OrderCard(
         materialsSummary(first.materials, first.weightGrams, materialTypesByFilaId)
     }
     val durationSeconds = if (isOrder) ov.tasks.sumOf { it.costTimeSeconds } else first.costTimeSeconds
-    NeuPanel(modifier = Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp)) {
+    // 已收费的条目用浅一点的差异底色区分
+    val chargedTint = if (!hidden && ov.actualChargeCents > 0) {
+        androidx.compose.ui.graphics.lerp(
+            MaterialTheme.colorScheme.surface,
+            MaterialTheme.colorScheme.primary,
+            0.07f
+        )
+    } else null
+    NeuPanel(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(10.dp),
+        containerColor = chargedTint
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.Top) {
                 if (selectable) {
-                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = Modifier.size(28.dp))
+                    Column(
+                        modifier = Modifier.width(44.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                            Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = Modifier.size(28.dp))
+                        }
+                        if (draggable) {
+                            DragHandle(
+                                onDragStart = onDragStart,
+                                onDragMove = onDragMove,
+                                onDragStop = onDragStop,
+                                onDragCancel = onDragCancel
+                            )
+                        }
+                    }
                     Spacer(Modifier.width(6.dp))
                 }
-                CoverImage(first.coverPath, 44.dp)
+                CoverImage(
+                    first.coverPath,
+                    44.dp,
+                    onBounds = onCoverBounds,
+                    isDropTarget = isDropTarget
+                )
                 Spacer(Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f).clickable(onClick = onShowDetail)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -363,8 +507,22 @@ private fun OrderCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                if (!hasBottomRow) {
+                    Spacer(Modifier.width(8.dp))
+                    OrderActionButtons(
+                        vertical = true,
+                        hidden = hidden,
+                        isOrder = isOrder,
+                        tasksCount = ov.tasks.size,
+                        expanded = expanded,
+                        onToggleExpand = { expanded = !expanded },
+                        onHide = onHide,
+                        onRestore = onRestore,
+                        onSetCharge = onSetCharge
+                    )
+                }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (hasBottomRow) Row(verticalAlignment = Alignment.CenterVertically) {
                 if (ov.actualChargeCents > 0) {
                     Text(
                         buildString {
@@ -381,23 +539,27 @@ private fun OrderCard(
                 } else {
                     Spacer(Modifier.weight(1f))
                 }
-                if (hidden) {
-                    SmallButton(stringResource(R.string.cost_restore), onRestore, primary = true)
-                } else {
-                    if (isOrder) {
-                        SmallButton(stringResource(R.string.cost_dissolve), onDissolve)
-                        Spacer(Modifier.width(6.dp))
-                        if (ov.tasks.size > 1) {
-                            SmallButton(if (expanded) stringResource(R.string.cost_collapse) else stringResource(R.string.cost_expand), { expanded = !expanded })
-                            Spacer(Modifier.width(6.dp))
-                        }
-                    }
-                    SmallButton(stringResource(R.string.cost_set_charge), onSetCharge, primary = true)
-                }
+                OrderActionButtons(
+                    vertical = false,
+                    hidden = hidden,
+                    isOrder = isOrder,
+                    tasksCount = ov.tasks.size,
+                    expanded = expanded,
+                    onToggleExpand = { expanded = !expanded },
+                    onHide = onHide,
+                    onRestore = onRestore,
+                    onSetCharge = onSetCharge
+                )
             }
             if (expanded && ov.tasks.size > 1) {
                 Spacer(Modifier.size(2.dp))
-                ov.tasks.forEach { t -> SubTaskRow(t, materialTypesByFilaId) }
+                ov.tasks.forEach { t ->
+                    SubTaskRow(
+                        t = t,
+                        materialTypesByFilaId = materialTypesByFilaId,
+                        onRemove = if (isOrder && !hidden) ({ onRemoveTask(t.id) }) else null
+                    )
+                }
             }
         }
     }
@@ -405,7 +567,11 @@ private fun OrderCard(
 
 /** 合并订单展开后的子条目:左图 + 右两行。 */
 @Composable
-private fun SubTaskRow(t: PrintTaskRow, materialTypesByFilaId: Map<String, String>) {
+private fun SubTaskRow(
+    t: PrintTaskRow,
+    materialTypesByFilaId: Map<String, String>,
+    onRemove: (() -> Unit)? = null
+) {
     Row(modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         CoverImage(t.coverPath, 36.dp)
         Spacer(Modifier.width(8.dp))
@@ -418,6 +584,24 @@ private fun SubTaskRow(t: PrintTaskRow, materialTypesByFilaId: Map<String, Strin
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (onRemove != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .clickable(onClick = onRemove),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "−",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
         }
     }
 }
@@ -442,25 +626,192 @@ private fun StateBadge(state: TaskState) {
 }
 
 @Composable
-private fun SmallButton(text: String, onClick: () -> Unit, primary: Boolean = false) {
+private fun SmallButton(text: String, onClick: () -> Unit, primary: Boolean = false, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(8.dp),
         color = if (primary) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
         contentColor = if (primary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
-        Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        Box(contentAlignment = Alignment.Center) {
+            Text(text, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
 @Composable
-private fun CoverImage(path: String, size: Dp) {
+private fun EyeIconButton(open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier.size(32.dp)) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (open) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (open) AppIcons.Visibility else AppIcons.VisibilityOff,
+            contentDescription = stringResource(if (open) R.string.cost_restore else R.string.cost_hide),
+            tint = if (open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun OrderActionButtons(
+    vertical: Boolean,
+    hidden: Boolean,
+    isOrder: Boolean,
+    tasksCount: Int,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    onHide: () -> Unit,
+    onRestore: () -> Unit,
+    onSetCharge: () -> Unit
+) {
+    // 所有小按钮统一宽高,横竖排都对齐一致
+    val itemMod = Modifier.width(44.dp).height(32.dp)
+    val content: @Composable () -> Unit = {
+        if (hidden) {
+            EyeIconButton(open = true, onClick = onRestore, modifier = itemMod)
+        } else {
+            if (isOrder && tasksCount > 1) {
+                SmallButton(if (expanded) "−" else "+", onToggleExpand, modifier = itemMod)
+            }
+            EyeIconButton(open = false, onClick = onHide, modifier = itemMod)
+            SmallButton(localeCurrencySymbol(), onSetCharge, primary = true, modifier = itemMod)
+        }
+    }
+    if (vertical) {
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    }
+}
+
+@Composable
+private fun localeCurrencySymbol(): String {
+    val locale = androidx.core.os.ConfigurationCompat
+        .getLocales(androidx.compose.ui.platform.LocalConfiguration.current)
+        .get(0)
+    return if (locale?.language.equals("zh", ignoreCase = true)) "¥" else "$"
+}
+
+@Composable
+private fun DragHandle(
+    onDragStart: (Offset) -> Unit,
+    onDragMove: (Offset) -> Unit,
+    onDragStop: () -> Unit,
+    onDragCancel: () -> Unit
+) {
+    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    Box(
+        modifier = Modifier
+            .size(width = 44.dp, height = 32.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .onGloballyPositioned { coords = it }
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { local -> coords?.let { onDragStart(it.localToWindow(local)) } },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        coords?.let { onDragMove(it.localToWindow(change.position)) }
+                    },
+                    onDragEnd = { onDragStop() },
+                    onDragCancel = { onDragCancel() }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = AppIcons.DragHandle,
+            contentDescription = stringResource(R.string.cost_drag_merge_hint),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(26.dp)
+        )
+    }
+}
+
+@Composable
+private fun CoverImage(
+    path: String,
+    size: Dp,
+    onBounds: ((Rect) -> Unit)? = null,
+    isDropTarget: Boolean = false,
+    interactive: Boolean = true
+) {
     val image = remember(path) {
         if (path.isNotBlank() && File(path).exists()) runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull() else null
     }
-    Box(modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+    var showLarge by remember(path) { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(if (onBounds != null) Modifier.onGloballyPositioned { onBounds(it.boundsInWindow()) } else Modifier)
+            .then(if (interactive && image != null && !isDropTarget) Modifier.clickable { showLarge = true } else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
         if (image != null) Image(bitmap = image, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else Text("3D", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (isDropTarget) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "+",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+    if (showLarge && image != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLarge = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFF2F2F2))
+                    .drawBehind {
+                        val tile = 16.dp.toPx()
+                        val cols = (this.size.width / tile).toInt() + 1
+                        val rows = (this.size.height / tile).toInt() + 1
+                        for (y in 0 until rows) {
+                            for (x in 0 until cols) {
+                                if ((x + y) % 2 == 0) {
+                                    drawRect(
+                                        color = Color(0xFFD9D9D9),
+                                        topLeft = Offset(x * tile, y * tile),
+                                        size = androidx.compose.ui.geometry.Size(tile, tile)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .clickable { showLarge = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
     }
 }
 
@@ -943,9 +1294,7 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
                         cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     textStyle = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
                 LazyColumn(
                     modifier = Modifier

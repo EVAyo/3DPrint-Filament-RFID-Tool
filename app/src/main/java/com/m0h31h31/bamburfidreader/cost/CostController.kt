@@ -278,6 +278,24 @@ class CostController private constructor(appContext: Context) {
         }
     }
 
+    /** 拖拽合并:把源任务合并到目标条目中。目标是订单则并入该订单;目标是单任务则两者新建一单。 */
+    fun mergeIntoTarget(sourceTaskIds: List<Long>, target: OrderView, defaultName: String) {
+        if (sourceTaskIds.isEmpty()) return
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val targetOrderId = target.orderId
+                if (targetOrderId != null) {
+                    dao.setTasksOrder(sourceTaskIds, targetOrderId)
+                } else {
+                    val targetTaskId = target.tasks.firstOrNull()?.id ?: return@withContext
+                    if (sourceTaskIds.contains(targetTaskId)) return@withContext
+                    dao.createOrderWithTasks(defaultName, listOf(targetTaskId) + sourceTaskIds)
+                }
+            }
+            reloadFromDb()
+        }
+    }
+
     /** 给一笔订单或单条任务设置实际收费;单任务会即时建一个 1 任务订单。 */
     fun setActualCharge(orderView: OrderView, cents: Long) {
         scope.launch {
@@ -289,6 +307,21 @@ class CostController private constructor(appContext: Context) {
                     val taskId = orderView.tasks.firstOrNull()?.id ?: return@withContext
                     val newId = dao.createOrderWithTasks(orderView.name, listOf(taskId))
                     if (newId > 0) dao.setOrderCharge(newId, cents)
+                }
+            }
+            reloadFromDb()
+        }
+    }
+
+    /** 从合并订单中移除单条任务;若移除后订单不足 2 条则解散整单。 */
+    fun detachTaskFromOrder(order: OrderView, taskId: Long) {
+        val orderId = order.orderId ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                if (order.tasks.size <= 2) {
+                    dao.deleteOrder(orderId)
+                } else {
+                    dao.setTasksOrder(listOf(taskId), null)
                 }
             }
             reloadFromDb()

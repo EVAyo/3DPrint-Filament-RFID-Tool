@@ -71,10 +71,11 @@ fun Modifier.neuBackground(): Modifier {
 @Composable
 fun Modifier.neuCard(
     shape: Shape = NeuShape,
-    elevated: Boolean = true
+    elevated: Boolean = true,
+    containerColor: Color? = null
 ): Modifier {
     val uiStyle = LocalAppUiStyle.current
-    val base = MaterialTheme.colorScheme.surface
+    val base = containerColor ?: MaterialTheme.colorScheme.surface
     val isModernWorkbench = uiStyle.isModernWorkbenchStyle()
     val resolvedShape = if (isModernWorkbench && shape == NeuShape) {
         ModernShape
@@ -146,11 +147,12 @@ fun NeuPanel(
     modifier: Modifier = Modifier,
     shape: Shape = NeuShape,
     contentPadding: PaddingValues = PaddingValues(12.dp),
+    containerColor: Color? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
         modifier = modifier
-            .neuCard(shape = shape)
+            .neuCard(shape = shape, containerColor = containerColor)
             .padding(contentPadding),
         content = content
     )
