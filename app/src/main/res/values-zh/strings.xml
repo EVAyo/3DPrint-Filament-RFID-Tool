@@ -441,6 +441,7 @@
     <string name="update_action_later">稍后提醒</string>
     <string name="update_download_notification_title">APP 更新</string>
     <string name="update_downloading">正在下载新版本…</string>
+    <string name="update_download_failed">下载失败,请稍后重试。</string>
     <string name="update_need_permission">请先在系统设置中允许安装未知来源应用</string>
     <string name="update_badge">有新版本</string>
     <string name="update_check_btn">检查更新</string>
@@ -677,6 +678,10 @@
     <string name="db_file_not_found">数据库文件不存在</string>
     <string name="db_storage_unavailable">无法访问存储目录</string>
     <string name="db_backup_success">数据库备份成功</string>
+    <string name="db_backup_success_download_format">已备份到下载目录:%1$s</string>
+    <string name="db_import_select_file">请选择备份文件…</string>
+    <string name="db_import_canceled">已取消导入</string>
+    <string name="db_import_invalid_file">不是有效的数据库文件</string>
     <string name="db_backup_failed">数据库备份失败</string>
     <string name="db_import_file_not_found">未找到备份文件</string>
     <string name="db_import_success">数据库导入成功</string>

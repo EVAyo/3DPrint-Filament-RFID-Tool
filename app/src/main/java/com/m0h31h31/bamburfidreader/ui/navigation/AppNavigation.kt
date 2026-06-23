@@ -221,6 +221,7 @@ fun AppNavigation(
     selectedTagCopyCount: Int? = null,
     pendingUpdateInfo: com.m0h31h31.bamburfidreader.utils.UpdateInfo? = null,
     isDownloadingUpdate: Boolean = false,
+    updateDownloadProgress: Int = 0,
     onStartUpdate: (com.m0h31h31.bamburfidreader.utils.UpdateInfo) -> Unit = {},
     onDismissUpdate: () -> Unit = {},
 ) {
@@ -376,11 +377,12 @@ fun AppNavigation(
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text(
-                            text = stringResource(R.string.update_downloading),
+                            text = "${stringResource(R.string.update_downloading)} $updateDownloadProgress%",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         LinearProgressIndicator(
+                            progress = { (updateDownloadProgress / 100f).coerceIn(0f, 1f) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp),

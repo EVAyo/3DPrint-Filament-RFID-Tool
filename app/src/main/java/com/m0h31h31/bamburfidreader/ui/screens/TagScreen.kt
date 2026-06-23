@@ -164,12 +164,13 @@ private fun buildCategoryGroups(items: List<ShareTagItem>, unknownLabel: String)
     return items
         .groupBy { it.materialDetailedType.ifBlank { it.materialType }.ifBlank { unknownLabel } }
         .entries
-        .sortedBy { it.key }
+        // 按类下标签数降序(数量相同再按名称),用户拖拽的自定义顺序在 CategoryView 中优先
+        .sortedWith(compareByDescending<Map.Entry<String, List<ShareTagItem>>> { it.value.size }.thenBy { it.key })
         .map { (material, matItems) ->
             val colorGroups = matItems
                 .groupBy { "${it.colorUid}|${it.filaColorCode}|${it.colorName}" }
                 .entries
-                .sortedBy { it.key }
+                .sortedWith(compareByDescending<Map.Entry<String, List<ShareTagItem>>> { it.value.size }.thenBy { it.key })
                 .map { (_, groupItems) ->
                     val first = groupItems.first()
                     ColorGroup(
@@ -534,12 +535,8 @@ private fun CategoryView(
     unknownColorIdText: String,
     anomalyUids: Map<String, Int> = emptyMap()
 ) {
-    val orderedCategories = remember(categories, categoryOrder) {
-        val catMap = categories.associateBy { it.materialType }
-        val ordered = categoryOrder.mapNotNull { catMap[it] }
-        val remaining = categories.filter { it.materialType !in categoryOrder }
-        ordered + remaining
-    }
+    // 外层大类列表按总数排序(categories 已按类下标签数降序)
+    val orderedCategories = categories
 
     // Which color group's dialog is open: pair of (materialType, ColorGroup)
     var openDialog by remember { mutableStateOf<Pair<String, ColorGroup>?>(null) }
@@ -575,12 +572,6 @@ private fun CategoryView(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = AppIcons.DragHandle,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp).draggableHandle(),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
                             Text(
                                 text = category.materialType.ifBlank { unknownText },
                                 style = MaterialTheme.typography.titleSmall,
@@ -919,6 +910,22 @@ fun TagScreen(
     val unknownLabel = stringResource(R.string.label_unknown)
     val categories = remember(filteredItems) { buildCategoryGroups(filteredItems, unknownLabel) }
 
+    // 列表模式默认按"标签总数"排序:同材料类型的标签数越多越靠前(颜色筛选时保持按色差排序)。
+    val listItems = remember(filteredItems, colorFilterHex) {
+        val hex = colorFilterHex
+        if (hex != null && hex.length == 6) {
+            filteredItems
+        } else {
+            val countByType = filteredItems.groupingBy { it.materialType.ifBlank { "￿" } }.eachCount()
+            filteredItems.sortedWith(
+                compareByDescending<ShareTagItem> { countByType[it.materialType.ifBlank { "￿" }] ?: 0 }
+                    .thenBy { it.materialType.ifBlank { "￿" } }
+                    .thenBy { it.materialDetailedType.ifBlank { "￿" } }
+                    .thenByDescending { it.productionDate.ifBlank { "" } }
+            )
+        }
+    }
+
     val selectedItem = items.firstOrNull { it.relativePath == selectedFileName }
 
     Surface(modifier = modifier.fillMaxSize().neuBackground(), color = MaterialTheme.colorScheme.background) {
@@ -1021,7 +1028,7 @@ fun TagScreen(
                             modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 2.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            items(filteredItems, key = { it.relativePath }) { item ->
+                            items(listItems, key = { it.relativePath }) { item ->
                                 TagListItem(
                                     item = item,
                                     selected = item.relativePath == selectedFileName,

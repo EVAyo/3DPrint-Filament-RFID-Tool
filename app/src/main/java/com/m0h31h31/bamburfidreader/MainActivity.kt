@@ -1,11 +1,8 @@
 package com.m0h31h31.bamburfidreader
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.database.sqlite.SQLiteDatabase
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -104,6 +101,8 @@ import com.m0h31h31.bamburfidreader.utils.UpdateInfo
 import com.m0h31h31.bamburfidreader.utils.ConfigManager
 import java.io.File
 import java.io.FileInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 import net.lingala.zip4j.ZipFile as Zip4jFile
 import net.lingala.zip4j.exception.ZipException as Zip4jException
@@ -555,7 +554,7 @@ class MainActivity : ComponentActivity() {
     private var selectedTagCopyCount by mutableStateOf<Int?>(null)
     private var pendingUpdateInfo by mutableStateOf<UpdateInfo?>(null)
     private var isDownloadingUpdate by mutableStateOf(false)
-    private var updateDownloadId = -1L
+    private var updateDownloadProgress by mutableStateOf(0)
     private var writeToolStatusMessage by mutableStateOf("")
     private var selfTagCount by mutableStateOf(0)
     private var debugInfoDialog: android.app.AlertDialog? = null
@@ -596,6 +595,14 @@ class MainActivity : ComponentActivity() {
                     refreshSnapmakerShareTagItemsAsync()
                 }
             }
+        }
+    private val importDatabaseLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+            if (uri == null) {
+                miscStatusMessage = uiString(R.string.db_import_canceled)
+                return@registerForActivityResult
+            }
+            miscStatusMessage = importDatabaseFromUri(uri)
         }
     private val exportTagPackageLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument(SHARE_IMPORT_ZIP_MIME)) { uri: Uri? ->
@@ -1132,14 +1139,6 @@ class MainActivity : ComponentActivity() {
         // 检查在线更新
         checkForUpdateAsync()
 
-        // 注册下载完成广播（ContextCompat 兼容 API 28-）
-        androidx.core.content.ContextCompat.registerReceiver(
-            this,
-            updateDownloadReceiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            androidx.core.content.ContextCompat.RECEIVER_EXPORTED
-        )
-        
         setContent {
             BambuRfidReaderTheme(themeMode = themeMode, uiStyle = uiStyle, colorPalette = colorPalette, uiScale = uiScale) {
                 AppNavigation(
@@ -1434,6 +1433,7 @@ class MainActivity : ComponentActivity() {
                     },
                     pendingUpdateInfo = pendingUpdateInfo,
                     isDownloadingUpdate = isDownloadingUpdate,
+                    updateDownloadProgress = updateDownloadProgress,
                     onStartUpdate = { info -> startUpdate(info) },
                     onDismissUpdate = { pendingUpdateInfo = null }
                 )
@@ -1730,7 +1730,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        try { unregisterReceiver(updateDownloadReceiver) } catch (_: Exception) {}
         logEvent("应用退出，准备打包日志")
         filamentDbHelper?.close()
         tts?.stop()
@@ -1859,52 +1858,103 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 备份到系统下载目录;排除 share_tags / snapmaker_share_tags 两个表(仅清空其数据,保留表结构)。 */
     private fun backupDatabase(): String {
         val dbFile = getDatabasePath(FILAMENT_DB_NAME)
         if (!dbFile.exists()) {
             return uiString(R.string.db_file_not_found)
         }
-        val externalDir = getExternalFilesDir(null)
-        if (externalDir == null) {
-            return uiString(R.string.db_storage_unavailable)
-        }
-        val backupFile = File(externalDir, "filaments_backup.db")
+        val tmp = File(cacheDir, "filaments_backup_tmp.db")
         return try {
-            dbFile.copyTo(backupFile, overwrite = true)
-            // 删除备份中的标签原始数据，避免 NFC block 数据泄露
-            val backupDb = android.database.sqlite.SQLiteDatabase.openDatabase(
-                backupFile.absolutePath, null,
-                android.database.sqlite.SQLiteDatabase.OPEN_READWRITE
-            )
-            backupDb.use { db ->
+            // 先 checkpoint,确保 WAL 数据已并入主库文件
+            runCatching {
+                filamentDbHelper?.writableDatabase?.rawQuery("PRAGMA wal_checkpoint(FULL)", null)?.use { it.moveToFirst() }
+            }
+            dbFile.copyTo(tmp, overwrite = true)
+            // 清空两个分享表的数据(不备份),并压缩
+            android.database.sqlite.SQLiteDatabase.openDatabase(
+                tmp.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE
+            ).use { db ->
                 db.delete(SHARE_TAGS_TABLE, null, null)
                 db.delete(SNAPMAKER_SHARE_TAGS_TABLE, null, null)
+                db.execSQL("VACUUM")
             }
-            uiString(R.string.db_backup_success)
+            val fileName = "filaments_backup_${
+                java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+            }.db"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: return uiString(R.string.db_backup_failed)
+                contentResolver.openOutputStream(uri)?.use { out -> tmp.inputStream().use { it.copyTo(out) } }
+                    ?: return uiString(R.string.db_backup_failed)
+            } else {
+                @Suppress("DEPRECATION")
+                val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                downloads.mkdirs()
+                tmp.copyTo(File(downloads, fileName), overwrite = true)
+            }
+            uiString(R.string.db_backup_success_download_format, fileName)
         } catch (e: Exception) {
             logDebug("数据库备份失败: ${e.message}")
             uiString(R.string.db_backup_failed)
+        } finally {
+            tmp.delete()
         }
     }
 
+    /** 让用户从文件中选择备份导入(不再使用默认位置)。 */
     private fun importDatabase(): String {
-        val externalDir = getExternalFilesDir(null)
-        if (externalDir == null) {
-            return uiString(R.string.db_storage_unavailable)
-        }
-        val backupFile = File(externalDir, "filaments_backup.db")
-        if (!backupFile.exists()) {
-            return uiString(R.string.db_import_file_not_found)
-        }
+        importDatabaseLauncher.launch(
+            arrayOf(
+                "application/octet-stream",
+                "application/x-sqlite3",
+                "application/vnd.sqlite3",
+                "*/*"
+            )
+        )
+        return uiString(R.string.db_import_select_file)
+    }
+
+    private fun importDatabaseFromUri(uri: Uri): String {
         val dbFile = getDatabasePath(FILAMENT_DB_NAME)
+        val tmp = File(cacheDir, "filaments_import_tmp.db")
         return try {
+            contentResolver.openInputStream(uri)?.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                ?: return uiString(R.string.db_import_failed)
+            if (!isSqliteFile(tmp)) {
+                return uiString(R.string.db_import_invalid_file)
+            }
             filamentDbHelper?.close()
-            backupFile.copyTo(dbFile, overwrite = true)
-            filamentDbHelper?.writableDatabase
+            // 删除旧 WAL/SHM,避免脏数据并入导入库
+            File(dbFile.parentFile, "$FILAMENT_DB_NAME-wal").delete()
+            File(dbFile.parentFile, "$FILAMENT_DB_NAME-shm").delete()
+            tmp.copyTo(dbFile, overwrite = true)
+            filamentDbHelper = FilamentDbHelper(this)
+            filamentDbHelper?.writableDatabase   // 触发 onUpgrade 迁移(若导入库版本较旧)
             uiString(R.string.db_import_success)
         } catch (e: Exception) {
             logDebug("数据库导入失败: ${e.message}")
             uiString(R.string.db_import_failed)
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    /** 校验是否为 SQLite 文件(文件头 "SQLite format 3 ")。 */
+    private fun isSqliteFile(file: File): Boolean {
+        return try {
+            file.inputStream().use { input ->
+                val header = ByteArray(16)
+                if (input.read(header) < 16) return false
+                String(header, Charsets.US_ASCII).startsWith("SQLite format 3")
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -3370,15 +3420,6 @@ class MainActivity : ComponentActivity() {
 
     // ── 在线更新 ──────────────────────────────────────────────────────────────
 
-    private val updateDownloadReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-            if (id != -1L && id == updateDownloadId) {
-                installDownloadedApk(id)
-            }
-        }
-    }
-
     private fun checkForUpdateAsync() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -3401,34 +3442,82 @@ class MainActivity : ComponentActivity() {
         startApkDownload(info.downloadUrl)
     }
 
+    /** 内置下载器:HTTP 拉取 APK 到应用私有目录,带进度,完成后调用安装(不依赖系统 DownloadManager)。 */
     private fun startApkDownload(downloadUrl: String) {
         if (isDownloadingUpdate) return
-        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val dest = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "BambuRfidReader_update.apk")
-        if (dest.exists()) dest.delete()
-        val request = DownloadManager.Request(android.net.Uri.parse(downloadUrl))
-            .setTitle(getString(R.string.update_download_notification_title))
-            .setDescription(getString(R.string.update_downloading))
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationUri(android.net.Uri.fromFile(dest))
-            .setMimeType("application/vnd.android.package-archive")
-        updateDownloadId = dm.enqueue(request)
         isDownloadingUpdate = true
-        Toast.makeText(this, getString(R.string.update_downloading), Toast.LENGTH_LONG).show()
-        logDebug("Update download enqueued id=$updateDownloadId url=$downloadUrl")
+        updateDownloadProgress = 0
+        Toast.makeText(this, getString(R.string.update_downloading), Toast.LENGTH_SHORT).show()
+        logDebug("Update download start url=$downloadUrl")
+        lifecycleScope.launch(Dispatchers.IO) {
+            val dest = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "BambuRfidReader_update.apk")
+            val ok = runCatching { downloadApkTo(downloadUrl, dest) }.getOrElse {
+                logDebug("Update download failed: ${it.message}")
+                false
+            }
+            withContext(Dispatchers.Main) {
+                isDownloadingUpdate = false
+                if (ok && dest.exists() && dest.length() > 0) {
+                    installDownloadedApk(dest)
+                } else {
+                    Toast.makeText(this@MainActivity, getString(R.string.update_download_failed), Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
-    private fun installDownloadedApk(downloadId: Long) {
-        isDownloadingUpdate = false
-        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val query = DownloadManager.Query().setFilterById(downloadId)
-        val cursor = dm.query(query)
-        val success = cursor.use {
-            it.moveToFirst() &&
-                it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL
+    /** 下载到 dest,手动跟随重定向(兼容跨协议跳转);更新进度。返回是否成功。 */
+    private suspend fun downloadApkTo(urlStr: String, dest: File): Boolean {
+        if (dest.exists()) dest.delete()
+        dest.parentFile?.mkdirs()
+        var current = urlStr
+        var redirects = 0
+        while (redirects < 5) {
+            val conn = (URL(current).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                instanceFollowRedirects = false
+            }
+            try {
+                conn.connect()
+                val code = conn.responseCode
+                if (code in 300..399) {
+                    val loc = conn.getHeaderField("Location") ?: return false
+                    current = URL(URL(current), loc).toString()
+                    redirects++
+                    continue
+                }
+                if (code !in 200..299) return false
+                val total = conn.contentLength.toLong()
+                var downloaded = 0L
+                var lastPct = -1
+                conn.inputStream.use { input ->
+                    dest.outputStream().use { out ->
+                        val buf = ByteArray(8192)
+                        while (true) {
+                            val read = input.read(buf)
+                            if (read == -1) break
+                            out.write(buf, 0, read)
+                            downloaded += read
+                            if (total > 0) {
+                                val pct = (downloaded * 100 / total).toInt()
+                                if (pct != lastPct) {
+                                    lastPct = pct
+                                    withContext(Dispatchers.Main) { updateDownloadProgress = pct }
+                                }
+                            }
+                        }
+                    }
+                }
+                return true
+            } finally {
+                conn.disconnect()
+            }
         }
-        if (!success) { logDebug("Update download failed or not found"); return }
-        val apkFile = File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "BambuRfidReader_update.apk")
+        return false
+    }
+
+    private fun installDownloadedApk(apkFile: File) {
         if (!apkFile.exists()) { logDebug("APK not found: ${apkFile.absolutePath}"); return }
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.update_provider", apkFile)

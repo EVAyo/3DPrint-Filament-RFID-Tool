@@ -453,6 +453,7 @@
     <string name="update_action_later">Remind me later</string>
     <string name="update_download_notification_title">APP update</string>
     <string name="update_downloading">Downloading new version…</string>
+    <string name="update_download_failed">Download failed. Please try again later.</string>
     <string name="update_need_permission">Please allow installation from unknown sources in system settings first</string>
     <string name="update_badge">Update available</string>
     <string name="update_check_btn">Check for updates</string>
@@ -724,6 +725,10 @@
     <string name="db_file_not_found">Database file not found</string>
     <string name="db_storage_unavailable">Storage directory unavailable</string>
     <string name="db_backup_success">Database backup successful</string>
+    <string name="db_backup_success_download_format">Backed up to Downloads: %1$s</string>
+    <string name="db_import_select_file">Select a backup file…</string>
+    <string name="db_import_canceled">Import canceled</string>
+    <string name="db_import_invalid_file">Not a valid database file</string>
     <string name="db_backup_failed">Database backup failed</string>
     <string name="db_import_file_not_found">Backup file not found</string>
     <string name="db_import_success">Database import successful</string>
