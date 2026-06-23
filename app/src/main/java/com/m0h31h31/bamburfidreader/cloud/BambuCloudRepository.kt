@@ -67,6 +67,38 @@ class BambuCloudRepository(
         }
     }
 
+    suspend fun updateFilament(update: BambuCloudFilamentUpdate): BambuCloudFilamentMutationResult {
+        val currentSession = sessionStore.loadSession()
+            ?: return BambuCloudFilamentMutationResult.Failure("Not logged in")
+        return when (val result = service.updateFilament(currentSession.tokens.accessToken, update)) {
+            is BambuCloudApiResult.Success -> BambuCloudFilamentMutationResult.Success
+            BambuCloudApiResult.VerificationCodeRequired -> {
+                BambuCloudFilamentMutationResult.Failure("Verification code required")
+            }
+            is BambuCloudApiResult.CaptchaRequired -> BambuCloudFilamentMutationResult.Failure(result.message)
+            is BambuCloudApiResult.Failure -> BambuCloudFilamentMutationResult.Failure(result.message)
+        }
+    }
+
+    suspend fun deleteFilament(filament: BambuCloudFilament): BambuCloudFilamentMutationResult {
+        val currentSession = sessionStore.loadSession()
+            ?: return BambuCloudFilamentMutationResult.Failure("Not logged in")
+        return when (
+            val result = service.deleteFilaments(
+                accessToken = currentSession.tokens.accessToken,
+                ids = listOf(filament.id),
+                rfids = listOf(filament.rfid)
+            )
+        ) {
+            is BambuCloudApiResult.Success -> BambuCloudFilamentMutationResult.Success
+            BambuCloudApiResult.VerificationCodeRequired -> {
+                BambuCloudFilamentMutationResult.Failure("Verification code required")
+            }
+            is BambuCloudApiResult.CaptchaRequired -> BambuCloudFilamentMutationResult.Failure(result.message)
+            is BambuCloudApiResult.Failure -> BambuCloudFilamentMutationResult.Failure(result.message)
+        }
+    }
+
     suspend fun fetchTasks(
         offset: Int = 0,
         limit: Int = 50,

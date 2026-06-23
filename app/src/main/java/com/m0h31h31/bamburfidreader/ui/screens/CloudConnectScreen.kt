@@ -69,7 +69,9 @@ import com.m0h31h31.bamburfidreader.R
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilament
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilamentCatalog
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilamentCatalogInfo
+import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilamentMutationResult
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilamentResult
+import com.m0h31h31.bamburfidreader.cloud.BambuCloudFilamentUpdate
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudPrinter
 import com.m0h31h31.bamburfidreader.cloud.BambuCloudPrinterResult
 import com.m0h31h31.bamburfidreader.cloud.BambuAmsTray
@@ -94,6 +96,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+private const val CLOUD_FILAMENT_NOTE_MAX_LENGTH = 150
 
 @Composable
 fun CloudConnectScreen(
@@ -128,6 +135,9 @@ fun CloudConnectScreen(
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showGeetest by remember { mutableStateOf(false) }
     var captchaId by remember { mutableStateOf("") }
+    var selectedFilament by remember { mutableStateOf<BambuCloudFilament?>(null) }
+    var filamentDetailBusy by remember { mutableStateOf(false) }
+    var filamentDetailMessage by remember { mutableStateOf("") }
     // 是否已带验证结果回提过一次：用于防止"解题→服务器又要验证"的死循环
     var captchaAttempted by remember { mutableStateOf(false) }
 
@@ -318,7 +328,11 @@ fun CloudConnectScreen(
                 loading = filamentsLoading,
                 syncing = filamentsSyncing,
                 statusMessage = filamentStatusMessage,
-                onSyncRemaining = ::syncFilamentRemainingToLocal
+                onSyncRemaining = ::syncFilamentRemainingToLocal,
+                onFilamentClick = { filament ->
+                    selectedFilament = filament
+                    filamentDetailMessage = ""
+                }
             )
         }
     }
@@ -486,6 +500,63 @@ fun CloudConnectScreen(
             onDismiss = { showGeetest = false }
         )
     }
+
+    selectedFilament?.let { filament ->
+        CloudFilamentDetailDialog(
+            filament = filament,
+            catalogInfo = filamentCatalogInfo[filament.id],
+            busy = filamentDetailBusy,
+            message = filamentDetailMessage,
+            onDismiss = {
+                if (!filamentDetailBusy) {
+                    selectedFilament = null
+                    filamentDetailMessage = ""
+                }
+            },
+            onSave = { update ->
+                if (filamentDetailBusy) return@CloudFilamentDetailDialog
+                filamentDetailBusy = true
+                filamentDetailMessage = ""
+                coroutineScope.launch {
+                    when (val result = repository.updateFilament(update)) {
+                        BambuCloudFilamentMutationResult.Success -> {
+                            filamentStatusMessage = context.getString(R.string.cloud_filament_update_success)
+                            controller.refreshFilaments(context)
+                            selectedFilament = null
+                        }
+                        is BambuCloudFilamentMutationResult.Failure -> {
+                            filamentDetailMessage = context.getString(
+                                R.string.cloud_filament_update_failed,
+                                result.message
+                            )
+                        }
+                    }
+                    filamentDetailBusy = false
+                }
+            },
+            onDelete = {
+                if (filamentDetailBusy) return@CloudFilamentDetailDialog
+                filamentDetailBusy = true
+                filamentDetailMessage = ""
+                coroutineScope.launch {
+                    when (val result = repository.deleteFilament(filament)) {
+                        BambuCloudFilamentMutationResult.Success -> {
+                            filamentStatusMessage = context.getString(R.string.cloud_filament_delete_success)
+                            controller.refreshFilaments(context)
+                            selectedFilament = null
+                        }
+                        is BambuCloudFilamentMutationResult.Failure -> {
+                            filamentDetailMessage = context.getString(
+                                R.string.cloud_filament_delete_failed,
+                                result.message
+                            )
+                        }
+                    }
+                    filamentDetailBusy = false
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -592,7 +663,8 @@ private fun CloudFilamentLibraryCard(
     loading: Boolean,
     syncing: Boolean,
     statusMessage: String,
-    onSyncRemaining: () -> Unit
+    onSyncRemaining: () -> Unit,
+    onFilamentClick: (BambuCloudFilament) -> Unit
 ) {
     NeuPanel(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -684,7 +756,8 @@ private fun CloudFilamentLibraryCard(
                     filaments.forEachIndexed { index, filament ->
                         CloudFilamentRow(
                             filament = filament,
-                            catalogInfo = catalogInfo[filament.id]
+                            catalogInfo = catalogInfo[filament.id],
+                            onClick = { onFilamentClick(filament) }
                         )
                         if (index < filaments.lastIndex) {
                             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
@@ -699,7 +772,8 @@ private fun CloudFilamentLibraryCard(
 @Composable
 private fun CloudFilamentRow(
     filament: BambuCloudFilament,
-    catalogInfo: BambuCloudFilamentCatalogInfo?
+    catalogInfo: BambuCloudFilamentCatalogInfo?,
+    onClick: () -> Unit
 ) {
     val unknown = stringResource(R.string.label_unknown)
     val title = buildList {
@@ -722,6 +796,7 @@ private fun CloudFilamentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -791,6 +866,267 @@ private fun CloudFilamentRow(
             )
         }
     }
+}
+
+@Composable
+private fun CloudFilamentDetailDialog(
+    filament: BambuCloudFilament,
+    catalogInfo: BambuCloudFilamentCatalogInfo?,
+    busy: Boolean,
+    message: String,
+    onDismiss: () -> Unit,
+    onSave: (BambuCloudFilamentUpdate) -> Unit,
+    onDelete: () -> Unit
+) {
+    val unknown = stringResource(R.string.label_unknown)
+    val invalidWeightMessage = stringResource(R.string.cloud_filament_invalid_net_weight)
+    var displayName by remember(filament.id) { mutableStateOf(filament.displayName.orEmpty()) }
+    var netWeightText by remember(filament.id) { mutableStateOf(filament.netWeightGrams.coerceAtLeast(0).toString()) }
+    var note by remember(filament.id) { mutableStateOf(limitCloudFilamentNote(filament.note)) }
+    var localMessage by remember(filament.id) { mutableStateOf("") }
+    val effectiveMessage = localMessage.ifBlank { message }
+    val title = displayName.ifBlank {
+        filament.name.ifBlank {
+            filament.type.ifBlank { unknown }
+        }
+    }
+    val updateBuildResult = buildCloudFilamentUpdate(
+        filament = filament,
+        displayName = displayName,
+        netWeightText = netWeightText,
+        note = note
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.cloud_filament_detail_title, title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (effectiveMessage.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = effectiveMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = {
+                        displayName = it
+                        localMessage = ""
+                    },
+                    enabled = !busy,
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.cloud_filament_field_display_name)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = netWeightText,
+                    onValueChange = {
+                        netWeightText = it.filter(Char::isDigit)
+                        localMessage = ""
+                    },
+                    enabled = !busy,
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.cloud_filament_field_net_weight)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    suffix = { Text(stringResource(R.string.unit_grams)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = {
+                        note = limitCloudFilamentNote(it)
+                        localMessage = ""
+                    },
+                    enabled = !busy,
+                    minLines = 2,
+                    maxLines = 4,
+                    label = { Text(stringResource(R.string.cloud_filament_field_note)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (busy) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppCircularProgressIndicator(modifier = Modifier.size(18.dp))
+                        Text(
+                            text = stringResource(R.string.cloud_filament_saving),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                HorizontalDivider()
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_id), filament.id.toString())
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_create_type), formatCreateType(filament.createType, unknown))
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_vendor), filament.vendor.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_type), filament.type.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_name), filament.name.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_id), filament.filamentId.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_rfid), filament.rfid.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color), filament.color.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color_type), filament.colorType.toString())
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_colors),
+                    filament.colors.joinToString(", ").ifBlank { unknown }
+                )
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_total_net_weight),
+                    stringResource(R.string.cloud_filament_grams_value, filament.totalNetWeightGrams.coerceAtLeast(0))
+                )
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_created_at), formatCloudTimestamp(filament.createdAtSeconds, unknown))
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_updated_at), formatCloudTimestamp(filament.updatedAtSeconds, unknown))
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_status), formatCloudStatus(filament.status))
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_support),
+                    if (filament.isSupport) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
+                )
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_tray_id_name), filament.trayIdName.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_category), filament.category.ifBlank { unknown })
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_catalog_color),
+                    catalogInfo?.colorName.orEmpty().ifBlank { unknown }
+                )
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_catalog_number),
+                    catalogInfo?.filamentNumber.orEmpty().ifBlank { unknown }
+                )
+                CloudFilamentDetailLine(
+                    stringResource(R.string.cloud_filament_field_in_printer),
+                    if (filament.inPrinter) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
+                )
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_id), filament.deviceId.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_sn), filament.amsSerial.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_slot_id), filament.slotId.ifBlank { unknown })
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_id), filament.amsId?.toString() ?: unknown)
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_type), filament.amsType?.toString() ?: unknown)
+                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_name), filament.deviceName.ifBlank { unknown })
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy && updateBuildResult !is CloudFilamentUpdateBuildResult.NoChanges,
+                onClick = {
+                    when (val result = buildCloudFilamentUpdate(filament, displayName, netWeightText, note)) {
+                        CloudFilamentUpdateBuildResult.InvalidNetWeight -> {
+                            localMessage = invalidWeightMessage
+                        }
+                        CloudFilamentUpdateBuildResult.NoChanges -> Unit
+                        is CloudFilamentUpdateBuildResult.Update -> onSave(result.update)
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    enabled = !busy,
+                    onClick = onDelete
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                TextButton(
+                    enabled = !busy,
+                    onClick = onDismiss
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun CloudFilamentDetailLine(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = "$label:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.width(108.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+internal fun limitCloudFilamentNote(value: String): String {
+    return value.take(CLOUD_FILAMENT_NOTE_MAX_LENGTH)
+}
+
+internal sealed class CloudFilamentUpdateBuildResult {
+    data class Update(val update: BambuCloudFilamentUpdate) : CloudFilamentUpdateBuildResult()
+    data object NoChanges : CloudFilamentUpdateBuildResult()
+    data object InvalidNetWeight : CloudFilamentUpdateBuildResult()
+}
+
+internal fun buildCloudFilamentUpdate(
+    filament: BambuCloudFilament,
+    displayName: String,
+    netWeightText: String,
+    note: String
+): CloudFilamentUpdateBuildResult {
+    val totalNetWeight = filament.totalNetWeightGrams.coerceAtLeast(0)
+    val trimmedNetWeight = netWeightText.trim()
+    val netWeight = if (trimmedNetWeight.isBlank()) {
+        null
+    } else {
+        trimmedNetWeight.toIntOrNull() ?: return CloudFilamentUpdateBuildResult.InvalidNetWeight
+    }
+    if (netWeight != null && (netWeight < 0 || netWeight > totalNetWeight)) {
+        return CloudFilamentUpdateBuildResult.InvalidNetWeight
+    }
+
+    val normalizedDisplayName = displayName.trim()
+    val originalDisplayName = filament.displayName.orEmpty().trim()
+    val normalizedNote = limitCloudFilamentNote(note.trim())
+    val originalNote = limitCloudFilamentNote(filament.note.trim())
+    val normalizedNetWeight = netWeight?.takeIf { it != filament.netWeightGrams }
+    val changedDisplayName = normalizedDisplayName.takeIf { it != originalDisplayName }
+    val changedNote = normalizedNote.takeIf { it != originalNote }
+
+    if (normalizedNetWeight == null && changedDisplayName == null && changedNote == null) {
+        return CloudFilamentUpdateBuildResult.NoChanges
+    }
+
+    return CloudFilamentUpdateBuildResult.Update(
+        BambuCloudFilamentUpdate(
+            id = filament.id,
+            netWeightGrams = normalizedNetWeight,
+            displayName = changedDisplayName,
+            note = changedNote
+        )
+    )
 }
 
 @Composable
@@ -1551,6 +1887,29 @@ private fun formatRemainingTime(minutes: Int): String {
 
 private fun formatNozzle(value: Double): String {
     return if (value % 1.0 == 0.0) value.toInt().toString() else String.format("%.1f", value)
+}
+
+private fun formatCreateType(value: String, unknown: String): String {
+    return when (value.trim().lowercase(Locale.ROOT)) {
+        "ams" -> "AMS"
+        "" -> unknown
+        else -> value
+    }
+}
+
+@Composable
+private fun formatCloudStatus(value: Int): String {
+    return when (value) {
+        0 -> stringResource(R.string.cloud_filament_status_normal)
+        else -> value.toString()
+    }
+}
+
+private fun formatCloudTimestamp(seconds: Long, unknown: String): String {
+    if (seconds <= 0L) return unknown
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(seconds * 1000L))
+    }.getOrDefault(unknown)
 }
 
 private fun formatTemperature(value: Double?): String {

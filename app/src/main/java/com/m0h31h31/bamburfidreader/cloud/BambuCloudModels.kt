@@ -40,16 +40,32 @@ data class BambuCloudFilament(
     val filamentId: String,
     val rfid: String,
     val color: String,
+    val colorType: Int = 0,
     val colors: List<String>,
     val netWeightGrams: Int,
     val totalNetWeightGrams: Int,
+    val note: String = "",
+    val createdAtSeconds: Long = 0L,
+    val updatedAtSeconds: Long = 0L,
+    val status: Int = 0,
+    val isSupport: Boolean = false,
     val trayIdName: String,
+    val category: String = "",
+    val displayName: String? = null,
     val inPrinter: Boolean,
     val deviceId: String,
     val amsSerial: String,
     val slotId: String,
     val amsId: Int?,
-    val deviceName: String
+    val amsType: Int? = null,
+    val deviceName: String = ""
+)
+
+data class BambuCloudFilamentUpdate(
+    val id: Long,
+    val netWeightGrams: Int? = null,
+    val displayName: String? = null,
+    val note: String? = null
 )
 
 data class BambuCloudSession(
@@ -171,6 +187,17 @@ interface BambuCloudService {
         limit: Int
     ): BambuCloudApiResult<List<BambuCloudFilament>>
 
+    suspend fun updateFilament(
+        accessToken: String,
+        update: BambuCloudFilamentUpdate
+    ): BambuCloudApiResult<Unit>
+
+    suspend fun deleteFilaments(
+        accessToken: String,
+        ids: List<Long>,
+        rfids: List<String>
+    ): BambuCloudApiResult<Unit>
+
     suspend fun fetchTasks(
         accessToken: String,
         offset: Int,
@@ -208,6 +235,11 @@ sealed class BambuCloudPrinterResult {
 sealed class BambuCloudFilamentResult {
     data class Success(val filaments: List<BambuCloudFilament>) : BambuCloudFilamentResult()
     data class Failure(val message: String) : BambuCloudFilamentResult()
+}
+
+sealed class BambuCloudFilamentMutationResult {
+    data object Success : BambuCloudFilamentMutationResult()
+    data class Failure(val message: String) : BambuCloudFilamentMutationResult()
 }
 
 sealed class BambuCloudTaskResult {

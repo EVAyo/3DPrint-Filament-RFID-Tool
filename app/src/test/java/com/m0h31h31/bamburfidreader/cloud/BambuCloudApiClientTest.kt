@@ -1,6 +1,7 @@
 package com.m0h31h31.bamburfidreader.cloud
 
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -371,10 +372,18 @@ class BambuCloudApiClientTest {
                           "filamentId": "GFA00",
                           "RFID": "1F78AB9554E34B46BC890D60A016E9CF",
                           "color": "#8E9089FF",
+                          "colorType": 2,
                           "colors": ["#8E9089FF"],
                           "netWeight": 760,
                           "totalNetWeight": 1000,
+                          "note": "almost full",
+                          "createdAt": 1773052605,
+                          "updatedAt": 1781875819,
+                          "status": 0,
+                          "isSupport": false,
                           "trayIdName": "A00-D00",
+                          "category": "PLA",
+                          "displayName": "Workbench spool",
                           "inPrinter": true,
                           "devId": "01P09C4A3000216",
                           "amsSn": "00600A492907413",
@@ -403,9 +412,17 @@ class BambuCloudApiClientTest {
         assertEquals("GFA00", filament.filamentId)
         assertEquals("1F78AB9554E34B46BC890D60A016E9CF", filament.rfid)
         assertEquals("#8E9089FF", filament.color)
+        assertEquals(2, filament.colorType)
         assertEquals(listOf("#8E9089FF"), filament.colors)
         assertEquals(760, filament.netWeightGrams)
         assertEquals(1000, filament.totalNetWeightGrams)
+        assertEquals("almost full", filament.note)
+        assertEquals(1773052605L, filament.createdAtSeconds)
+        assertEquals(1781875819L, filament.updatedAtSeconds)
+        assertEquals(0, filament.status)
+        assertFalse(filament.isSupport)
+        assertEquals("PLA", filament.category)
+        assertEquals("Workbench spool", filament.displayName)
         assertTrue(filament.inPrinter)
         assertEquals("01P09C4A3000216", filament.deviceId)
         assertEquals("00600A492907413", filament.amsSerial)
@@ -418,6 +435,92 @@ class BambuCloudApiClientTest {
             transport.lastRequest.url
         )
         assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+    }
+
+    @Test
+    fun updateFilamentUsesPutWithEditableFieldsOnly() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(statusCode = 200, body = """{"success":true}""")
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.updateFilament(
+            accessToken = "access-123",
+            update = BambuCloudFilamentUpdate(
+                id = 947238L,
+                netWeightGrams = 100,
+                displayName = "111",
+                note = "xxxx"
+            )
+        )
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        assertEquals("PUT", transport.lastRequest.method)
+        assertEquals(
+            "https://api.bambulab.cn/v1/design-user-service/my/filament/v2",
+            transport.lastRequest.url
+        )
+        assertEquals("application/json; charset=UTF-8", transport.lastRequest.headers["Content-Type"])
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+        val body = JSONObject(transport.lastRequest.body)
+        assertEquals(947238L, body.getLong("id"))
+        assertEquals(100, body.getInt("netWeight"))
+        assertEquals("111", body.getString("displayName"))
+        assertEquals("xxxx", body.getString("note"))
+        assertEquals(4, body.length())
+    }
+
+    @Test
+    fun updateFilamentOmitsUnchangedEditableFields() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(statusCode = 200, body = """{"success":true}""")
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.updateFilament(
+            accessToken = "access-123",
+            update = BambuCloudFilamentUpdate(
+                id = 947238L,
+                netWeightGrams = null,
+                displayName = "display-only",
+                note = null
+            )
+        )
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        val body = JSONObject(transport.lastRequest.body)
+        assertEquals(947238L, body.getLong("id"))
+        assertEquals("display-only", body.getString("displayName"))
+        assertFalse(body.has("netWeight"))
+        assertFalse(body.has("note"))
+        assertEquals(2, body.length())
+    }
+
+    @Test
+    fun deleteFilamentsUsesBatchDeleteWithListBody() = runBlocking {
+        val transport = RecordingTransport(
+            BambuCloudHttpResponse(statusCode = 200, body = """{"success":true}""")
+        )
+        val client = BambuCloudApiClient(transport)
+
+        val result = client.deleteFilaments(
+            accessToken = "access-123",
+            ids = listOf(947238L),
+            rfids = listOf("0AD141602F5B42C381FD2FAA7586F9ED")
+        )
+
+        assertTrue(result is BambuCloudApiResult.Success)
+        assertEquals("DELETE", transport.lastRequest.method)
+        assertEquals(
+            "https://api.bambulab.cn/v1/design-user-service/my/filament/v2/batch",
+            transport.lastRequest.url
+        )
+        assertEquals("application/json; charset=UTF-8", transport.lastRequest.headers["Content-Type"])
+        assertEquals("Bearer access-123", transport.lastRequest.headers["Authorization"])
+        val body = JSONObject(transport.lastRequest.body)
+        assertEquals(947238L, body.getJSONArray("ids").getLong(0))
+        assertEquals("0AD141602F5B42C381FD2FAA7586F9ED", body.getJSONArray("RFIDs").getString(0))
+        assertEquals(2, body.length())
     }
 
     @Test

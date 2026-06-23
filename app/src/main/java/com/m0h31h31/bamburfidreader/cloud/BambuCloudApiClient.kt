@@ -1,6 +1,7 @@
 package com.m0h31h31.bamburfidreader.cloud
 
 import org.json.JSONObject
+import org.json.JSONArray
 import java.util.Base64
 
 class BambuCloudApiClient(
@@ -147,21 +148,69 @@ class BambuCloudApiClient(
                             filamentId = item.optCleanString("filamentId"),
                             rfid = item.optCleanString("RFID"),
                             color = item.optCleanString("color"),
+                            colorType = item.optInt("colorType", 0),
                             colors = item.optStringList("colors"),
                             netWeightGrams = item.optInt("netWeight", 0),
                             totalNetWeightGrams = item.optInt("totalNetWeight", 0),
+                            note = item.optCleanString("note"),
+                            createdAtSeconds = item.optLong("createdAt", 0L),
+                            updatedAtSeconds = item.optLong("updatedAt", 0L),
+                            status = item.optInt("status", 0),
+                            isSupport = item.optBoolean("isSupport", false),
                             trayIdName = item.optCleanString("trayIdName"),
+                            category = item.optCleanString("category"),
+                            displayName = item.optNullableCleanString("displayName"),
                             inPrinter = item.optBoolean("inPrinter", false),
                             deviceId = item.optCleanString("devId"),
                             amsSerial = item.optCleanString("amsSn"),
                             slotId = item.optCleanString("slotId"),
                             amsId = item.optNullableInt("amsId"),
+                            amsType = item.optNullableInt("amsType"),
                             deviceName = item.optCleanString("deviceName")
                         )
                     )
                 }
             }
         }
+    }
+
+    override suspend fun updateFilament(
+        accessToken: String,
+        update: BambuCloudFilamentUpdate
+    ): BambuCloudApiResult<Unit> {
+        val body = JSONObject()
+            .put("id", update.id)
+        update.netWeightGrams?.let { body.put("netWeight", it.coerceAtLeast(0)) }
+        update.displayName?.let { body.put("displayName", it) }
+        update.note?.let { body.put("note", it) }
+        val response = executeSafely(
+            BambuCloudHttpRequest(
+                method = "PUT",
+                url = "$baseUrl/v1/design-user-service/my/filament/v2",
+                headers = authorizedJsonHeaders(accessToken),
+                body = body.toString()
+            )
+        )
+        return parseSuccessResponse(response) { Unit }
+    }
+
+    override suspend fun deleteFilaments(
+        accessToken: String,
+        ids: List<Long>,
+        rfids: List<String>
+    ): BambuCloudApiResult<Unit> {
+        val body = JSONObject()
+            .put("ids", JSONArray(ids))
+            .put("RFIDs", JSONArray(rfids))
+        val response = executeSafely(
+            BambuCloudHttpRequest(
+                method = "DELETE",
+                url = "$baseUrl/v1/design-user-service/my/filament/v2/batch",
+                headers = authorizedJsonHeaders(accessToken),
+                body = body.toString()
+            )
+        )
+        return parseSuccessResponse(response) { Unit }
     }
 
     override suspend fun fetchTasks(
@@ -339,6 +388,19 @@ class BambuCloudApiClient(
     private fun JSONObject.optCleanString(key: String): String {
         if (!has(key) || isNull(key)) return ""
         return optString(key).trim()
+    }
+
+    private fun JSONObject.optNullableCleanString(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        return optString(key).trim()
+    }
+
+    private fun authorizedJsonHeaders(accessToken: String): Map<String, String> {
+        return mapOf(
+            "Accept" to "application/json",
+            "Content-Type" to "application/json; charset=UTF-8",
+            "Authorization" to "Bearer $accessToken"
+        )
     }
 
     private fun JSONObject.optNullableInt(key: String): Int? {

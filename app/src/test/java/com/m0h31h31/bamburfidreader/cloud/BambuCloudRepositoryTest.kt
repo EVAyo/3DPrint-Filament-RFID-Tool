@@ -192,11 +192,17 @@ class BambuCloudRepositoryTest {
         private val loginResult: BambuCloudApiResult<BambuCloudTokens>,
         private val accountResult: BambuCloudApiResult<BambuCloudAccount>,
         private val printerResult: BambuCloudApiResult<List<BambuCloudPrinter>> = BambuCloudApiResult.Success(emptyList()),
-        private val filamentResult: BambuCloudApiResult<List<BambuCloudFilament>> = BambuCloudApiResult.Success(emptyList())
+        private val filamentResult: BambuCloudApiResult<List<BambuCloudFilament>> = BambuCloudApiResult.Success(emptyList()),
+        private val filamentMutationResult: BambuCloudApiResult<Unit> = BambuCloudApiResult.Success(Unit)
     ) : BambuCloudService {
         var profileAccessToken: String = ""
         var printerAccessToken: String = ""
         var filamentAccessToken: String = ""
+        var updateFilamentAccessToken: String = ""
+        var lastFilamentUpdate: BambuCloudFilamentUpdate? = null
+        var deleteFilamentAccessToken: String = ""
+        var lastDeleteIds: List<Long> = emptyList()
+        var lastDeleteRfids: List<String> = emptyList()
 
         override suspend fun loginWithPassword(
             account: String,
@@ -232,6 +238,26 @@ class BambuCloudRepositoryTest {
         ): BambuCloudApiResult<List<BambuCloudFilament>> {
             filamentAccessToken = accessToken
             return filamentResult
+        }
+
+        override suspend fun updateFilament(
+            accessToken: String,
+            update: BambuCloudFilamentUpdate
+        ): BambuCloudApiResult<Unit> {
+            updateFilamentAccessToken = accessToken
+            lastFilamentUpdate = update
+            return filamentMutationResult
+        }
+
+        override suspend fun deleteFilaments(
+            accessToken: String,
+            ids: List<Long>,
+            rfids: List<String>
+        ): BambuCloudApiResult<Unit> {
+            deleteFilamentAccessToken = accessToken
+            lastDeleteIds = ids
+            lastDeleteRfids = rfids
+            return filamentMutationResult
         }
 
         override suspend fun fetchTasks(
