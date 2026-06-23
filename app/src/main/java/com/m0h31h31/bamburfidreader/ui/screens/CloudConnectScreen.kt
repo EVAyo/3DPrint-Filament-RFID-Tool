@@ -905,7 +905,7 @@ private fun CloudFilamentDetailDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 if (effectiveMessage.isNotBlank()) {
                     Box(
@@ -930,6 +930,7 @@ private fun CloudFilamentDetailDialog(
                     },
                     enabled = !busy,
                     singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
                     label = { Text(stringResource(R.string.cloud_filament_field_display_name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -941,6 +942,7 @@ private fun CloudFilamentDetailDialog(
                     },
                     enabled = !busy,
                     singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
                     label = { Text(stringResource(R.string.cloud_filament_field_net_weight)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     suffix = { Text(stringResource(R.string.unit_grams)) },
@@ -953,8 +955,9 @@ private fun CloudFilamentDetailDialog(
                         localMessage = ""
                     },
                     enabled = !busy,
-                    minLines = 2,
-                    maxLines = 4,
+                    minLines = 1,
+                    maxLines = 2,
+                    textStyle = MaterialTheme.typography.bodySmall,
                     label = { Text(stringResource(R.string.cloud_filament_field_note)) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -971,50 +974,52 @@ private fun CloudFilamentDetailDialog(
                     }
                 }
                 HorizontalDivider()
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_id), filament.id.toString())
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_create_type), formatCreateType(filament.createType, unknown))
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_vendor), filament.vendor.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_type), filament.type.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_name), filament.name.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_id), filament.filamentId.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_rfid), filament.rfid.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color), filament.color.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color_type), filament.colorType.toString())
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_colors),
-                    filament.colors.joinToString(", ").ifBlank { unknown }
-                )
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_total_net_weight),
-                    stringResource(R.string.cloud_filament_grams_value, filament.totalNetWeightGrams.coerceAtLeast(0))
-                )
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_created_at), formatCloudTimestamp(filament.createdAtSeconds, unknown))
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_updated_at), formatCloudTimestamp(filament.updatedAtSeconds, unknown))
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_status), formatCloudStatus(filament.status))
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_support),
-                    if (filament.isSupport) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
-                )
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_tray_id_name), filament.trayIdName.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_category), filament.category.ifBlank { unknown })
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_catalog_color),
-                    catalogInfo?.colorName.orEmpty().ifBlank { unknown }
-                )
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_catalog_number),
-                    catalogInfo?.filamentNumber.orEmpty().ifBlank { unknown }
-                )
-                CloudFilamentDetailLine(
-                    stringResource(R.string.cloud_filament_field_in_printer),
-                    if (filament.inPrinter) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
-                )
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_id), filament.deviceId.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_sn), filament.amsSerial.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_slot_id), filament.slotId.ifBlank { unknown })
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_id), filament.amsId?.toString() ?: unknown)
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_type), filament.amsType?.toString() ?: unknown)
-                CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_name), filament.deviceName.ifBlank { unknown })
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_id), filament.id.toString())
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_create_type), formatCreateType(filament.createType, unknown))
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_vendor), filament.vendor.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_type), filament.type.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_name), filament.name.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_filament_id), filament.filamentId.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_rfid), filament.rfid.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color), filament.color.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_color_type), filament.colorType.toString())
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_colors),
+                        filament.colors.joinToString(", ").ifBlank { unknown }
+                    )
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_total_net_weight),
+                        stringResource(R.string.cloud_filament_grams_value, filament.totalNetWeightGrams.coerceAtLeast(0))
+                    )
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_created_at), formatCloudTimestamp(filament.createdAtSeconds, unknown))
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_updated_at), formatCloudTimestamp(filament.updatedAtSeconds, unknown))
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_status), formatCloudStatus(filament.status))
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_support),
+                        if (filament.isSupport) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
+                    )
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_tray_id_name), filament.trayIdName.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_category), filament.category.ifBlank { unknown })
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_catalog_color),
+                        catalogInfo?.colorName.orEmpty().ifBlank { unknown }
+                    )
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_catalog_number),
+                        catalogInfo?.filamentNumber.orEmpty().ifBlank { unknown }
+                    )
+                    CloudFilamentDetailLine(
+                        stringResource(R.string.cloud_filament_field_in_printer),
+                        if (filament.inPrinter) stringResource(R.string.cloud_yes) else stringResource(R.string.cloud_no)
+                    )
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_id), filament.deviceId.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_sn), filament.amsSerial.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_slot_id), filament.slotId.ifBlank { unknown })
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_id), filament.amsId?.toString() ?: unknown)
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_ams_type), filament.amsType?.toString() ?: unknown)
+                    CloudFilamentDetailLine(stringResource(R.string.cloud_filament_field_device_name), filament.deviceName.ifBlank { unknown })
+                }
             }
         },
         confirmButton = {
@@ -1059,19 +1064,20 @@ private fun CloudFilamentDetailDialog(
 private fun CloudFilamentDetailLine(label: String, value: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.Top
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = "$label:",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            modifier = Modifier.width(108.dp)
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(86.dp)
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
