@@ -898,6 +898,8 @@
     <string name="nfc_compat_result_read_failed">Read failed</string>
 
     <!-- Cost / pricing module -->
+    <string name="config_ui_scale">UI scale</string>
+    <string name="config_ui_scale_desc">Scale the whole interface proportionally</string>
     <string name="config_cost_feature">Cost &amp; Pricing</string>
     <string name="config_cost_feature_desc">Quote jobs and analyze cost/profit from print history</string>
     <string name="cost_need_login">Please sign in on the Connect page first</string>

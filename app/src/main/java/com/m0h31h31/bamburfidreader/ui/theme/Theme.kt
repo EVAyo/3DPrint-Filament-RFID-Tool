@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
@@ -168,6 +170,7 @@ fun BambuRfidReaderTheme(
     dynamicColor: Boolean = false,
     uiStyle: AppUiStyle = DEFAULT_APP_UI_STYLE,
     colorPalette: ColorPalette = ColorPalette.OCEAN,
+    uiScale: Float = 1f,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -184,6 +187,14 @@ fun BambuRfidReaderTheme(
         paletteColorScheme(colorPalette, miuix = uiStyle == AppUiStyle.MIUIX, dark = darkTheme)
     }
     val shapes = if (isModernWorkbench) ModernShapes else AppShapes
+    // 全局界面缩放:始终包一层(树结构恒定,避免切换缩放时重建子树导致 NavHost 复位/跳页)。
+    // uiScale=1 时等同原 density,仅缩放渲染尺寸,不影响任何功能逻辑。
+    val scaledContent: @Composable () -> Unit = {
+        val base = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(base.density * uiScale, base.fontScale)
+        ) { content() }
+    }
     CompositionLocalProvider(LocalAppUiStyle provides uiStyle) {
         if (uiStyle == AppUiStyle.MIUIX) {
             MiuixTheme(
@@ -193,7 +204,7 @@ fun BambuRfidReaderTheme(
                     colorScheme = colorScheme,
                     typography = Typography,
                     shapes = shapes,
-                    content = content
+                    content = scaledContent
                 )
             }
         } else {
@@ -201,7 +212,7 @@ fun BambuRfidReaderTheme(
                 colorScheme = colorScheme,
                 typography = Typography,
                 shapes = shapes,
-                content = content
+                content = scaledContent
             )
         }
     }

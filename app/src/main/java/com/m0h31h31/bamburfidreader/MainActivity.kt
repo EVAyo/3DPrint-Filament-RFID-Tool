@@ -160,6 +160,7 @@ private const val KEY_CREALITY_ENABLED = "creality_enabled"
 private const val KEY_SNAPMAKER_TAG_ENABLED = "snapmaker_tag_enabled"
 private const val KEY_CLOUD_CONNECT_ENABLED = "cloud_connect_enabled"
 private const val KEY_COST_ENABLED = "cost_enabled"
+private const val KEY_UI_SCALE = "ui_scale"
 private const val KEY_AUTO_SHARE_TAG = "auto_share_tag"
 private const val KEY_AUTO_DETECT_BRAND = "auto_detect_brand"
 private const val KEY_GLOBAL_NFC_LISTENER = "global_nfc_listener"
@@ -496,6 +497,7 @@ class MainActivity : ComponentActivity() {
     private var snapmakerTagEnabled by mutableStateOf(false) // 控制快造复制页面显示
     private var cloudConnectEnabled by mutableStateOf(true) // 控制拓竹云连接页面显示
     private var costEnabled by mutableStateOf(false) // 控制费用/报价页面显示
+    private var uiScale by mutableStateOf(1f) // 全局界面缩放比例
     private var snapmakerShareTagItems by mutableStateOf<List<SnapmakerShareTagItem>>(emptyList())
     private var snapmakerShareLoading by mutableStateOf(false)
     private var snapmakerWriteStatusMessage by mutableStateOf("")
@@ -1065,6 +1067,7 @@ class MainActivity : ComponentActivity() {
         snapmakerTagEnabled = uiPrefs.getBoolean(KEY_SNAPMAKER_TAG_ENABLED, false)
         cloudConnectEnabled = uiPrefs.getBoolean(KEY_CLOUD_CONNECT_ENABLED, true)
         costEnabled = uiPrefs.getBoolean(KEY_COST_ENABLED, false)
+        uiScale = uiPrefs.getFloat(KEY_UI_SCALE, 1f)
         inventoryEnabled = uiPrefs.getBoolean(KEY_INVENTORY_ENABLED, true)
         autoDetectBrand = uiPrefs.getBoolean(KEY_AUTO_DETECT_BRAND, false)
         globalNfcListenerEnabled = uiPrefs.getBoolean(KEY_GLOBAL_NFC_LISTENER, true)
@@ -1138,7 +1141,7 @@ class MainActivity : ComponentActivity() {
         )
         
         setContent {
-            BambuRfidReaderTheme(themeMode = themeMode, uiStyle = uiStyle, colorPalette = colorPalette) {
+            BambuRfidReaderTheme(themeMode = themeMode, uiStyle = uiStyle, colorPalette = colorPalette, uiScale = uiScale) {
                 AppNavigation(
                     state = uiState,
                     voiceEnabled = voiceEnabled,
@@ -1222,6 +1225,11 @@ class MainActivity : ComponentActivity() {
                     onCostEnabledChange = { enabled ->
                         costEnabled = enabled
                         uiPrefs.edit().putBoolean(KEY_COST_ENABLED, enabled).apply()
+                    },
+                    uiScale = uiScale,
+                    onUiScaleChange = { scale ->
+                        uiScale = scale
+                        uiPrefs.edit().putFloat(KEY_UI_SCALE, scale).apply()
                     },
                     snapmakerShareTagItems = snapmakerShareTagItems,
                     snapmakerShareLoading = snapmakerShareLoading,

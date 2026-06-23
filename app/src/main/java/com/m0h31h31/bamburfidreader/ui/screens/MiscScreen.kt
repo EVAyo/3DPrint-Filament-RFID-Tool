@@ -193,6 +193,8 @@ private fun ModernMiscScreen(
     onCloudConnectEnabledChange: (Boolean) -> Unit,
     costEnabled: Boolean,
     onCostEnabledChange: (Boolean) -> Unit,
+    uiScale: Float,
+    onUiScaleChange: (Float) -> Unit,
     inventoryEnabled: Boolean,
     onInventoryEnabledChange: (Boolean) -> Unit,
     autoDetectBrand: Boolean,
@@ -399,6 +401,11 @@ private fun ModernMiscScreen(
                         )
                     }
                 }
+                ModernDivider()
+                ModernSettingRow(
+                    title = stringResource(R.string.config_ui_scale),
+                    subtitle = stringResource(R.string.config_ui_scale_desc)
+                ) { UiScaleStepper(uiScale, onUiScaleChange) }
             }
 
             // NFC
@@ -1400,6 +1407,29 @@ private fun normalizeConfigMessage(message: String): String {
         .trim()
 }
 
+private const val UI_SCALE_MIN = 0.6f
+private const val UI_SCALE_MAX = 1.2f
+
+private fun snapUiScale(value: Float): Float =
+    (Math.round(value / 0.05f) * 0.05f).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX)
+
+/** 界面缩放步进器:60%–120%,5% 步长(与下方滑块同步)。 */
+@Composable
+private fun UiScaleStepper(uiScale: Float, onChange: (Float) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(
+            onClick = { onChange(snapUiScale(uiScale - 0.05f)) },
+            enabled = uiScale > UI_SCALE_MIN + 0.001f
+        ) { Text("−", style = MaterialTheme.typography.titleLarge) }
+        Text("${Math.round(uiScale * 100)}%", style = MaterialTheme.typography.bodyMedium)
+        TextButton(
+            onClick = { onChange(snapUiScale(uiScale + 0.05f)) },
+            enabled = uiScale < UI_SCALE_MAX - 0.001f
+        ) { Text("＋", style = MaterialTheme.typography.titleLarge) }
+    }
+}
+
+
 @Composable
 private fun statusToneColor(tone: StatusTone): Color {
     val uiStyle = LocalAppUiStyle.current
@@ -1441,6 +1471,8 @@ fun MiscScreen(
     onCloudConnectEnabledChange: (Boolean) -> Unit = {},
     costEnabled: Boolean = false,
     onCostEnabledChange: (Boolean) -> Unit = {},
+    uiScale: Float = 1f,
+    onUiScaleChange: (Float) -> Unit = {},
     selfTagCount: Int = 0,
     appConfigMessage: String = "",
     appConfigAdMessage: String = "",
@@ -1671,6 +1703,8 @@ fun MiscScreen(
             onCloudConnectEnabledChange = onCloudConnectEnabledChange,
             costEnabled = costEnabled,
             onCostEnabledChange = onCostEnabledChange,
+            uiScale = uiScale,
+            onUiScaleChange = onUiScaleChange,
             inventoryEnabled = inventoryEnabled,
             onInventoryEnabledChange = onInventoryEnabledChange,
             autoDetectBrand = autoDetectBrand,
@@ -2073,6 +2107,25 @@ fun MiscScreen(
                                     }
                                 }
                             )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(text = stringResource(R.string.config_ui_scale))
+                                Text(
+                                    text = stringResource(R.string.config_ui_scale_desc),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            UiScaleStepper(uiScale, onUiScaleChange)
                         }
 
                         Row(
