@@ -51,7 +51,7 @@
         },
         "qq": {
             "type": "scheme",
-            "value": "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1074926713&card_type=group&source=qrcode"
+            "value": "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1036194029&card_type=group&source=qrcode"
         },
         
         "gitee": {
@@ -63,7 +63,7 @@
             "value": "https://github.com/m0h31h31/BambuRfidReader"
         }
     },
-    "message": "【共享说明】\n本程序默认开启「自动共享标签」。当你成功共享 3 个及以上标签后，即可在线下载他人共享的标签。\n也可以助力作者的 MakerWorld 作品，之后联系作者开通下载权限。\n若不便在线下载，QQ 群内提供离线标签包可自行获取。\n\n【标签卡购买】\n群内有 FUID、CUID 标签卡出售，点击咸鱼图标可快速跳转。\n备注「从 APP 跳转」下单，附带赠品。\nQQ 群号：1074926713\n\n【关于本程序】\n程序开源，软件本体不涉及任何收费行为。\n软件功能与标签的长期可用性不作保证，请知悉。\n\n【FUID 卡】\n· 官卡与 FUID 的 0 区块为一次性写入，写入后无法更改。\n· 官方卡不能改写为其他标签，但其余区块可修改。\n· 除非你明确要将卡用作其他用途，否则不建议格式化官卡 / FUID。\n· 已格式化的卡，可用对应 UID 的标签数据写回还原。\n\n【CUID 卡（推荐）】\n· 支持重复擦写，更灵活。\n· 但市面上绝大多数 CUID 卡无法正常使用。\n· 不熟悉卡片的用户，不建议在其他渠道自行购买。\n· 有些标签存在AMS不读的情况,可能是拓竹封禁了这个标签数据,换一个数据用。\n· 复制的时候选择复制人数较少的数据!",
+    "message": "【共享说明】\n本程序默认开启「自动共享标签」。当你成功共享 3 个及以上标签后，即可在线下载他人共享的标签。\n也可以助力作者的 MakerWorld 作品，之后联系作者开通下载权限。\n若不便在线下载，QQ 群内提供离线标签包可自行获取。\n\n【标签卡购买】\n群内有 FUID、CUID 标签卡出售，点击咸鱼图标可快速跳转。\n备注「从 APP 跳转」下单，附带赠品。\nQQ 群号：1074926713(已满) 二群:1036194029\n\n【关于本程序】\n程序开源，软件本体不涉及任何收费行为。\n软件功能与标签的长期可用性不作保证，请知悉。\n\n【FUID 卡】\n· 官卡与 FUID 的 0 区块为一次性写入，写入后无法更改。\n· 官方卡不能改写为其他标签，但其余区块可修改。\n· 除非你明确要将卡用作其他用途，否则不建议格式化官卡 / FUID。\n· 已格式化的卡，可用对应 UID 的标签数据写回还原。\n\n【CUID 卡（推荐）】\n· 支持重复擦写，更灵活。\n· 但市面上绝大多数 CUID 卡无法正常使用。\n· 不熟悉卡片的用户，不建议在其他渠道自行购买。\n· 有些标签存在AMS不读的情况,可能是拓竹封禁了这个标签数据,换一个数据用。\n· 复制的时候选择复制人数较少的数据!",
     "messageEn": "[This information may not be applicable to users outside of China.]\n Tag data is available in the github. FUID and CUID tags are also for sale (tap the Xianyu icon to jump there; orders placed via the app include a free gift).\nQQ Group: 1074926713\nOpen source! The software itself is completely free!!!\nLong-term availability of features and tags is not guaranteed!!!\n\nRecent AMS firmware may cause tag data to become invalid. If this happens, scan the card and report the anomaly — the tag will be flagged and a warning will appear when copying!!!\n\nFUID (Recommended):\nSector 0 of official and FUID cards is one-time-write and cannot be changed once written.\nOther sectors can be modified.\nFormatting official or FUID cards is not recommended unless you clearly intend to repurpose the card.\nAfter formatting, you can restore it by writing the tag data for the same UID.\nCUID:\nCUID cards can be erased and rewritten.\nHowever, the vast majority of CUID cards on the market are not usable.\nBuying from other channels is not recommended if you are unfamiliar with NFC card types.",
     "adMessage": "咸鱼图标可以跳转买卡店铺(发送APP过来的有赠品),店铺也有一些3D打印周边物品可按需购买\n\nmakeroad(一个3D打印模型网站)拉用户得积分\n复制下面连接打开后注册就行!\nhttps://www.makeroad.com/login?inviteCode=438574\n你注册后上传模型也能白嫖耗材!\n\n一个好用的耗材管理微信小程序[WM万墨]\n广告位招租^-^",
     "adMessageEn": "[This information may not be applicable to users outside of China.]\nThe Xianyu icon links to the tag shop (orders placed via the app include a free gift). The shop also carries various 3D printing accessories.\n\nAdvertising space available ^-^"
