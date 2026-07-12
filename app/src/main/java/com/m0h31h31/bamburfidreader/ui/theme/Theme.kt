@@ -192,7 +192,9 @@ fun BambuRfidReaderTheme(
     val scaledContent: @Composable () -> Unit = {
         val base = LocalDensity.current
         CompositionLocalProvider(
-            LocalDensity provides Density(base.density * uiScale, base.fontScale)
+            LocalDensity provides Density(base.density * uiScale, base.fontScale),
+            // 透传缩放比例,供弹窗内部重新应用(弹窗子窗口会重置 LocalDensity)
+            com.m0h31h31.bamburfidreader.ui.components.LocalUiScale provides uiScale
         ) { content() }
     }
     CompositionLocalProvider(LocalAppUiStyle provides uiStyle) {

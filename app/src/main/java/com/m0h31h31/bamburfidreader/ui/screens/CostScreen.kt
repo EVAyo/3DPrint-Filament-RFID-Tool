@@ -1,11 +1,14 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -777,7 +780,7 @@ private fun CoverImage(
         }
     }
     if (showLarge && image != null) {
-        androidx.compose.ui.window.Dialog(
+        com.m0h31h31.bamburfidreader.ui.components.AppDialog(
             onDismissRequest = { showLarge = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
         ) {
@@ -822,7 +825,7 @@ private fun ChargeDialog(ov: OrderView, onSave: (Long) -> Unit, onDismiss: () ->
     var text by remember { mutableStateOf(if (ov.actualChargeCents > 0) Money.toPlain(ov.actualChargeCents) else "") }
     val cents = Money.parse(text) ?: 0L
     val profit = cents - ov.costCents
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cost_set_charge)) },
         text = {
@@ -839,7 +842,7 @@ private fun ChargeDialog(ov: OrderView, onSave: (Long) -> Unit, onDismiss: () ->
 
 @Composable
 private fun DetailDialog(ov: OrderView, controller: CostController, materialTypesByFilaId: Map<String, String>, onDismiss: () -> Unit) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -932,7 +935,7 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
     )
     val q = CostCalculator.computeQuote(input, config)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -945,7 +948,10 @@ private fun QuoteDialog(config: CostConfig, prices: List<MaterialPrice>, onDismi
         },
         text = {
             Column(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 MaterialSearchField(prices = prices, selected = selectedPrice, onSelect = {
@@ -1045,7 +1051,7 @@ private fun ConfigDialog(config: CostConfig, onSave: (CostConfig) -> Unit, onDis
     var deprec by remember { mutableStateOf(Money.toPlain(config.defaultDepreciationPerHourCents)) }
     val otherFees = remember { config.otherFees.toMutableStateList() }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -1257,7 +1263,7 @@ private fun PricesDialog(prices: List<MaterialPrice>, onSet: (String, Long) -> U
     val filtered = remember(query, prices) {
         if (query.isBlank()) prices else prices.filter { it.filaType.contains(query, true) || it.filaId.contains(query, true) || it.baseType.contains(query, true) }
     }
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surface,

@@ -1,5 +1,7 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppDialog
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -374,7 +376,7 @@ private fun UidSelectionDialog(
     onDismiss: () -> Unit,
     anomalyUids: Map<String, Int> = emptyMap()
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
             tonalElevation = 6.dp,
@@ -490,7 +492,7 @@ private fun UidSelectionDialog(
                 if (anomalyPendingTarget != null) {
                     val anomalyCount = anomalyUids[anomalyPendingTarget.sourceUid.uppercase()]
                         ?: 1
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { pendingAnomalyItem = null },
                         title = { Text(stringResource(R.string.anomaly_copy_warning_title)) },
                         text = { Text(stringResource(R.string.anomaly_copy_warning_message, anomalyCount)) },
@@ -689,7 +691,7 @@ private fun CModifyRecoveryDialog(
         all.forEach { appendLine(it) }
     }.trimEnd()
 
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         NeuPanel(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier.padding(4.dp),
@@ -1138,7 +1140,7 @@ fun TagScreen(
 
             val deleteTarget = pendingDeleteItem
             if (deleteTarget != null) {
-                AlertDialog(
+                AppAlertDialog(
                     onDismissRequest = { pendingDeleteItem = null },
                     title = { Text(stringResource(R.string.tag_delete_confirm_title)) },
                     text = { Text(stringResource(R.string.tag_delete_confirm_message, deleteTarget.sourceUid)) },
@@ -1162,7 +1164,7 @@ fun TagScreen(
             if (anomalyWriteTarget != null) {
                 val anomalyWriteCount = anomalyUids[anomalyWriteTarget.sourceUid.uppercase()]
                     ?: 1
-                AlertDialog(
+                AppAlertDialog(
                     onDismissRequest = { pendingAnomalyWriteItem = null },
                     title = { Text(stringResource(R.string.anomaly_copy_warning_title)) },
                     text = { Text(stringResource(R.string.anomaly_copy_warning_message, anomalyWriteCount)) },

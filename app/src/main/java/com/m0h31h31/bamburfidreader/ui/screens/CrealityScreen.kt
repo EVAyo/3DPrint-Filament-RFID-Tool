@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,7 +60,7 @@ fun CameraColorPickerDialog(
     val imageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
     val aspectRatio = bitmap.width.toFloat() / bitmap.height.toFloat().coerceAtLeast(1f)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.creality_camera_color_title)) },
         text = {
@@ -200,7 +201,7 @@ fun ColorPickerDialog(
         derivedStateOf { Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f))) }
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.creality_color_picker_title)) },
         text = {

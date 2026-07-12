@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -643,7 +644,7 @@ fun ReaderScreen(
                     )
                 }
                 if (showOutboundConfirm) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showOutboundConfirm = false },
                         title = { Text(stringResource(R.string.reader_outbound_confirm_title)) },
                         text = { Text(stringResource(R.string.reader_outbound_confirm_message)) },
@@ -669,7 +670,7 @@ fun ReaderScreen(
                 if (showAnomalyConfirm && onReportAnomaly != null) {
                     val reportSuccessText = stringResource(R.string.anomaly_report_success)
                     val reportFailText = stringResource(R.string.anomaly_report_fail)
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showAnomalyConfirm = false },
                         title = { Text(stringResource(R.string.anomaly_dialog_title)) },
                         text = { Text(stringResource(R.string.anomaly_dialog_message)) },
@@ -1547,7 +1548,7 @@ private fun ModernReaderScreen(
     }
 
     if (showOutboundConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showOutboundConfirm = false },
             title = { Text(stringResource(R.string.reader_outbound_confirm_title)) },
             text = { Text(stringResource(R.string.reader_outbound_confirm_message)) },
@@ -1568,7 +1569,7 @@ private fun ModernReaderScreen(
     }
     if (showAnomalyConfirm && onReportAnomaly != null) {
         val reportSuccessText = stringResource(R.string.anomaly_report_success)
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showAnomalyConfirm = false },
             title = { Text(stringResource(R.string.anomaly_dialog_title)) },
             text = {

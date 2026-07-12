@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -455,7 +456,7 @@ fun DataScreen(dbHelper: FilamentDbHelper?, modifier: Modifier = Modifier) {
 
     val dialogStack = activeStackDialog.value
     if (dialogStack != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { activeStackDialog.value = null },
             title = {
                 Text(

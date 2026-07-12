@@ -28,8 +28,8 @@ android {
         applicationId = "com.m0h31h31.bamburfidreader"
         minSdk = 28
         targetSdk = 36
-        versionCode = 321
-        versionName = "3.2.1"
+        versionCode = 322
+        versionName = "3.2.2"
         val eventApiKey = localProperties.getProperty("EVENT_API_KEY", "")
         buildConfigField("String", "EVENT_API_KEY", "\"${escapeBuildConfigString(eventApiKey)}\"")
         val tagPackageKey = localProperties.getProperty("TAG_PACKAGE_KEY", "")

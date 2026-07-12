@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -338,7 +339,7 @@ fun CloudConnectScreen(
     }
 
     if (showLoginDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = {
                 if (!loginInProgress) showLoginDialog = false
             },
@@ -458,7 +459,7 @@ fun CloudConnectScreen(
     }
 
     if (showLogoutConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
             title = { Text(stringResource(R.string.cloud_logout_confirm_title)) },
             text = { Text(stringResource(R.string.cloud_logout_confirm_message)) },
@@ -897,7 +898,7 @@ private fun CloudFilamentDetailDialog(
         note = note
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cloud_filament_detail_title, title)) },
         text = {
@@ -1558,7 +1559,7 @@ private fun CloudAmsDialog(
     status: BambuPrinterRealtimeStatus,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.cloud_ams_details_title)) },
         text = {

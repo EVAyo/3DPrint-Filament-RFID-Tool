@@ -1,5 +1,7 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppDialog
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -356,7 +358,7 @@ fun SnapmakerTagScreen(
         // Delete dialog
         val deleteTarget = pendingDeleteItem
         if (deleteTarget != null) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { pendingDeleteItem = null },
                 title = { Text(stringResource(R.string.tag_delete_confirm_title)) },
                 text = { Text(stringResource(R.string.snapmaker_delete_confirm_message, deleteTarget.uid)) },
@@ -512,7 +514,7 @@ private fun SnapUidSelectionDialog(
     onSelect: (SnapmakerShareTagItem) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    AppDialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
             tonalElevation = 6.dp,

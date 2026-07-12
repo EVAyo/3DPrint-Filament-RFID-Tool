@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
@@ -944,7 +945,7 @@ private fun ModernMiscScreen(
 
     // Dialogs
     if (dlDeniedMsg.isNotBlank()) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { dlDeniedMsg = "" },
             title = { Text(stringResource(R.string.download_not_allowed_title)) },
             text = {
@@ -964,7 +965,7 @@ private fun ModernMiscScreen(
     }
 
     if (dlInProgress) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { },
             title = {
                 Text(stringResource(
@@ -1005,7 +1006,7 @@ private fun ModernMiscScreen(
     }
 
     if (mySharesDialogVisible) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { mySharesDialogVisible = false }) {
+        com.m0h31h31.bamburfidreader.ui.components.AppDialog(onDismissRequest = { mySharesDialogVisible = false }) {
             Surface(shape = MaterialTheme.shapes.large, tonalElevation = 6.dp) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -1054,7 +1055,7 @@ private fun ModernMiscScreen(
     }
 
     if (showPaletteDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showPaletteDialog = false },
             title = { Text(stringResource(R.string.misc_color_palette_dialog_title)) },
             text = {
@@ -1111,7 +1112,7 @@ private fun ModernMiscScreen(
     }
 
     if (showReadAllSectorsDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showReadAllSectorsDialog = false },
             title = { Text(stringResource(R.string.misc_read_all_title)) },
             text = { Text(stringResource(R.string.misc_read_all_message)) },
@@ -1128,7 +1129,7 @@ private fun ModernMiscScreen(
     }
 
     if (showImportDatabaseConfirmDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showImportDatabaseConfirmDialog = false },
             title = { Text(stringResource(R.string.misc_import_db_title)) },
             text = { Text(stringResource(R.string.misc_import_db_message)) },
@@ -1145,7 +1146,7 @@ private fun ModernMiscScreen(
     }
 
     if (showClearSelfTagsConfirmDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showClearSelfTagsConfirmDialog = false },
             title = { Text(stringResource(R.string.misc_clear_self_tags_title)) },
             text = { Text(stringResource(R.string.misc_clear_self_tags_message)) },
@@ -1162,7 +1163,7 @@ private fun ModernMiscScreen(
     }
 
     if (showClearShareTagsConfirmDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showClearShareTagsConfirmDialog = false },
             title = { Text(stringResource(R.string.misc_clear_share_tags_title)) },
             text = { Text(stringResource(R.string.misc_clear_share_tags_message)) },
@@ -1179,7 +1180,7 @@ private fun ModernMiscScreen(
     }
 
     if (showCuidDisclaimerDialog) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showCuidDisclaimerDialog = false },
             title = { Text(stringResource(R.string.misc_cuid_test)) },
             text = { Text(stringResource(R.string.misc_cuid_test_disclaimer)) },
@@ -1196,7 +1197,7 @@ private fun ModernMiscScreen(
     }
 
     if (showAutoShareDisableConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showAutoShareDisableConfirm = false },
             title = { Text(stringResource(R.string.auto_share_disable_confirm_title)) },
             text = { Text(stringResource(R.string.auto_share_disable_confirm_message)) },
@@ -1214,7 +1215,7 @@ private fun ModernMiscScreen(
 
     if (showImportTypeDialog) {
         val importingTagMsg = stringResource(R.string.misc_importing_tag_package)
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showImportTypeDialog = false },
             title = { Text(stringResource(R.string.misc_import_tag_type_title)) },
             text = {
@@ -2042,7 +2043,7 @@ fun MiscScreen(
                         }
 
                         if (showPaletteDialog) {
-                            AlertDialog(
+                            AppAlertDialog(
                                 onDismissRequest = { showPaletteDialog = false },
                                 title = { Text(stringResource(R.string.misc_color_palette_dialog_title)) },
                                 text = {
@@ -2443,7 +2444,7 @@ fun MiscScreen(
 
                         // 权限拒绝提示弹窗
                         if (dlDeniedMsg.isNotBlank()) {
-                            AlertDialog(
+                            AppAlertDialog(
                                 onDismissRequest = { dlDeniedMsg = "" },
                                 title = { Text(stringResource(R.string.download_not_allowed_title)) },
                                 text  = {
@@ -2466,7 +2467,7 @@ fun MiscScreen(
 
                         // 下载进度弹窗
                         if (dlInProgress) {
-                            AlertDialog(
+                            AppAlertDialog(
                                 onDismissRequest = { /* 下载中不允许关闭 */ },
                                 title = {
                                     Text(stringResource(
@@ -2611,7 +2612,7 @@ fun MiscScreen(
                         }
 
                         if (mySharesDialogVisible) {
-                            androidx.compose.ui.window.Dialog(
+                            com.m0h31h31.bamburfidreader.ui.components.AppDialog(
                                 onDismissRequest = { mySharesDialogVisible = false }
                             ) {
                                 Surface(
@@ -2793,7 +2794,7 @@ fun MiscScreen(
                 }
 
                 if (showReadAllSectorsDialog) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showReadAllSectorsDialog = false },
                         title = { Text(text = stringResource(R.string.misc_read_all_title)) },
                         text = {
@@ -2815,7 +2816,7 @@ fun MiscScreen(
                 }
 
                 if (showImportDatabaseConfirmDialog) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showImportDatabaseConfirmDialog = false },
                         title = { Text(text = stringResource(R.string.misc_import_db_title)) },
                         text = {
@@ -2835,7 +2836,7 @@ fun MiscScreen(
                 }
 
                 if (showClearSelfTagsConfirmDialog) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showClearSelfTagsConfirmDialog = false },
                         title = { Text(text = stringResource(R.string.misc_clear_self_tags_title)) },
                         text = {
@@ -2860,7 +2861,7 @@ fun MiscScreen(
                 }
 
                 if (showCuidDisclaimerDialog) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showCuidDisclaimerDialog = false },
                         title = { Text(text = stringResource(R.string.misc_cuid_test)) },
                         text = { Text(text = stringResource(R.string.misc_cuid_test_disclaimer)) },
@@ -2883,7 +2884,7 @@ fun MiscScreen(
                 }
 
                 if (showClearShareTagsConfirmDialog) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showClearShareTagsConfirmDialog = false },
                         title = { Text(text = stringResource(R.string.misc_clear_share_tags_title)) },
                         text = {
@@ -2908,7 +2909,7 @@ fun MiscScreen(
                 }
 
                 if (showAutoShareDisableConfirm) {
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showAutoShareDisableConfirm = false },
                         title = { Text(text = stringResource(R.string.auto_share_disable_confirm_title)) },
                         text = { Text(text = stringResource(R.string.auto_share_disable_confirm_message)) },
@@ -2930,7 +2931,7 @@ fun MiscScreen(
 
                 if (showImportTypeDialog) {
                     val importingTagMsg = stringResource(R.string.misc_importing_tag_package)
-                    AlertDialog(
+                    AppAlertDialog(
                         onDismissRequest = { showImportTypeDialog = false },
                         title = { Text(text = stringResource(R.string.misc_import_tag_type_title)) },
                         text = {

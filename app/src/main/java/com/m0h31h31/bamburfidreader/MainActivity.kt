@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -320,7 +321,7 @@ private fun NoticeGuideDialog(
     onDismiss: () -> Unit,
     onGoToNotice: () -> Unit
 ) {
-    androidx.compose.material3.AlertDialog(
+    com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             androidx.compose.material3.Text(
@@ -354,7 +355,7 @@ private fun BoostReminderDialog(
     onDismiss: () -> Unit,
     onBoost: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    com.m0h31h31.bamburfidreader.ui.components.AppDialog(onDismissRequest = onDismiss) {
         Surface(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surface,
@@ -398,7 +399,7 @@ private fun UserAgreementDialog(
     onDecline: () -> Unit,
     onAccept: () -> Unit
 ) {
-    Dialog(
+    com.m0h31h31.bamburfidreader.ui.components.AppDialog(
         onDismissRequest = {},
         properties = DialogProperties(
             dismissOnBackPress = false,

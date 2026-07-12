@@ -1,5 +1,6 @@
 package com.m0h31h31.bamburfidreader.ui.screens
 
+import com.m0h31h31.bamburfidreader.ui.components.AppAlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,7 +193,7 @@ fun InventoryScreen(
     }
 
     if (pendingDelete != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(text = stringResource(R.string.dialog_delete_title)) },
             text = { Text(text = stringResource(R.string.dialog_delete_message)) },
@@ -221,7 +222,7 @@ fun InventoryScreen(
         )
     }
     if (pendingEdit != null) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { pendingEdit = null },
             title = { Text(text = stringResource(R.string.inventory_edit_title)) },
             text = {
