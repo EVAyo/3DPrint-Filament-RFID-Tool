@@ -132,28 +132,21 @@ class CostCalculatorTest {
     }
 
     @Test
-    fun statsCountOnlyPricedOrdersAndExcludeFailedByDefault() {
+    fun statsCountAllPricedOrdersIncludingCancelled() {
         val ok = task(id = 1, cost = 1000, status = 2)
-        val failed = task(id = 2, cost = 2000, status = 3, failedType = 1)
+        val failed = task(id = 2, cost = 2000, status = 3, failedType = 1) // 已取消/失败
         val unpriced = task(id = 3, cost = 5000, status = 2)
         val orders = listOf(
             OrderView(null, "ok", listOf(ok), actualChargeCents = 3000),
             OrderView(null, "failed", listOf(failed), actualChargeCents = 500),
             OrderView(null, "unpriced", listOf(unpriced), actualChargeCents = 0)
         )
-        // 默认:排除失败 + 排除未定价 → 只剩 ok
-        val excl = CostCalculator.computeStats(orders, includeFailed = false)
-        assertEquals(1, excl.orderCount)
-        assertEquals(1000L, excl.totalCostCents)
-        assertEquals(3000L, excl.totalRevenueCents)
-        assertEquals(2000L, excl.totalProfitCents)
-
-        // 含失败:ok + failed(均已定价),unpriced 仍排除
-        val incl = CostCalculator.computeStats(orders, includeFailed = true)
-        assertEquals(2, incl.orderCount)
-        assertEquals(3000L, incl.totalCostCents)      // 1000 + 2000
-        assertEquals(3500L, incl.totalRevenueCents)   // 3000 + 500
-        assertEquals(500L, incl.totalProfitCents)
+        // 已定价的已取消/失败单也计入合计;仅未定价的被排除
+        val stats = CostCalculator.computeStats(orders)
+        assertEquals(2, stats.orderCount)
+        assertEquals(3000L, stats.totalCostCents)      // 1000 + 2000
+        assertEquals(3500L, stats.totalRevenueCents)   // 3000 + 500
+        assertEquals(500L, stats.totalProfitCents)
     }
 
     @Test

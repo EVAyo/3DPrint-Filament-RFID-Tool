@@ -88,7 +88,7 @@ class CostController private constructor(appContext: Context) {
 
     /** 统计始终排除隐藏任务。 */
     fun stats(): CostStats =
-        CostCalculator.computeStats(buildOrderViews(tasksState.value.filter { !it.hidden }, ordersState.value), includeFailed = false)
+        CostCalculator.computeStats(buildOrderViews(tasksState.value.filter { !it.hidden }, ordersState.value))
 
     fun hiddenCount(): Int = tasksState.value.count { it.hidden }
 

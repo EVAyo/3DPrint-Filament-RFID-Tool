@@ -108,12 +108,11 @@ object CostCalculator {
 
     /**
      * 统计:仅计入已录入实际收费(actualCharge>0)的订单 —— 未定价的打印任务不算亏损。
-     * 默认排除失败单。
+     * 只要显式录入了收费即计入合计:用户手动定价代表这笔要收钱,
+     * 哪怕含已取消/失败的打印记录(单项或合并订单)也应计入总收入。
      */
-    fun computeStats(orders: List<OrderView>, includeFailed: Boolean): CostStats {
-        val visible = orders.filter {
-            it.actualChargeCents > 0 && (includeFailed || !it.anyFailed)
-        }
+    fun computeStats(orders: List<OrderView>): CostStats {
+        val visible = orders.filter { it.actualChargeCents > 0 }
         val cost = visible.sumOf { it.costCents }
         val revenue = visible.sumOf { it.actualChargeCents }
         val profit = revenue - cost

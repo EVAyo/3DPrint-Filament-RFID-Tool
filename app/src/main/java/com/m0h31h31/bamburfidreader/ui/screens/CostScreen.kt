@@ -126,7 +126,7 @@ fun CostScreen(modifier: Modifier = Modifier) {
         buildOrderViews(tasks.filter { if (showHidden) it.hidden else !it.hidden }, orders)
     }
     val stats = remember(tasks, orders) {
-        CostCalculator.computeStats(buildOrderViews(tasks.filter { !it.hidden }, orders), includeFailed = false)
+        CostCalculator.computeStats(buildOrderViews(tasks.filter { !it.hidden }, orders))
     }
     val hiddenCount = remember(tasks) { tasks.count { it.hidden } }
 
