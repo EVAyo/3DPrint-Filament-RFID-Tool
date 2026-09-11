@@ -1,5 +1,5 @@
 {
-    "version": "3.2.1",
+    "version": "3.2.3",
     "boostLink": {
         "type": "scheme",
         "value": "bambulab://bbl/design/model/detail?design_id=2020787&appSharePlatform=copy"
@@ -43,7 +43,8 @@
         },
         "xianyu": {
             "type": "scheme",
-            "value": "fleamarket://personalPage?userid=2221825144812"
+            "value": "fleamarket://personalPage?userid=2221825144812",
+
         },
         "douyin": {
             "type": "scheme",
