@@ -43,8 +43,7 @@
         },
         "xianyu": {
             "type": "scheme",
-            "value": "fleamarket://personalPage?userid=2221825144812",
-
+            "value": "fleamarket://personalPage?userid=2221825144812"
         },
         "douyin": {
             "type": "scheme",

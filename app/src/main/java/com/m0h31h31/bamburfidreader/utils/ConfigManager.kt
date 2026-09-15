@@ -68,8 +68,24 @@ object ConfigManager {
     }
 
     /**
+     * 远端配置必须能解析成 JSON 对象。内容损坏时不落盘，
+     * 避免一次错误的远端提交覆盖掉本地可用配置。
+     */
+    private fun isValidJsonConfig(url: String, data: ByteArray): Boolean {
+        return try {
+            JSONObject(data.toString(Charsets.UTF_8))
+            true
+        } catch (e: Exception) {
+            com.m0h31h31.bamburfidreader.logging.logDebug(
+                "Remote config from $url is not valid JSON, ignored: ${e.message}"
+            )
+            false
+        }
+    }
+
+    /**
      * 依次尝试主/备地址，带条件请求头。远端未变化时返回 NotModified，
-     * 全部地址失败时返回 null。
+     * 全部地址失败（或内容不是合法 JSON）时返回 null。
      */
     private suspend fun fetchConfigIfChanged(
         context: Context,
@@ -83,11 +99,15 @@ object ConfigManager {
                 etag = prefs.getString("etag:$url", null),
                 lastModified = prefs.getString("lastmod:$url", null)
             ) ?: continue
-            return when (result) {
-                is NetworkUtils.ConditionalFetchResult.NotModified -> RemoteConfigFetch.NotModified
-                is NetworkUtils.ConditionalFetchResult.Success -> RemoteConfigFetch.Changed(
-                    RemoteConfigContent(url, result.data, result.etag, result.lastModified)
-                )
+            when (result) {
+                is NetworkUtils.ConditionalFetchResult.NotModified -> return RemoteConfigFetch.NotModified
+                is NetworkUtils.ConditionalFetchResult.Success -> {
+                    // 内容损坏时继续尝试备用地址，而不是把坏文件写进本地
+                    if (!isValidJsonConfig(url, result.data)) continue
+                    return RemoteConfigFetch.Changed(
+                        RemoteConfigContent(url, result.data, result.etag, result.lastModified)
+                    )
+                }
             }
         }
         return null
@@ -225,11 +245,15 @@ object ConfigManager {
         val externalDir = context.getExternalFilesDir(null) ?: context.filesDir
         val file = File(externalDir, fileName)
         if (file.exists()) {
-            return try {
+            val text = try {
                 file.readText()
             } catch (e: Exception) {
                 com.m0h31h31.bamburfidreader.logging.logDebug("Error reading local config: $fileName, error: ${e.message}")
                 null
+            }
+            // 已下载的文件内容损坏时回退到内置资源，避免公告/图标等配置整体失效
+            if (text != null && isValidJsonConfig(file.absolutePath, text.toByteArray(Charsets.UTF_8))) {
+                return text
             }
         }
         return try {
